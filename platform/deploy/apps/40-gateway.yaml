@@ -1,0 +1,68 @@
+# The Tenant API Gateway: the only thing a merchant's browser talks to.
+# Everything under /api is authenticated, tenant-resolved and permission-checked
+# here before any domain service sees it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: twentyfour
+  labels: { app: gateway, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: gateway } }
+  template:
+    metadata: { labels: { app: gateway, tier: backend } }
+    spec:
+      containers:
+        - name: gatewayd
+          image: localhost:5000/twentyfour/gateway:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:8081"
+            - "-auth=auth.twentyfour.svc.cluster.local:9102"
+            - "-rbac=rbac.twentyfour.svc.cluster.local:9101"
+            # Local development is plain HTTP on a single host, so the cookie is
+            # host-only and not Secure. Both must change before this is exposed
+            # anywhere real: a session cookie sent over HTTP is a session anyone
+            # on the path can take.
+            - "-secure-cookie=false"
+            # Development only: every permission check passes, so the whole
+            # dashboard can be walked before the services behind it exist.
+            - "-permissive=true"
+          ports: [{ containerPort: 8081, name: http }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 8
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gateway, namespace: twentyfour }
+spec:
+  selector: { app: gateway }
+  ports: [{ port: 80, targetPort: 8081 }]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gateway
+  namespace: twentyfour
+spec:
+  entryPoints: [web]
+  routes:
+    # Higher priority than the frontends: /api must never fall through to a
+    # static file server, which is what produced 405 on login.
+    - match: Host(`app.twentyfour.localhost`) && PathPrefix(`/api`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: gateway
+          port: 80
+      middlewares:
+        - name: web-unavailable

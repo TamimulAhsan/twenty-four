@@ -1,0 +1,16 @@
+# Multi-stage; final image is distroless-equivalent scratch with a static binary.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+ARG GIT_COMMIT=dev
+RUN CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X main.commit=${GIT_COMMIT}" \
+      -o /out/core ./cmd/core
+
+FROM scratch
+COPY --from=build /out/core /core
+EXPOSE 8080
+USER 65532:65532
+ENTRYPOINT ["/core"]

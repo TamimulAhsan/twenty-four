@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package twentyfour.catalog.v1;
+
+import "twentyfour/common/v1/money.proto";
+
+// Catalog is the single source of truth for what a tenant sells and what it
+// costs. POS, Bookings, Inventory and the Website Builder all read from here;
+// none of them keeps its own price list. That is the whole point — the moment
+// two services hold prices, the numbers stop matching.
+service CatalogService {
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+  // Priced in bulk so a POS cart resolves in one call, not one per line.
+  rpc PriceItems(PriceItemsRequest) returns (PriceItemsResponse);
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
+  rpc UpdateItem(UpdateItemRequest) returns (UpdateItemResponse);
+  rpc ArchiveItem(ArchiveItemRequest) returns (ArchiveItemResponse);
+}
+
+// What kind of thing this is. Deliberately not named for a trade: a hotel Room,
+// a spa Treatment and a restaurant Dish are all the same shape. The display
+// term comes from the tenant's industry profile, never from this enum.
+enum ItemKind {
+  ITEM_KIND_UNSPECIFIED = 0;
+  // Sold as a unit and may be stock-tracked.
+  ITEM_KIND_PRODUCT = 1;
+  // Sold as time or labour; bookable.
+  ITEM_KIND_SERVICE = 2;
+}
+
+message Item {
+  string id = 1;
+  string tenant_id = 2;
+  string sku = 3;
+  string name = 4;
+  string description = 5;
+  ItemKind kind = 6;
+
+  // Unit price as the merchant enters it and the customer sees it.
+  // tax_included says whether that figure already contains the tax.
+  twentyfour.common.v1.Money unit_price = 7;
+  twentyfour.common.v1.TaxRate tax_rate = 8;
+  bool tax_included = 9;
+
+  string category = 10;
+  bool track_stock = 11;
+  bool active = 12;
+  // For services: how long it occupies a resource. Zero for products.
+  int32 duration_minutes = 13;
+}
+
+message GetItemRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+message GetItemResponse { Item item = 1; }
+
+message PriceItemsRequest {
+  string tenant_id = 1;
+  repeated PriceLineRequest lines = 2;
+}
+message PriceLineRequest {
+  string item_id = 1;
+  int32 quantity = 2;
+  // Optional per-line discount, in minor units, applied before tax is derived.
+  int64 discount_minor = 3;
+}
+
+// A priced line. The caller stores these values on its own record: a POS order
+// must not change because someone edited a price afterwards.
+message PricedLine {
+  string item_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+  twentyfour.common.v1.Money unit_price = 4;
+  twentyfour.common.v1.TaxRate tax_rate = 5;
+  int64 discount_minor = 6;
+
+  // Derived, and returned so every caller agrees on the arithmetic.
+  twentyfour.common.v1.Money gross = 7;  // what the customer pays for this line
+  twentyfour.common.v1.Money net = 8;    // gross minus tax
+  twentyfour.common.v1.Money tax = 9;
+}
+
+message PriceItemsResponse {
+  repeated PricedLine lines = 1;
+  twentyfour.common.v1.Money gross_total = 2;
+  twentyfour.common.v1.Money net_total = 3;
+  twentyfour.common.v1.Money tax_total = 4;
+}
+
+message ListItemsRequest {
+  string tenant_id = 1;
+  string category = 2;
+  bool include_archived = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+message ListItemsResponse {
+  repeated Item items = 1;
+  string next_page_token = 2;
+}
+
+message CreateItemRequest {
+  string tenant_id = 1;
+  Item item = 2;
+}
+message CreateItemResponse { Item item = 1; }
+
+message UpdateItemRequest {
+  string tenant_id = 1;
+  Item item = 2;
+}
+message UpdateItemResponse { Item item = 1; }
+
+message ArchiveItemRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+message ArchiveItemResponse { Item item = 1; }

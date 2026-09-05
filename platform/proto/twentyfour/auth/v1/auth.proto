@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+package twentyfour.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AuthService owns identity: who someone is, and whether they are still signed
+// in. It owns credentials, sessions and tokens — and nothing else.
+//
+// It does NOT decide what anyone may do. That is RBAC's job, and Auth calls it
+// only to bind an initial role at signup. Keeping the two apart means a
+// password bug can never become a privilege-escalation bug.
+service AuthService {
+  // Creates the first user of a new tenant and makes them its owner.
+  rpc Signup(SignupRequest) returns (SignupResponse);
+  // Adds a staff member to an existing tenant. Consumes a seat.
+  rpc InviteUser(InviteUserRequest) returns (InviteUserResponse);
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // The gateway's hot path. Verifies the token signature AND that the session
+  // is still live, so a revoked session stops working immediately rather than
+  // when the token happens to expire.
+  rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
+
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc DeactivateUser(DeactivateUserRequest) returns (DeactivateUserResponse);
+
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (RequestPasswordResetResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
+
+  // Admin plane only — MFA is mandatory there.
+  rpc EnrollTotp(EnrollTotpRequest) returns (EnrollTotpResponse);
+  rpc ConfirmTotp(ConfirmTotpRequest) returns (ConfirmTotpResponse);
+}
+
+enum Plane {
+  PLANE_UNSPECIFIED = 0;
+  PLANE_TENANT = 1;
+  PLANE_ADMIN = 2;
+}
+
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_INVITED = 1;
+  USER_STATUS_ACTIVE = 2;
+  USER_STATUS_DEACTIVATED = 3;
+  // Too many failed attempts. Clears on reset or after the lockout window.
+  USER_STATUS_LOCKED = 4;
+}
+
+message User {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string display_name = 4;
+  UserStatus status = 5;
+  Plane plane = 6;
+  bool email_verified = 7;
+  bool totp_enrolled = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp last_login_at = 10;
+}
+
+message Session {
+  string id = 1;
+  string user_id = 2;
+  string tenant_id = 3;
+  google.protobuf.Timestamp issued_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  string user_agent = 6;
+  string ip = 7;
+}
+
+message SignupRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+  // Business name for the tenant being created alongside this user.
+  string business_name = 4;
+}
+message SignupResponse {
+  User user = 1;
+  string tenant_id = 2;
+  // Signup does not sign you in; the email must be verified first.
+  string verification_token = 3;
+}
+
+message InviteUserRequest {
+  string tenant_id = 1;
+  string email = 2;
+  string display_name = 3;
+  // Role bound on acceptance, passed straight through to RBAC.
+  string role_key = 4;
+  string actor_id = 5;
+}
+message InviteUserResponse {
+  User user = 1;
+  string invite_token = 2;
+}
+
+message AcceptInviteRequest {
+  string invite_token = 1;
+  string password = 2;
+}
+message AcceptInviteResponse { User user = 1; }
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  Plane plane = 3;
+  // Required when the account has TOTP enrolled.
+  string totp_code = 4;
+  string user_agent = 5;
+  string ip = 6;
+}
+message LoginResponse {
+  User user = 1;
+  // Opaque to every caller. Only VerifyToken interprets it.
+  string token = 2;
+  Session session = 3;
+  // True when credentials were right but a TOTP code is still needed.
+  bool totp_required = 4;
+}
+
+message LogoutRequest { string token = 1; }
+message LogoutResponse { bool ended = 1; }
+
+message VerifyTokenRequest {
+  string token = 1;
+  Plane expected_plane = 2;
+}
+message VerifyTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string tenant_id = 3;
+  Plane plane = 4;
+  string session_id = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  // Set when invalid, for logging. Never returned to the end user verbatim.
+  string reason = 7;
+}
+
+message GetUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+}
+message GetUserResponse { User user = 1; }
+
+message ListUsersRequest {
+  string tenant_id = 1;
+  bool include_deactivated = 2;
+}
+message ListUsersResponse {
+  repeated User users = 1;
+  // Seats in use, so the caller can compare against the tenant's quota.
+  int32 active_count = 2;
+}
+
+message DeactivateUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string actor_id = 3;
+}
+message DeactivateUserResponse { bool deactivated = 1; }
+
+message ChangePasswordRequest {
+  string user_id = 1;
+  string current_password = 2;
+  string new_password = 3;
+}
+message ChangePasswordResponse { bool changed = 1; }
+
+message RequestPasswordResetRequest {
+  string email = 1;
+  Plane plane = 2;
+}
+// Always reports success, whether or not the address exists — otherwise this
+// endpoint becomes an account-enumeration oracle.
+message RequestPasswordResetResponse { bool accepted = 1; }
+
+message ResetPasswordRequest {
+  string reset_token = 1;
+  string new_password = 2;
+}
+message ResetPasswordResponse { bool reset = 1; }
+
+message EnrollTotpRequest { string user_id = 1; }
+message EnrollTotpResponse {
+  string secret = 1;
+  string otpauth_uri = 2;
+  repeated string recovery_codes = 3;
+}
+
+message ConfirmTotpRequest {
+  string user_id = 1;
+  string code = 2;
+}
+message ConfirmTotpResponse { bool enrolled = 1; }

@@ -1,0 +1,6 @@
+# The page shown when an application is scaled down or failing. No build step:
+# it must not be able to break in a way that stops it from explaining breakage.
+FROM docker.io/library/nginx:1.29-alpine
+COPY apps/unavailable/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/unavailable/index.html /usr/share/nginx/html/index.html
+EXPOSE 8080

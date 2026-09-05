@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core
+  namespace: twentyfour
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: core } }
+  template:
+    metadata: { labels: { app: core } }
+    spec:
+      containers:
+        - name: core
+          image: localhost:5000/twentyfour/core:dev
+          imagePullPolicy: Always
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: POSTGRES_ADDR, value: "postgres.twentyfour.svc.cluster.local:5432" }
+            - { name: REDIS_ADDR,    value: "redis.twentyfour.svc.cluster.local:6379" }
+            - { name: KAFKA_ADDR,    value: "kafka.twentyfour.svc.cluster.local:9092" }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 3
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits:   { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: core, namespace: twentyfour }
+spec:
+  selector: { app: core }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+# Traefik ships with k3s — this is the in-cluster ingress from graph.html §17.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: core
+  namespace: twentyfour
+  annotations:
+    spec.ingressClassName: traefik
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.twentyfour.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port: { number: 80 }

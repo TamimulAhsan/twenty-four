@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TwentyFour — Platform Architecture</title>
+<style>
+  :root{
+    --bg:#fbfbfa; --fg:#1a1a19; --muted:#6a6a64; --faint:#8d8d85;
+    --rule:#e3e3de; --card:#fff; --accent:#3b6fd4; --accent-bg:#f2f7ff;
+    --warn:#c0392b; --warn-bg:#fff5f4;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15.5px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  .layout{display:grid; grid-template-columns:236px minmax(0,1fr); gap:3.5rem;
+          max-width:1860px; margin:0 auto; padding:3rem 2.5rem 6rem}
+  @media (max-width:1180px){
+    .layout{grid-template-columns:minmax(0,1fr); gap:0; padding:2rem 1.25rem 4rem}
+    .toc{position:static!important; margin-bottom:2.5rem}
+  }
+  .prose{max-width:84ch}
+
+  /* ── Table of contents ──────────────────────────────────── */
+  .toc{position:sticky; top:2rem; align-self:start; font-size:13px; line-height:1.5}
+  .toc h2{font-size:11px; letter-spacing:.11em; text-transform:uppercase;
+          color:var(--faint); margin:0 0 .8rem; font-weight:600}
+  .toc ol{list-style:none; margin:0; padding:0; counter-reset:toc}
+  .toc li{counter-increment:toc; margin:.1rem 0}
+  .toc a{display:block; padding:.32rem .55rem .32rem 1.9rem; text-indent:-1.35rem;
+         color:var(--muted); text-decoration:none; border-radius:5px; border-left:2px solid transparent}
+  .toc a::before{content:counter(toc) "."; color:var(--faint); margin-right:.45rem; font-variant-numeric:tabular-nums}
+  .toc a:hover{background:var(--card); color:var(--fg); border-left-color:var(--accent)}
+  .toc .grp{margin:1.1rem 0 .35rem; padding-left:.55rem; font-size:10.5px; font-weight:600;
+            letter-spacing:.1em; text-transform:uppercase; color:var(--faint)}
+
+  /* ── Typography ─────────────────────────────────────────── */
+  h1{font-size:2rem; margin:0 0 .5rem; letter-spacing:-.02em; line-height:1.15}
+  .lede{font-size:1.02rem; color:var(--muted); margin:0; max-width:84ch}
+  h2.sec{font-size:1.3rem; margin:0 0 .15rem; letter-spacing:-.012em; scroll-margin-top:2rem}
+  .sec-wrap{margin-top:4.5rem; padding-top:2.25rem; border-top:1px solid var(--rule)}
+  .sec-wrap:first-of-type{border-top:none; margin-top:3rem}
+  .kicker{font-size:11px; font-weight:600; letter-spacing:.11em; text-transform:uppercase;
+          color:var(--faint); margin:0 0 .4rem}
+  h3{font-size:1rem; margin:2.25rem 0 .45rem; letter-spacing:-.005em}
+  h4{font-size:.9rem; margin:1.5rem 0 .35rem}
+  p{margin:.7rem 0}
+  ul,ol.body{margin:.6rem 0; padding-left:1.25rem}
+  li{margin:.35rem 0}
+  code{background:#ecece8; padding:.12em .4em; border-radius:3px;
+       font:.86em/1 ui-monospace,SFMono-Regular,Menlo,monospace}
+  strong{font-weight:650}
+
+  /* ── Diagrams ───────────────────────────────────────────── */
+  .diagram{border:1px solid var(--rule); border-radius:10px; background:var(--card);
+           padding:1.75rem 1.5rem; overflow-x:auto; margin:1.5rem 0}
+  .mermaid svg{width:100%; height:auto; display:block}
+  .diagram.natural .mermaid svg{width:auto; max-width:none}
+  .diagram.natural{padding-bottom:1.25rem}
+  .figcap{font-size:12.5px; color:var(--faint); margin:-.6rem 0 1.5rem; max-width:84ch}
+
+  /* ── Tables ─────────────────────────────────────────────── */
+  .tbl{border:1px solid var(--rule); border-radius:10px; overflow:hidden; margin:1.25rem 0; background:var(--card)}
+  .tbl-scroll{overflow-x:auto}
+  table{border-collapse:collapse; width:100%; font-size:13.5px; min-width:640px}
+  th,td{text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top}
+  th{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint);
+     font-weight:600; background:#f7f7f4; white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfa}
+  td code{font-size:.82em; white-space:nowrap}
+  .svc{font-weight:600; white-space:nowrap}
+
+  /* ── Callouts ───────────────────────────────────────────── */
+  .note{border:1px solid var(--rule); border-left:3px solid var(--accent);
+        background:var(--accent-bg); padding:1rem 1.2rem; border-radius:0 8px 8px 0;
+        margin:1.5rem 0; font-size:14px; max-width:88ch}
+  .note.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .note p:first-child{margin-top:0} .note p:last-child{margin-bottom:0}
+  .note .lbl{display:block; font-size:11px; font-weight:700; letter-spacing:.08em;
+             text-transform:uppercase; margin-bottom:.4rem; color:var(--accent)}
+  .note.warn .lbl{color:var(--warn)}
+
+  /* ── Legend & tags ──────────────────────────────────────── */
+  .legend{display:flex; flex-wrap:wrap; gap:1.1rem; margin:1.5rem 0 0; padding:.9rem 1.15rem;
+          border:1px solid var(--rule); border-radius:8px; background:var(--card); font-size:12.5px}
+  .legend span{display:flex; align-items:center; gap:.5rem; color:var(--muted)}
+  .sw{width:13px; height:13px; border-radius:3px; border:1.5px solid; flex:none}
+  .ln{width:24px; height:0; border-top:2px solid #55555a; flex:none}
+  .ln.d{border-top-style:dashed}
+  .tag{display:inline-block; font-size:10.5px; font-weight:650; letter-spacing:.03em;
+       padding:.12rem .42rem; border-radius:3px; border:1px solid; white-space:nowrap}
+  .t-core{background:#f1f7ed;border-color:#4f8a3d;color:#2c5622}
+  .t-sold{background:#eef4ff;border-color:#3b6fd4;color:#1d3f7d}
+  .t-dep{background:#fff6e8;border-color:#c98420;color:#7a4d08}
+  .t-oss{background:#f7f0fa;border-color:#8557a8;color:#3d1f52}
+  .t-int{background:#f0f0ed;border-color:#8a8a82;color:#4a4a44}
+  .t-soon{background:#fff6e8;border-color:#c98420;color:#7a4d08}
+  .t-trade{background:#f2ecff;border-color:#6b4fbb;color:#33246b}
+
+  .cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:1.25rem; margin:1.25rem 0}
+  .panel{border:1px solid var(--rule); border-radius:10px; background:var(--card); padding:1.15rem 1.3rem}
+  .panel h4{margin:0 0 .6rem; font-size:.92rem; display:flex; align-items:center; gap:.5rem}
+  .panel ul{margin:0; padding-left:1.1rem; font-size:13.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ═════════════════ TABLE OF CONTENTS ═════════════════ -->
+<nav class="toc">
+  <h2>Contents</h2>
+  <div class="grp">Overview</div>
+  <ol>
+    <li><a href="#routing">Request routing</a></li>
+    <li><a href="#deployment">Deployment topology</a></li>
+    <li><a href="#inventory">Service inventory</a></li>
+    <li><a href="#catalog">Module catalog</a></li>
+  </ol>
+  <div class="grp">Domains</div>
+  <ol start="5">
+    <li><a href="#core">Core Platform</a></li>
+    <li><a href="#commerce">Commerce Operations</a></li>
+    <li><a href="#finance">Finance Engine</a></li>
+    <li><a href="#growth">Marketing &amp; Sales</a></li>
+    <li><a href="#platform">Platform Services</a></li>
+  </ol>
+  <div class="grp">Mechanisms</div>
+  <ol start="10">
+    <li><a href="#modules">Modules &amp; entitlement</a></li>
+    <li><a href="#saga">Zero to live in 24h</a></li>
+    <li><a href="#crm">Twenty CRM integration</a></li>
+    <li><a href="#events">Event flow &amp; topics</a></li>
+  </ol>
+  <div class="grp">Reference</div>
+  <ol start="14">
+    <li><a href="#dashboards">Dashboard scope</a></li>
+    <li><a href="#crosscutting">Cross-cutting concerns</a></li>
+    <li><a href="#open">Decisions &amp; open items</a></li>
+    <li><a href="#stack">Stack &amp; infrastructure</a></li>
+  </ol>
+</nav>
+
+<main>
+<header>
+  <h1>TwentyFour — Platform Architecture</h1>
+  <p class="lede">One operating system for small and medium businesses — website, bookings, point of
+     sale, payments, marketing and customer records. Sold as modules, provisioned per tenant by a
+     specialist, live within 24 hours. Every box in this document is an independently deployable
+     microservice; all of them run once and are shared by every tenant.</p>
+
+  <div class="legend">
+    <span><i class="sw" style="background:#eef4ff;border-color:#3b6fd4"></i>Client / edge / frontend</span>
+    <span><i class="sw" style="background:#f1f7ed;border-color:#4f8a3d"></i>Microservice</span>
+    <span><i class="sw" style="background:#ffeef0;border-color:#c0392b"></i>Control plane</span>
+    <span><i class="sw" style="background:#fff6e8;border-color:#c98420"></i>Data store / bus</span>
+    <span><i class="sw" style="background:#f7f0fa;border-color:#8557a8"></i>External / forked OSS</span>
+    <span><i class="ln"></i>Synchronous call</span>
+    <span><i class="ln d"></i>Asynchronous event</span>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Two decisions everything else follows from</span>
+    <p><strong>Modules, not microservices, are the unit of sale.</strong> "POS" is a commercial bundle
+       that switches on several services and pulls in its dependencies automatically. The Module
+       Registry owns that mapping.</p>
+    <p><strong>Provisioning is data, not deployment.</strong> No pods are created per merchant.
+       Provisioning writes an entitlement record, seeds tenant data from an industry template, and
+       connects external accounts. The gateway enforces entitlement on every request.</p>
+  </div>
+</header>
+
+<!-- ═════════════════ 1. ROUTING ═════════════════ -->
+<section class="sec-wrap" id="routing">
+  <p class="kicker">Overview · 01</p>
+  <h2 class="sec">Request routing across three planes</h2>
+  <div class="prose">
+    <p>The platform serves three audiences that must never share an authorisation path. The merchant's
+       own customers browse a tenant storefront. Merchant staff run their business from the merchant
+       dashboard. Your specialists administer every tenant from the admin console.</p>
+    <p>Host NGINX does nothing but terminate TLS, map merchant custom domains and proxy into the
+       cluster — no serving happens there. Inside, Traefik splits host-based routes to the NGINX frontend
+       pod, which serves the static SPA bundles, from API traffic to the two gateways. The stack and the
+       reasoning behind each proxy are in <a href="#stack">§17</a>.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph Actors ["Audiences"]
+        Customer["Merchant's Customers"]
+        Terminal["POS Terminal &amp; Card Reader"]
+        MerchantStaff["Merchant Owner &amp; Staff"]
+        AdminUser["TwentyFour Specialist"]
+    end
+
+    HostNginx["Host NGINX<br/>TLS · custom domains<br/>reverse proxy only"]
+    Customer --> HostNginx
+    Terminal --> HostNginx
+    MerchantStaff --> HostNginx
+    AdminUser --> HostNginx
+
+    Ingress["K8s Ingress — Traefik"]
+    HostNginx -->|"all traffic"| Ingress
+
+    WebNginx["NGINX Frontend Pod"]
+    Gateway["Tenant API Gateway"]
+    AdminGW["Admin Gateway<br/>staff SSO · MFA · IP allowlist"]
+    TwentyUI["Twenty CRM Frontend<br/>rebranded fork · own pod"]
+
+    Ingress -->|"host routes"| WebNginx
+    Ingress -->|"crm.twentyfour"| TwentyUI
+    Ingress -->|"/api/*"| Gateway
+    Ingress -->|"/admin/api/*"| AdminGW
+
+    subgraph Bundles ["Static bundles"]
+        Storefront["Storefront SPA"]
+        MerchantUI["Merchant Dashboard SPA"]
+        AdminUI["Admin Console SPA"]
+    end
+    WebNginx --> Storefront
+    WebNginx --> MerchantUI
+    WebNginx --> AdminUI
+
+    subgraph Policy ["Policy — resolved once, at the edge"]
+        Auth["Auth Service"]
+        RBAC["RBAC &amp; Permissions"]
+        Tenant["Tenant Profile"]
+        Entitlement["Entitlement Service"]
+    end
+    Gateway -->|"verify token"| Auth
+    Gateway -->|"check role"| RBAC
+    Gateway -->|"resolve tenant"| Tenant
+    Gateway -->|"module entitled?"| Entitlement
+    AdminGW -->|"staff SSO + MFA"| Auth
+
+    subgraph BFFs ["Backends for Frontend"]
+        StoreBFF["Storefront BFF"]
+        MerchBFF["Merchant BFF"]
+        AdminBFF["Admin BFF"]
+    end
+    Gateway --> StoreBFF
+    Gateway --> MerchBFF
+    AdminGW --> AdminBFF
+
+    Domains["Domain services<br/>Commerce · Finance · Growth<br/>Platform · Control plane"]
+    StoreBFF --> Domains
+    MerchBFF --> Domains
+    AdminBFF --> Domains
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    classDef oss fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class Customer,Terminal,MerchantStaff,AdminUser,HostNginx,Ingress,WebNginx,Storefront,MerchantUI,AdminUI,Gateway,AdminGW,StoreBFF,MerchBFF,AdminBFF client;
+    class Auth,RBAC,Domains service;
+    class Tenant,Entitlement control;
+    class TwentyUI oss;
+</pre>
+  </div>
+  <p class="figcap">Which BFF reaches which domain is a matrix, not a shape — it is tabulated below
+     rather than drawn, to keep the routing spine legible.</p>
+
+  <h3>What each backend-for-frontend reaches</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>BFF</th><th>Serves</th><th>Reaches</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Storefront BFF</td><td>The merchant's customers. Anonymous browsing plus
+        customer sessions.</td><td>Catalog, Bookings, POS (online orders), Payments, Website Builder</td></tr>
+      <tr><td class="svc">Merchant BFF</td><td>Merchant owner and staff, inside entitled modules only.</td>
+        <td>All of Commerce, Finance and Growth; Platform Services; Tenant and Entitlement (read-only)</td></tr>
+      <tr><td class="svc">Admin BFF</td><td>TwentyFour specialists, across every tenant.</td>
+        <td>Full control plane, SaaS Billing, Support &amp; Impersonation, Audit Log, Reporting</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <div class="note">
+    <span class="lbl">Why two gateways</span>
+    <p>The admin plane can read and mutate every tenant, so it does not share an ingress path, an auth
+       realm or a session cookie with tenant traffic. Staff sign in through SSO with MFA behind an IP
+       allowlist, and every admin action is written to the audit log before it reaches a service. A
+       single gateway with a role check would make one RBAC bug a cross-tenant breach.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 2. DEPLOYMENT TOPOLOGY ═════════════════ -->
+<section class="sec-wrap" id="deployment">
+  <p class="kicker">Overview · 02</p>
+  <h2 class="sec">Deployment topology — one environment per market</h2>
+  <div class="prose">
+    <p>The platform is deployed <strong>once per market, on its own VPS</strong>. Hungary runs on
+       Hungarian infrastructure; Bangladesh runs on Bangladeshi infrastructure. They share a codebase
+       and share nothing at runtime — no database, no event bus, no traffic, no tenant.</p>
+    <p>Every environment runs the identical stack except for three pods — Payments, Invoice &amp;
+       Receipt and Subscription Billing — which are replaced with that market's implementations. Because
+       an environment serves exactly one market, no service anywhere needs to know which country it is
+       running in. That is the point: <strong>market variation is handled by deployment, never by
+       code</strong>.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    Repo["One codebase<br/>market services behind a stable contract"]
+
+    subgraph HU ["Hungary — its own VPS"]
+        HUcommon["Identical stack<br/>edge · identity · control plane · commerce<br/>growth · Twenty CRM · platform services"]
+        HUswap["Payments · HU<br/>Invoicing · HU<br/>Billing · HU"]
+        HUdata[("Own PostgreSQL · Redis<br/>Kafka · ClickHouse · storage")]
+        HUcommon --- HUswap
+        HUswap --- HUdata
+    end
+
+    subgraph BD ["Bangladesh — its own VPS"]
+        BDcommon["Identical stack<br/>edge · identity · control plane · commerce<br/>growth · Twenty CRM · platform services"]
+        BDswap["Payments · BD<br/>Invoicing · BD<br/>Billing · BD"]
+        BDdata[("Own PostgreSQL · Redis<br/>Kafka · ClickHouse · storage")]
+        BDcommon --- BDswap
+        BDswap --- BDdata
+    end
+
+    Repo -->|"deploy with HU finance pods"| HU
+    Repo -->|"deploy with BD finance pods"| BD
+
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef swap fill:#fff1e6,stroke:#c0392b,stroke-width:2px,color:#6d1b12;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    class Repo client;
+    class HUcommon,BDcommon service;
+    class HUswap,BDswap swap;
+    class HUdata,BDdata infra;
+</pre>
+  </div>
+
+  <h3>What this buys, and what it costs</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th></th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">No country logic</td><td>No branching, no adapters, no per-tenant country resolution. The single largest source of accidental complexity in multi-market products simply never enters the codebase.</td></tr>
+      <tr><td class="svc">Data residency</td><td>Hungarian data stays on Hungarian infrastructure, Bangladeshi data on Bangladeshi. GDPR and local data rules are satisfied by topology rather than by policy.</td></tr>
+      <tr><td class="svc">One ledger per market</td><td>One environment, one legal entity, one currency, one set of books. No multi-entity ledger, no consolidation logic inside the product.</td></tr>
+      <tr><td class="svc">Blast radius</td><td>A bad finance release in one market cannot touch another. A provider outage is contained to one country.</td></tr>
+      <tr><td class="svc">Cost: infrastructure multiplies</td><td>Each market is a full stack — roughly 35 workloads and 75–85 pods at production replicas. Two markets is two of everything.</td></tr>
+      <tr><td class="svc">Cost: releases fan out</td><td>A change to shared code has to be rolled out to every environment. Versions will drift unless deployment is automated from day one.</td></tr>
+      <tr><td class="svc">Cost: no group-level view</td><td>Nothing sees across markets. Consolidated MRR and group financials need a separate reporting step that pulls from each environment.</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <div class="note">
+    <span class="lbl">Decided: one admin console per market</span>
+    <p>Each environment has its own console, seeing only its own tenants. A specialist working across
+       markets signs into each separately. This matches the isolation exactly and keeps the console a
+       normal part of the stack rather than something that has to reach across boundaries.</p>
+    <p><strong>The consequence to plan for is group consolidation.</strong> With one ledger per entity,
+       nothing adds up the group. Early on that is a spreadsheet pulled from each environment's
+       reporting API; if it matters later it becomes a small warehouse each environment exports into.
+       Worth naming an owner before the first board pack rather than after.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 2. SERVICE INVENTORY ═════════════════ -->
+<section class="sec-wrap" id="inventory">
+  <p class="kicker">Overview · 03</p>
+  <h2 class="sec">Service inventory</h2>
+  <div class="prose">
+    <p>Twenty-nine services across five domains. <span class="tag t-core">always on</span> ships with
+       every tenant, <span class="tag t-sold">module</span> is sold and entitled per tenant, and
+       <span class="tag t-int">internal</span> has no merchant-facing surface at all. <span class="tag t-dep">swapped per market</span> means the pod is replaced wholesale when a new market is stood up — see <a href="#deployment">Deployment topology</a>.</p>
+  </div>
+
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Service</th><th>Domain</th><th>Responsibility</th><th>Store</th><th>Type</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Auth</td><td>Core</td><td>Credentials, sessions, token issue and verify; OIDC provider for Twenty</td><td>PG · Redis</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">RBAC &amp; Permissions</td><td>Core</td><td>Roles, permission sets, policy evaluation</td><td>PG</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Tenant &amp; Business Profile</td><td>Control</td><td>Business identity, trade, hours, tax, currency, locale</td><td>PG · Redis</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Entitlement</td><td>Control</td><td>Which modules a tenant holds, plus quotas — staff seats being the first one that bites</td><td>PG · Redis</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Module Registry &amp; Pricing</td><td>Control</td><td>Module definitions, dependency graph, price points, config schema</td><td>PG</td><td><span class="tag t-int">internal</span></td></tr>
+      <tr><td class="svc">Provisioning Orchestrator</td><td>Control</td><td>Runs the provisioning saga; per-step state, retries, compensation</td><td>PG</td><td><span class="tag t-int">internal</span></td></tr>
+      <tr><td class="svc">Onboarding &amp; Intake</td><td>Control</td><td>Self-serve signup including the <strong>business type selector</strong>, intake answers, 24-hour checklist and SLA timer</td><td>PG</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">POS &amp; Orders</td><td>Commerce</td><td>Registering a sale — cart, tender, discounts, voids, refunds, receipt, daily takings. Trade-neutral by design.</td><td>PG</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Bookings &amp; Appointments</td><td>Commerce</td><td>Calendar, slots, deposits, no-shows, buffers, double-booking prevention</td><td>PG</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Product &amp; Service Catalog</td><td>Commerce</td><td>Items, services, prices, tax rules, modifiers — one source of truth</td><td>PG · Redis</td><td><span class="tag t-dep">dependency</span></td></tr>
+      <tr><td class="svc">Kitchen Display</td><td>Commerce</td><td>Routes order lines to prep stations, course timing, bump and complete. Consumes order events. Enabled by the industry profile, not sold.</td><td>PG</td><td><span class="tag t-trade">trade capability</span></td></tr>
+      <tr><td class="svc">Real-time Inventory</td><td>Commerce</td><td>Stock levels, reservations, adjustments, low-stock thresholds</td><td>PG · Redis</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Staff &amp; Scheduling</td><td>Commerce</td><td>Staff records, roles, rotas, per-person availability</td><td>PG</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Website Builder</td><td>Commerce</td><td>Site templates, pages, publishing, custom domain requests</td><td>PG · S3</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Payments</td><td>Finance</td><td><strong>Market-specific.</strong> Authorise, capture, refund, status; talks to this market's providers. Idempotent on a caller-supplied key.</td><td>PG</td><td><span class="tag t-dep">swapped per market</span></td></tr>
+      <tr><td class="svc">Invoice &amp; Receipt</td><td>Finance</td><td><strong>Market-specific.</strong> Numbering, layout, mandatory fields, and any reporting this market's tax authority requires.</td><td>PG · S3</td><td><span class="tag t-dep">swapped per market</span></td></tr>
+      <tr><td class="svc">Subscription Billing</td><td>Finance</td><td><strong>Market-specific.</strong> Tier subscription, cycle charging, dunning, local tax treatment of your own invoice.</td><td>PG</td><td><span class="tag t-dep">swapped per market</span></td></tr>
+      <tr><td class="svc">Ledger &amp; Reconciliation</td><td>Finance</td><td>Double-entry journal for this environment's single legal entity and currency; payouts, fees, settlement matching.</td><td>PG · CH</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Twenty CRM <span class="tag t-oss">forked OSS</span></td><td>Growth</td><td>Contacts, companies, pipeline, tasks, notes — one workspace per tenant</td><td>own PG</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">CRM Sync</td><td>Growth</td><td>Bidirectional pipeline between the platform and Twenty; ID mapping</td><td>PG</td><td><span class="tag t-int">internal</span></td></tr>
+      <tr><td class="svc">AI Marketing Engine</td><td>Growth</td><td>Budget allocation against booked revenue every six hours</td><td>PG · CH</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Ad Account Sync</td><td>Growth</td><td>Campaign, spend and conversion sync with ad platforms</td><td>PG</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">AI Creative Generation</td><td>Growth</td><td>Copy and imagery generation, creative variant testing</td><td>PG · S3</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Notification</td><td>Platform</td><td>Templates, branding, channel preference, quiet hours, delivery log</td><td>PG</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Media &amp; Document</td><td>Platform</td><td>Only writer to object storage; signed URL issue</td><td>PG · S3</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Reporting &amp; Analytics API</td><td>Platform</td><td>Dashboard queries over ClickHouse; never queries operational stores</td><td>CH</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Scheduler &amp; Job Runner</td><td>Platform</td><td>Cron, reminders, the six-hour budget cycle, nightly reconciliation</td><td>PG</td><td><span class="tag t-int">internal</span></td></tr>
+      <tr><td class="svc">Audit Log</td><td>Platform</td><td>Append-only record of every automated and human decision</td><td>PG</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Support &amp; Impersonation</td><td>Platform</td><td>Scoped, time-boxed, fully audited impersonation tokens</td><td>PG</td><td><span class="tag t-int">internal</span></td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<!-- ═════════════════ 4. MODULE CATALOG ═════════════════ -->
+<section class="sec-wrap" id="catalog">
+  <p class="kicker">Overview · 04</p>
+  <h2 class="sec">Module catalog</h2>
+  <div class="prose">
+    <p>What the product is actually made of, from the merchant's point of view. A module is the unit a
+       specialist provisions and the unit the gateway enforces. It is <strong>not</strong> the unit of
+       price — a tenant sits on a subscription tier, and the tier decides which modules they get.</p>
+    <p>Modules do not map one-to-one onto services. Selecting POS switches on one service and
+       <strong>pulls in three more</strong>, because an order needs something to price it, something to
+       decrement, and something to charge. Those dependencies resolve automatically in the admin
+       console; the specialist sees what got pulled in.</p>
+    <p>Core modules are deliberately <strong>trade-neutral</strong>. Anything specific to one trade is a
+       sold module, a trade capability switched on by the industry profile, or just a profile setting —
+       see the note below the dependency graph.</p>
+  </div>
+
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Module</th><th>What the merchant gets</th><th>Services switched on</th><th>Auto-enables</th><th>Type</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Identity &amp; Tenancy</td><td>Accounts, staff logins, roles, business profile</td><td>Auth, RBAC, Tenant, Entitlement</td><td>—</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Notifications</td><td>Every outbound email, SMS and push, with their branding and quiet hours</td><td>Notification</td><td>—</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Audit &amp; Documents</td><td>A plain-language record of every automated decision; stored files</td><td>Audit Log, Media &amp; Document</td><td>—</td><td><span class="tag t-core">always on</span></td></tr>
+      <tr><td class="svc">Website &amp; Storefront</td><td>A public site built from their trade's template, with online ordering or booking</td><td>Website Builder, Storefront BFF</td><td>Catalog</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Bookings</td><td>Calendar, deposits, no-show handling, buffers, no double-booking a person</td><td>Bookings &amp; Appointments</td><td>Catalog, Staff, Payments</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">POS &amp; Orders</td><td>A till that registers a sale — cart, tender, discounts, voids, refunds, receipt, daily takings</td><td>POS &amp; Orders</td><td>Catalog, Inventory, Payments</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Kitchen Display</td><td>Order lines on prep screens, course timing, bump when done</td><td>Kitchen Display</td><td>Part of POS &amp; Orders</td><td><span class="tag t-trade">trade capability</span></td></tr>
+      <tr><td class="svc">Payments</td><td>Taking money, refunds, receipts, and the books behind them</td><td>Payments, Invoice &amp; Receipt, Ledger</td><td>—</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">CRM</td><td>Contacts, pipeline, history, tasks — their own Twenty workspace</td><td>Twenty CRM (forked), CRM Sync</td><td>—</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Marketing &amp; Ads</td><td>Ad spend reallocated every six hours against booked revenue, across Meta, Google and TikTok</td><td>AI Marketing, Ad Sync</td><td>Advanced Analytics</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">AI Creative</td><td>Ad copy and imagery generated, and variants tested against performance</td><td>AI Creative Generation</td><td>Marketing &amp; Ads</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Staff &amp; Rota</td><td>Staff records, roles, shifts, per-person availability</td><td>Staff &amp; Scheduling</td><td>—</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Advanced Analytics</td><td>Revenue, occupancy and channel reporting beyond the basic dashboard</td><td>Reporting &amp; Analytics API</td><td>—</td><td><span class="tag t-sold">module</span></td></tr>
+      <tr><td class="svc">Inventory</td><td>Live stock levels, reservations, low-stock alerts</td><td>Real-time Inventory</td><td>Catalog</td><td><span class="tag t-dep">dependency or sold</span></td></tr>
+      <tr><td class="svc">Catalog</td><td>Whatever they sell — products, services or both — with prices and tax rules. One source of truth.</td><td>Product &amp; Service Catalog</td><td>—</td><td><span class="tag t-dep">dependency only</span></td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>Dependency graph</h3>
+  <p class="figcap">What the Module Registry resolves when a specialist ticks a box. Arrows read
+     "requires".</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    Website["Website &amp; Storefront"]
+    Bookings["Bookings"]
+    POS["POS &amp; Orders"]
+    KDS["Kitchen Display<br/>trade capability, not sold"]
+    Marketing["Marketing &amp; Ads"]
+    AICreative["AI Creative"]
+
+    Inventory["Inventory"]
+    Staff["Staff &amp; Rota"]
+    Payments["Payments"]
+    CRM["CRM"]
+    Analytics["Advanced Analytics"]
+
+    Catalog["Catalog<br/>never sold alone"]
+
+    Website --> Catalog
+    Bookings --> Catalog
+    Bookings --> Staff
+    Bookings --> Payments
+    POS --> Catalog
+    POS --> Inventory
+    POS --> Payments
+    KDS --> POS
+    Inventory --> Catalog
+    Marketing --> Analytics
+    AICreative --> Marketing
+
+    classDef sold fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef both fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef dep fill:#fff6e8,stroke:#c98420,stroke-width:2px,color:#5c3a05;
+    classDef trade fill:#f2ecff,stroke:#6b4fbb,stroke-width:1.5px,color:#33246b;
+    class Website,Bookings,POS,Marketing,AICreative sold;
+    class KDS trade;
+    class Inventory,Staff,Payments,CRM,Analytics both;
+    class Catalog dep;
+</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Every core module must be trade-neutral</span>
+    <p>The platform ships 40+ industry configurations, so a module that assumes one trade is a module
+       that is wrong for most tenants. <strong>POS means "register a sale"</strong> — nothing more. A
+       candy shop, a boutique and a salon all need it, and none of them has a kitchen.</p>
+    <p>Trade-specific capability lands in one of three places. The test is whether a merchant would
+       ever choose it, and whether it has a surface of its own:</p>
+    <ul>
+      <li><strong>Sold module</strong> — a merchant chooses it and it belongs to a tier. CRM, Marketing
+        &amp; Ads, AI Creative.</li>
+      <li><strong>Trade capability</strong> — it has its own screens, devices and workflow, but nobody
+        chooses it: the trade decides. <em>Kitchen Display is the worked example.</em> It ships inside
+        POS &amp; Orders and is switched on for food-service tenants only. A candy shop buying POS gets
+        a till; a restaurant buying the same POS gets a till and prep screens. Table and floor-plan
+        management would follow the same rule.</li>
+      <li><strong>Industry profile setting</strong> — only terminology, fields, rates or layout. Whether
+        the catalog is called a menu, a price list or a treatment list; which tax categories exist; what
+        a receipt looks like. No new service, no new code path.</li>
+    </ul>
+    <p>The principle survives all three: <strong>POS still means "register a sale" everywhere.</strong>
+       The candy shop never sees a kitchen display because their profile does not enable it, not because
+       POS behaves differently. If a description of a <em>sold</em> module names a trade, that is still
+       the bug.</p>
+  </div>
+
+  <h3>Subscription tiers</h3>
+  <div class="prose">
+    <p>Four tiers. The tier is what a merchant buys and what they are billed for; the module set follows
+       from it. <strong>Enterprise is the exception</strong> — it is a custom-provisioned tier whose
+       module set is agreed per customer, which is why it has no fixed contents and no list price.</p>
+  </div>
+
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Tier</th><th>Modules granted</th><th>Pulled in automatically</th><th>Staff seats</th><th>Also included</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Starter</td>
+          <td>POS &amp; Orders, Bookings, Payments <span style="color:var(--faint)">— the industry tool set</span></td>
+          <td>Catalog, Inventory, Staff &amp; Rota</td>
+          <td>3</td>
+          <td>Deployment and training</td></tr>
+      <tr><td class="svc">Growth</td>
+          <td><em>Everything in Starter</em> + Website &amp; Storefront, Marketing &amp; Ads</td>
+          <td>Advanced Analytics</td>
+          <td>5</td>
+          <td>Automatic budget reallocation across Meta, Google and TikTok</td></tr>
+      <tr><td class="svc">Max</td>
+          <td><em>Everything in Growth</em> + AI Creative, CRM</td>
+          <td>—</td>
+          <td>15</td>
+          <td>Custom domain <span class="tag t-soon">coming soon</span></td></tr>
+      <tr><td class="svc">Enterprise</td>
+          <td><em>Everything in Max</em></td>
+          <td>—</td>
+          <td>Negotiated</td>
+          <td>Dedicated account team, SLA, custom integration,<br/>API access <span class="tag t-soon">coming soon</span></td></tr>
+    </tbody>
+  </table></div></div>
+  <p class="figcap">Seat counts are provisional and expected to move. Prices are not set. Neither is an
+     architectural input — both are values in the Registry, changed without touching code.</p>
+
+  <div class="note">
+    <span class="lbl">Two perks ship after launch</span>
+    <p><strong>Custom domain</strong> (Max) needs per-tenant TLS issuance and renewal at the Host NGINX
+       layer. <strong>API access</strong> (Enterprise) needs a gateway surface plus a small service
+       issuing keys, scopes and per-tenant rate limits. Neither exists today.</p>
+    <p>Both are marked <span class="tag t-soon">coming soon</span> on the tier page rather than being
+       quietly implied, so a merchant on Max knows a custom domain is queued rather than missing. The
+       Registry carries that state per perk, which means the label disappears when the work lands — no
+       release needed to stop advertising something as forthcoming.</p>
+  </div>
+
+  <h4>Staff seats are a quota, not a module</h4>
+  <div class="prose">
+    <p>The seat count is a <strong>limit held on the entitlement record</strong>, sitting alongside the
+       module set rather than inside it. It is unrelated to the Staff &amp; Rota module, which is about
+       shifts and availability and arrives as a Bookings dependency in every tier.</p>
+    <p>One seat means one person <strong>across both surfaces</strong> — the merchant dashboard and that
+       tenant's Twenty workspace. So the limit is enforced in two places from one number: the Staff
+       service refuses the seat, and CRM Sync must refuse to provision the corresponding workspace
+       member. Enforcing it only in the dashboard would let the CRM drift past the tier silently.</p>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Tiers grant modules; modules never carry a price</span>
+    <p>The Module Registry holds three things: the dependency graph above, the module set each tier
+       grants, and whether each module can be provisioned without a human. A specialist or a merchant
+       picks a tier, the module set follows, and dependencies are applied on top.</p>
+    <p>Where a tenant needs something outside their tier, that is an <strong>entitlement override</strong>
+       recorded against them — visible in the admin console and the audit log, and deliberately not
+       something that silently moves the price. Enterprise is simply the case where the override
+       <em>is</em> the tier.</p>
+    <p>Because an environment serves a single market, the picker offers exactly what that deployment
+       supports. There is no country filter applied at runtime.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">The marketing site names different tiers</span>
+    <p><code>script.js</code> defines <code>PRICES = { basic, starter, growth }</code> and
+       <code>pitch-deck.txt §6</code> sells <strong>Basic / Starter / Growth / Enterprise</strong>. The
+       tiers here are <strong>Starter / Growth / Max / Enterprise</strong> — "Basic" is gone and "Max" is
+       new. The pricing page, the <code>#pBasic</code> / <code>#pStarter</code> / <code>#pGrowth</code>
+       elements it fills, and the pitch deck all need updating to match, or the product and the
+       marketing will name different things.</p>
+  </div>
+
+  <h3>The industry profile</h3>
+  <div class="prose">
+    <p>One input decides everything trade-specific: <strong>business type</strong>. A specialist records
+       it during the intake call; a merchant signing up themselves picks it from a selector on the
+       onboarding form. It resolves to an industry profile, and the profile carries four things:</p>
+    <ul>
+      <li><strong>Trade capabilities</strong> — which are switched on, such as Kitchen Display for food
+        service.</li>
+      <li><strong>Term set</strong> — what to call things, covered below.</li>
+      <li><strong>Catalog template</strong> — the starting menu, room types, treatment list or product
+        set seeded at provisioning.</li>
+      <li><strong>Documents and tax categories</strong> — receipt layout, invoice wording, which tax
+        classes exist for this trade.</li>
+    </ul>
+    <p>So what a tenant is entitled to is the union of three sources, and it is worth being explicit
+       because they are set at different moments by different people:</p>
+  </div>
+
+  <div class="note">
+    <span class="lbl">What lands on the entitlement record</span>
+    <p><code>entitlement = tier module set ∪ industry profile capabilities ∪ manual overrides</code></p>
+    <p>The <strong>tier</strong> is chosen and paid for. The <strong>profile</strong> follows from the
+       business type and costs nothing. <strong>Overrides</strong> are recorded per tenant by a
+       specialist. The gateway checks the resulting set and neither knows nor cares which source put an
+       entry there — which is what keeps a trade capability from needing its own enforcement path.</p>
+  </div>
+
+  <h3>Trade vocabulary</h3>
+  <div class="prose">
+    <p>A hotel calls a catalog item a <em>Room</em>; a spa calls it a <em>Service</em>; a restaurant a
+       <em>Dish</em>; a shop a <em>Product</em>. Same concept, same tables, same API — different word on
+       the screen. With 40+ trades this cannot be handled by branching, and it must not be confused with
+       language translation.</p>
+    <p>Keep the two axes separate. <strong>Language</strong> is ordinary i18n. <strong>Trade
+       vocabulary</strong> is a <em>term set</em>: a mapping from a stable semantic key to a word, layered
+       on top of the language bundle. The code only ever knows the key.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    Code["Application code<br/>only ever knows the key<br/><code>catalog.item.plural</code>"]
+
+    subgraph Cascade ["Resolution — most specific wins"]
+        Base["Base term set<br/>generic fallback<br/>'Items'"]
+        Trade["Industry term set<br/>from the trade template<br/>'Rooms'"]
+        Tenant["Tenant override<br/>optional, set by a specialist<br/>'Suites'"]
+    end
+
+    Resolved["Resolved label<br/>rendered to the user"]
+
+    Code --> Base
+    Base -->|"overlaid by"| Trade
+    Trade -->|"overlaid by"| Tenant
+    Tenant --> Resolved
+
+    Surfaces["Everywhere text is rendered<br/>dashboard · storefront · invoices<br/>notifications · CRM object labels"]
+    Resolved --> Surfaces
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    class Code,Surfaces client;
+    class Base,Trade,Resolved service;
+    class Tenant control;
+</pre>
+  </div>
+  <p class="figcap">A cascade, like CSS. A new trade defines only the dozen terms that differ from base
+     — never the whole vocabulary — so onboarding trade number 41 is a content change, not a release.</p>
+
+  <h4>Example term set</h4>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Semantic key</th><th>Restaurant</th><th>Hotel</th><th>Spa / Salon</th><th>Retail</th></tr></thead>
+    <tbody>
+      <tr><td><code>catalog.item</code></td><td>Dish</td><td>Room</td><td>Treatment</td><td>Product</td></tr>
+      <tr><td><code>catalog.collection</code></td><td>Menu</td><td>Room types</td><td>Treatment list</td><td>Catalogue</td></tr>
+      <tr><td><code>booking.unit</code></td><td>Table</td><td>Room</td><td>Appointment</td><td>—</td></tr>
+      <tr><td><code>order</code></td><td>Ticket</td><td>Folio</td><td>Visit</td><td>Sale</td></tr>
+      <tr><td><code>customer</code></td><td>Guest</td><td>Guest</td><td>Client</td><td>Customer</td></tr>
+      <tr><td><code>staff.member</code></td><td>Server</td><td>Front desk</td><td>Therapist</td><td>Sales assistant</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h4>How it is delivered</h4>
+  <div class="prose">
+    <ul>
+      <li><strong>Term sets are content, not a service.</strong> They ship versioned with the industry
+        templates. Tenant Profile stores only which trade a tenant is and any overrides, so no new
+        deployment and no network hop to render a word.</li>
+      <li><strong>The dashboard fetches them once, at login</strong> — alongside entitlements, in the
+        same bootstrap call, cached in Redis the same way and invalidated by the same kind of event.
+        One round trip returns what a tenant may see and what to call it.</li>
+      <li><strong>It is an overlay on the language bundle,</strong> not a parallel system. Load
+        <code>hu-HU</code>, overlay the hotel term set, and <code>t()</code> keeps working unchanged.
+        Trades multiply by languages as content, never as code paths.</li>
+      <li><strong>Services that render text need it too.</strong> Invoices say "Room", not "Item".
+        Booking confirmations say "reservation", not "appointment". Invoicing, Notification, the
+        storefront and the Twenty object blueprint all resolve from the same set.</li>
+      <li><strong>The admin console needs a term set editor.</strong> That is what makes trade 41 a
+        specialist filling in a dozen fields rather than an engineering ticket.</li>
+    </ul>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">The rule that makes this safe</span>
+    <p><strong>A display term is never a key.</strong> Database columns, API paths, event payloads,
+       analytics dimensions and search fields all stay semantic — <code>catalog_item</code>, never
+       <code>room</code>. If <code>/api/rooms</code> ever exists, the abstraction has already failed and
+       the hotel vocabulary is welded into the platform.</p>
+    <p>Terms are presentation only. Renaming one is a content edit that takes effect on next load — it
+       must never imply a migration, and it must never change what a report counts.</p>
+  </div>
+
+</section>
+
+<!-- ═════════════════ 3. CORE PLATFORM ═════════════════ -->
+<section class="sec-wrap" id="core">
+  <p class="kicker">Domains · 05</p>
+  <h2 class="sec">Core Platform — identity and tenancy</h2>
+  <div class="prose">
+    <p>Four services the gateway consults on every single request, and three that exist only to bring a
+       tenant into being. They are grouped together because they answer the same question in different
+       forms: <em>who is this, which business are they acting for, and what did that business buy?</em></p>
+    <p>Note the shape: the gateway calls all four in parallel, it is not a chain. Auth does not know
+       about entitlements and Entitlement does not know about passwords.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    GW["Tenant API Gateway"]
+
+    subgraph Identity ["Identity"]
+        Auth["Auth Service<br/>tokens · sessions · OIDC"]
+        RBAC["RBAC &amp; Permissions<br/>roles · policy evaluation"]
+    end
+
+    subgraph Tenancy ["Tenancy &amp; control plane"]
+        Tenant["Tenant &amp; Business Profile"]
+        Entitlement["Entitlement Service"]
+        Registry["Module Registry &amp; Pricing"]
+        Provisioner["Provisioning Orchestrator"]
+        Onboarding["Onboarding &amp; Intake"]
+    end
+
+    GW -->|"verify token"| Auth
+    GW -->|"check role"| RBAC
+    GW -->|"resolve tenant"| Tenant
+    GW -->|"module entitled?"| Entitlement
+
+    Onboarding -->|"intake answers"| Tenant
+    Registry -->|"resolved module set"| Provisioner
+    Provisioner -->|"write entitlements"| Entitlement
+    Provisioner -->|"create profile"| Tenant
+
+    Redis[("Redis<br/>sessions · policy cache")]
+    PG[("PostgreSQL")]
+    Kafka[["Kafka"]]
+
+    Auth --> Redis
+    Entitlement -->|"policy cache"| Redis
+    Tenant -->|"config cache"| Redis
+    Identity --> PG
+    Tenancy --> PG
+
+    Entitlement -.->|"module.enabled / disabled"| Kafka
+    Provisioner -.->|"tenant.provisioned"| Kafka
+    Kafka -.->|"invalidate cached policy"| GW
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    class GW client;
+    class Auth,RBAC service;
+    class Tenant,Entitlement,Registry,Provisioner,Onboarding control;
+    class Redis,PG,Kafka infra;
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Why entitlement is checked at the gateway</span>
+    <p>The check has to happen once, in front of everything, or it will eventually be forgotten in one
+       service — and that one service is a cross-tenant data leak. The gateway resolves tenant and
+       module entitlement from Redis on every request, invalidated by <code>module.enabled</code> and
+       <code>module.disabled</code> events rather than by a TTL, so a change takes effect immediately
+       instead of whenever a timer expires. Domain services stay ignorant of who bought what; they only
+       ever see an already-authorised, already-scoped request.</p>
+    <p>The merchant dashboard builds its navigation from the same record via
+       <code>GET /me/entitlements</code>, so the UI and the API can never disagree about what a tenant has.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 4. COMMERCE ═════════════════ -->
+<section class="sec-wrap" id="commerce">
+  <p class="kicker">Domains · 06</p>
+  <h2 class="sec">Commerce Operations</h2>
+  <div class="prose">
+    <p>What the business actually runs on day to day. The important structural point is the
+       <strong>Catalog</strong>: it is the single source of truth for what the business sells and what
+       it costs, read by POS, Bookings, the Website Builder and Inventory. Without it every module
+       keeps its own price list, and the numbers stop matching — which is the exact problem the product
+       exists to solve.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    Entry["From the BFF layer"]
+
+    subgraph Commerce ["Commerce Operations"]
+        POS["POS &amp; Orders"]
+        Bookings["Bookings &amp; Appointments"]
+        Builder["Website Builder"]
+        Catalog["Product &amp; Service Catalog<br/>single source of truth"]
+        Inventory["Real-time Inventory"]
+        Staff["Staff &amp; Scheduling"]
+    end
+
+    Entry --> POS
+    Entry --> Bookings
+    Entry --> Builder
+    Entry --> Inventory
+
+    POS -->|"price &amp; tax"| Catalog
+    Bookings -->|"service definitions"| Catalog
+    Builder -->|"publish catalog"| Catalog
+    POS -->|"reserve stock"| Inventory
+    Bookings -->|"per-person availability"| Staff
+    Inventory -->|"item definitions"| Catalog
+
+    Payments["Payments"]
+    Notify["Notification Service"]
+    Files["Media &amp; Document"]
+    POS -->|"checkout"| Payments
+    Bookings -->|"deposit / no-show hold"| Payments
+    Bookings -->|"reminders"| Notify
+    Builder -->|"site assets"| Files
+
+    Redis[("Redis")]
+    Kafka[["Kafka"]]
+    Catalog -->|"price cache"| Redis
+    Inventory -->|"live counters"| Redis
+    POS -.->|"order.placed / voided"| Kafka
+    Bookings -.->|"booking.created / cancelled / no_show"| Kafka
+    Inventory -.->|"stock.low / adjusted"| Kafka
+    Staff -.->|"staff.added / removed"| Kafka
+    Kafka -.->|"stock movements"| Inventory
+    Kafka -.->|"order lines to prep stations"| KDS["Kitchen Display<br/>only where the trade needs it"]
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    class Entry client;
+    class POS,Bookings,Catalog,Inventory,Staff,Builder,KDS,Payments,Notify,Files service;
+    class Redis,Kafka infra;
+</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">A correction worth keeping visible</span>
+    <p>In an earlier draft Kafka carried only payment events, and inventory decremented on
+       <code>payment.succeeded</code>. That silently breaks every path that does not settle a card: a
+       cash sale, a comped item, a manual stock adjustment, an unpaid booking. POS, Bookings, Inventory
+       and Staff each publish their own events for exactly this reason.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 5. FINANCE ═════════════════ -->
+<section class="sec-wrap" id="finance">
+  <p class="kicker">Domains · 07</p>
+  <h2 class="sec">Finance Engine — swapped per market</h2>
+  <div class="prose">
+    <p>Three services differ by market: <strong>Payments</strong>, <strong>Invoice &amp; Receipt</strong>
+       and <strong>Subscription Billing</strong>. Providers, document formats, tax treatment and
+       reporting obligations have nothing in common between Hungary and Bangladesh, so each market gets
+       its own implementation of those three.</p>
+    <p><strong>There is no country logic anywhere in the codebase.</strong> No country codes, no
+       adapters chosen at runtime, no branching on jurisdiction. One environment serves exactly one
+       market, so the deployed Payments service simply <em>is</em> the Hungarian one or the Bangladeshi
+       one. Selecting a market is a deployment decision, not a runtime one.</p>
+    <p>The <strong>Ledger is not market-specific</strong>. Each environment serves one market and
+       therefore one legal entity, so it keeps a single set of books in a single currency. The
+       multi-entity complexity that a shared deployment would have forced simply does not arise.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    Sources["POS · Bookings · Storefront"]
+
+    subgraph Swap ["Market-specific — these three pods are swapped per deployment"]
+        Payments["Payments<br/>this market's rails"]
+        Invoicing["Invoice &amp; Receipt<br/>this market's format &amp; reporting"]
+        Billing["Subscription Billing<br/>this market's tax &amp; collection"]
+    end
+
+    Ledger["Ledger &amp; Reconciliation<br/>market-agnostic · one legal entity · one currency"]
+    Providers["This market's externals<br/>payment provider · tax authority"]
+
+    Kafka[["Kafka"]]
+    Files["Media &amp; Document"]
+    Notify["Notification"]
+    CH[("ClickHouse")]
+
+    Sources -->|"checkout — same contract in every market"| Payments
+    Billing -->|"subscription charge"| Payments
+    Payments --> Providers
+
+    Payments -.->|"payment.succeeded / refunded"| Kafka
+    Kafka -.->|"generate document"| Invoicing
+    Kafka -.->|"post journal entries"| Ledger
+
+    Invoicing -->|"report / clear where required"| Providers
+    Invoicing -->|"rendered document"| Files
+    Invoicing -->|"send receipt"| Notify
+    Ledger -->|"reconciliation reports"| CH
+
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef swap fill:#fff1e6,stroke:#c0392b,stroke-width:2px,color:#6d1b12;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef external fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class Sources,Ledger,Files,Notify service;
+    class Payments,Invoicing,Billing swap;
+    class Kafka,CH infra;
+    class Providers external;
+</pre>
+  </div>
+  <p class="figcap">Everything outside the red boundary is byte-identical in every market. The three
+     services inside it are replaced wholesale when a new market is stood up.</p>
+
+  <div class="note">
+    <span class="lbl">The contract is the whole design</span>
+    <p>Swapping a pod only works if nothing upstream can tell the difference. The value of this model
+       lives entirely in the interface those three services expose — it has to be stable, market-neutral,
+       and free of any assumption that happens to be true in the first market you build.</p>
+    <p>Concretely: no field named for a card, no assumption that a payment settles instantly, no
+       assumption that an invoice number is issued locally, and no currency-specific rounding baked into
+       a caller. POS asks for a payment and gets a result; it never learns that Bangladesh answered with
+       a mobile wallet and Hungary with a card.</p>
+  </div>
+
+  <h3>What every market implementation must satisfy</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Service</th><th>Contract it must honour</th><th>Free to differ in</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Payments</td>
+          <td>Create intent · authorise · capture · refund · query status · emit
+              <code>payment.succeeded</code> / <code>payment.refunded</code>. Idempotent on a caller-supplied key.
+              Amounts as integer minor units plus ISO currency code.</td>
+          <td>Which providers it talks to, whether capture is immediate or deferred, how settlement
+              is confirmed, what a refund costs.</td></tr>
+      <tr><td class="svc">Invoice &amp; Receipt</td>
+          <td>Issue a document for a payment · return a stable reference and a stored artifact · emit
+              <code>invoice.issued</code>. Issuing must never block on a third party.</td>
+          <td>Numbering scheme, document layout, mandatory fields, whether it must be reported to a
+              tax authority and how, and what a correction looks like.</td></tr>
+      <tr><td class="svc">Subscription Billing</td>
+          <td>Open a subscription for a tenant on a tier · charge on cycle · report state · handle
+              dunning · emit billing events.</td>
+          <td>Tax treatment of your own invoice, collection method, which entity issues it, local
+              statutory wording.</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>The first two markets</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Concern</th><th>Hungary deployment</th><th>Bangladesh deployment</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Currency</td><td>HUF — effectively no minor unit in circulation</td><td>BDT — two minor units</td></tr>
+      <tr><td class="svc">Payment rails</td><td>Cards and bank transfer</td><td>Mobile financial services first, cards second</td></tr>
+      <tr><td class="svc">Typical providers</td><td>Barion, SimplePay, OTP, Stripe</td><td>bKash, Nagad, SSLCOMMERZ, aamarPay — <strong>Stripe does not operate here</strong></td></tr>
+      <tr><td class="svc">Consumption tax</td><td>EU VAT; high standard rate</td><td>VAT / Mushak under NBR</td></tr>
+      <tr><td class="svc">Invoice reporting</td><td>NAV Online Számla — near real-time submission, mandatory</td><td>NBR Mushak regime; electronic fiscal device rules for some trades</td></tr>
+      <tr><td class="svc">Legal entity</td><td>Hungarian entity, its own books</td><td>Bangladeshi entity, its own books</td></tr>
+      <tr><td class="svc">Money movement</td><td>Free within SEPA</td><td>Foreign exchange controls affect repatriation</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <div class="note warn">
+    <span class="lbl">Treat this table as a shape, not as advice</span>
+    <p>Tax and fiscal rules change on legislative timelines, and the specifics above must be confirmed
+       with local accountants and counsel before launch in each market. Because each market is a
+       separate implementation on a separate machine, a rule change ships as one service in one
+       environment and cannot affect any other market.</p>
+  </div>
+
+  <h3>Rules that survive in every market</h3>
+  <ul class="prose">
+    <li><strong>Money is never a float.</strong> Integer minor units and an explicit ISO currency code,
+        including inside event payloads.</li>
+    <li><strong>An invoice is immutable once issued.</strong> Corrections are new documents that
+        reference the original — never edits.</li>
+    <li><strong>A third party being down must never block a sale.</strong> Whether it is a payment
+        provider or a tax authority, the market implementation queues and retries; the merchant keeps
+        trading.</li>
+  </ul>
+</section>
+
+<!-- ═════════════════ 6. GROWTH ═════════════════ -->
+<section class="sec-wrap" id="growth">
+  <p class="kicker">Domains · 08</p>
+  <h2 class="sec">Marketing &amp; Sales</h2>
+  <div class="prose">
+    <p>The CRM here is <strong>Twenty</strong>, the open-source product, forked and rebranded. It is not
+       a service you write, so it sits outside the domain with its own deployment and its own database,
+       reached only through the CRM Sync Service. Section 10 covers that integration in full.</p>
+    <p>The AI Marketing Engine is driven by the Scheduler's six-hour cycle, not by a user action. It
+       reads booked revenue by channel from ClickHouse, reallocates budget through Ad Account Sync, and
+       commissions new variants from AI Creative when a creative fatigues — where the tenant holds the
+       AI Creative module, which is sold separately from Marketing &amp; Ads and sits a tier above it.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    Sched["Scheduler &amp; Job Runner"]
+    Kafka[["Kafka"]]
+
+    subgraph Growth ["Marketing &amp; Sales"]
+        AIMarketing["AI Marketing Engine<br/>6-hour budget cycle"]
+        AdSync["Ad Account Sync"]
+        AICreative["AI Creative Generation"]
+        CRMSync["CRM Sync Service"]
+    end
+
+    subgraph TwentyBox ["Twenty CRM — forked OSS"]
+        Twenty["Twenty CRM Server<br/>one workspace per tenant"]
+    end
+
+    AdPlatforms["Meta / Google / TikTok Ads"]
+    LLM["LLM &amp; Image Generation API"]
+    CH[("ClickHouse")]
+    TwPG[("Twenty PostgreSQL<br/>schema per workspace")]
+    Notify["Notification"]
+    Files["Media &amp; Document"]
+
+    Sched -.->|"cron.tick"| Kafka
+    Kafka -.->|"rebalance budgets"| AIMarketing
+    Kafka -.->|"contacts, bookings, orders, invoices"| CRMSync
+
+    AIMarketing -->|"booked revenue by channel"| CH
+    AIMarketing -->|"budget &amp; targeting"| AdSync
+    AIMarketing -->|"creative brief"| AICreative
+    AdSync <-->|"campaigns, spend, conversions"| AdPlatforms
+    AICreative -->|"generate copy &amp; imagery"| LLM
+    AICreative -->|"store assets"| Files
+
+    CRMSync <-->|"GraphQL upsert · webhooks"| Twenty
+    CRMSync -->|"campaign &amp; retention sends"| Notify
+    CRMSync -.->|"crm.task.completed / stage.changed"| Kafka
+    Twenty --> TwPG
+
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef external fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class Sched,AIMarketing,AdSync,AICreative,CRMSync,Notify,Files service;
+    class Kafka,CH,TwPG infra;
+    class AdPlatforms,LLM,Twenty external;
+</pre>
+  </div>
+</section>
+
+<!-- ═════════════════ 7. PLATFORM SERVICES ═════════════════ -->
+<section class="sec-wrap" id="platform">
+  <p class="kicker">Domains · 09</p>
+  <h2 class="sec">Platform Services</h2>
+  <div class="prose">
+    <p>Cross-cutting services every other domain depends on. Each one exists to stop a capability being
+       reimplemented six times: one place that sends messages, one writer to object storage, one query
+       path for reporting, one clock, one audit trail.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    Kafka[["Kafka"]]
+    Sources["Bookings · Invoicing<br/>CRM Sync · Inventory"]
+
+    subgraph Plat ["Platform Services"]
+        Notify["Notification Service<br/>templates · quiet hours · delivery log"]
+        Files["Media &amp; Document<br/>only writer to object storage"]
+        Analytics["Reporting &amp; Analytics API"]
+        Scheduler["Scheduler &amp; Job Runner"]
+        Audit["Audit Log Service<br/>append-only"]
+        Support["Support &amp; Impersonation"]
+    end
+
+    Comms["Email / SMS / Push"]
+    S3[("Object Storage")]
+    CH[("ClickHouse")]
+    AdminGW["Admin Gateway"]
+    Auth["Auth Service"]
+
+    Sources -->|"direct sends"| Notify
+    Kafka -.->|"customer &amp; staff alerts"| Notify
+    Kafka -.->|"every decision, human or automated"| Audit
+    Kafka -.->|"CDC + event sink"| CH
+    Scheduler -.->|"cron.tick"| Kafka
+
+    Notify -->|"deliver"| Comms
+    Files --> S3
+    Analytics -->|"dashboard queries"| CH
+    AdminGW --> Support
+    Support -->|"scoped, time-boxed token"| Auth
+    Support -.->|"impersonation started / ended"| Kafka
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef external fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class AdminGW,Sources client;
+    class Notify,Files,Analytics,Scheduler,Audit,Support,Auth service;
+    class Kafka,S3,CH infra;
+    class Comms external;
+</pre>
+  </div>
+
+  <h3>Data tier</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Store</th><th>Holds</th><th>Access rule</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">PostgreSQL</td><td>System of record for every platform service</td>
+        <td>One private schema per service. No service reads another's tables — it calls the owning service or consumes its events.</td></tr>
+      <tr><td class="svc">Twenty PostgreSQL</td><td>Twenty CRM, one schema per workspace</td>
+        <td>Separate instance. Written only by Twenty itself; the platform reaches it through Twenty's API.</td></tr>
+      <tr><td class="svc">Redis</td><td>Sessions, gateway policy cache, price cache, live stock counters</td>
+        <td>Cache-aside by the owning service. Redis and PostgreSQL never talk to each other.</td></tr>
+      <tr><td class="svc">Kafka</td><td>The event bus — every cross-domain fact</td>
+        <td>Producers own their topics. Consumers are independent and may be added without touching the producer.</td></tr>
+      <tr><td class="svc">ClickHouse</td><td>Analytics and reporting</td>
+        <td>Fed only by a CDC and event sink connector off Kafka. Never double-written by services.</td></tr>
+      <tr><td class="svc">Object Storage</td><td>Invoice PDFs, site assets, generated creative</td>
+        <td>Written only by the Media &amp; Document service, which issues signed URLs to everyone else.</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<!-- ═════════════════ 8. MODULES ═════════════════ -->
+<section class="sec-wrap" id="modules">
+  <p class="kicker">Mechanisms · 10</p>
+  <h2 class="sec">Modules, entitlement and provisioning</h2>
+  <div class="prose">
+    <p>The mechanism that makes the platform modular. A specialist picks modules in the admin console;
+       the Module Registry resolves their dependencies; the Provisioning Orchestrator writes
+       entitlements and seeds tenant data. From then on the gateway rejects any call to a module the
+       tenant does not hold.</p>
+    <p>A tenant is born one of two ways: a specialist creates it after an intake call, or a merchant
+       signs up themselves and lands in a <code>pending</code> state for a specialist to pick up.</p>
+    <p><strong>Changing tier later works both ways too.</strong> A merchant can upgrade themselves from
+       the subscription page in their dashboard, and a specialist can do it for them from the admin
+       console. Both routes converge on the same Registry resolution and the same provisioning saga —
+       there is no separate self-serve code path to keep in step.</p>
+    <p><strong>Modules govern access; tiers govern price.</strong> There is no per-module pricing. A
+       tenant sits on a subscription tier, and the tier defines the module set they get. Entitlement is
+       still evaluated per module — that is what the gateway checks and what the dashboard renders from
+       — but the module count never enters a price calculation. Changing tier is what changes the bill.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    subgraph Intake ["Ways a tier is chosen or changed"]
+        Specialist["Specialist — intake call<br/>or later, on the tenant's behalf"]
+        SelfServe["New merchant — self-serve signup"]
+        Upgrade["Existing merchant — upgrades<br/>from the subscription page"]
+    end
+    AdminUI["Admin Console — tier &amp; module picker"]
+    MerchUI["Merchant Dashboard — subscription page"]
+    Onboard["Onboarding &amp; Intake"]
+    Specialist --> AdminUI
+    SelfServe -->|"business type selector"| Onboard
+    Onboard -->|"tenant in pending state"| AdminUI
+    Upgrade --> MerchUI
+
+    Registry["Module Registry &amp; Pricing"]
+    Provisioner["Provisioning Orchestrator"]
+    Entitlement["Entitlement Service"]
+
+    AdminUI -->|"chosen tier"| Registry
+    MerchUI -->|"chosen tier — self-serve"| Registry
+    Registry -->|"resolve deps → + Catalog, Inventory, CRM"| Provisioner
+    Provisioner -->|"write enabled module set"| Entitlement
+
+    Steps["Per-module provisioning steps<br/>idempotent · individually retryable<br/>see the table below"]
+    Provisioner --> Steps
+
+    Redis[("Redis — policy cache")]
+    GW["Tenant API Gateway"]
+    MerchantUI["Merchant Dashboard"]
+    Kafka[["Kafka"]]
+
+    Entitlement --> Redis
+    Redis -->|"module check, sub-ms"| GW
+    Entitlement -->|"GET /me/entitlements — renders nav"| MerchantUI
+    Entitlement -.->|"module.enabled / disabled"| Kafka
+    Kafka -.->|"invalidate policy cache"| GW
+    Kafka -.->|"welcome + credentials"| Notify["Notification"]
+    Kafka -.->|"who enabled what, when"| Audit["Audit Log"]
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    class Specialist,SelfServe,Upgrade,AdminUI,MerchUI,MerchantUI,GW client;
+    class Onboard,Steps,Notify,Audit service;
+    class Registry,Provisioner,Entitlement control;
+    class Redis,Kafka infra;
+</pre>
+  </div>
+
+  <h3>What a merchant may buy without a specialist</h3>
+  <div class="prose">
+    <p>Both routes exist, but they are not interchangeable for every module. A tier upgrade can complete
+       unattended only if <strong>every provisioning step it triggers can complete unattended</strong>.
+       Some cannot: opening a payment account needs KYC approval, linking ad accounts needs the merchant
+       to grant OAuth consent on the platform's own site, pairing terminals needs hardware in a room.</p>
+    <p>So the Module Registry carries a third fact alongside dependencies and tier membership:
+       <strong>whether the module is self-serve capable</strong>. A self-serve upgrade that pulls in a
+       module which is not becomes a <em>request</em> — payment is taken, entitlement is granted for
+       everything that provisioned cleanly, and the remaining steps are queued to a specialist with the
+       tenant told what is still coming. It never silently half-completes.</p>
+  </div>
+
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Route</th><th>Who</th><th>Can grant</th><th>Escalates when</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Self-serve</td><td>Merchant, from the subscription page</td><td>Any tier whose modules all provision unattended</td><td>A pulled-in module needs KYC, OAuth consent or hardware</td></tr>
+      <tr><td class="svc">Specialist-led</td><td>Your team, from the admin console</td><td>Any tier, plus entitlement overrides outside a tier</td><td>Never — this is the escalation target</td></tr>
+      <tr><td class="svc">Enterprise</td><td>Specialist only</td><td>A custom module set agreed per customer</td><td>Not applicable — always specialist-provisioned</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>Provisioning steps</h3>
+  <p class="figcap">Only the steps for entitled modules run. Each records its own state, so a specialist
+     retries one failed step from the admin console rather than restarting the tenant.</p>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Step</th><th>Runs when</th><th>What it does</th><th>On failure</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Tenant profile</td><td>always</td><td>Creates the business record — trade, hours, tax registration, currency, locale</td><td>Blocks everything downstream; retry</td></tr>
+      <tr><td class="svc">Entitlements</td><td>always</td><td>Writes the resolved module set; emits <code>module.enabled</code></td><td>Blocks everything downstream; retry</td></tr>
+      <tr><td class="svc">Catalog seed</td><td>Catalog entitled</td><td>Resolves the industry profile from business type, then seeds the catalog, term set, documents and trade capabilities</td><td>Retry; safe to re-run, upserts by external key</td></tr>
+      <tr><td class="svc">Site generation</td><td>Website entitled</td><td>Builds site from template, applies branding, requests domain</td><td>Retry; tenant is live without a public site meanwhile</td></tr>
+      <tr><td class="svc">Staff accounts</td><td>Staff entitled</td><td>Creates staff records, roles and initial rota</td><td>Retry; owner account already exists so the tenant is usable</td></tr>
+      <tr><td class="svc">Connected account</td><td>Payments entitled</td><td>Opens an account with this market's payment provider, verifies KYC state</td><td>Often slow, not failed — poll; blocks checkout only</td></tr>
+      <tr><td class="svc">Fiscal registration</td><td>where this market requires it</td><td>Registers the tenant with the tax authority; handled inside this market's Invoice service</td><td>Blocks reporting, not trading; escalate to a specialist</td></tr>
+      <tr><td class="svc">Ad account link</td><td>Marketing entitled</td><td>OAuth links Meta, Google and TikTok ad accounts</td><td>Retry; needs merchant consent, so may wait on a human</td></tr>
+      <tr><td class="svc">CRM workspace</td><td>CRM entitled</td><td>Creates the Twenty workspace, owner as super admin, applies the object blueprint, registers webhooks</td><td>Retry; safe to re-run, keyed on tenant ID</td></tr>
+      <tr><td class="svc">Subscription</td><td>always</td><td>Opens the subscription on the agreed tier — the price comes from the tier, never from the module count</td><td>Retry; tenant stays live, billing back-dates</td></tr>
+      <tr><td class="svc">Welcome</td><td>always</td><td>Emits <code>tenant.provisioned</code>; credentials and training links go out</td><td>Retry; last step, stops the SLA timer</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>Module catalog</h3>
+  <p class="prose">The full list of modules, what each gives the merchant, and the dependency graph the
+     Registry resolves are in <a href="#catalog">§4 Module catalog</a>.</p>
+
+  <h3>Tiers and modules</h3>
+  <p class="prose">The Module Registry holds two things: the dependency graph between modules, and the
+     module set each tier grants. A specialist provisioning a tenant picks the tier; the resolved module
+     set follows from it with dependencies applied. Where a specialist needs to deviate for one
+     customer, that is an entitlement override recorded against the tenant — visible in the admin
+     console and the audit log, and deliberately not something that silently moves the price.</p>
+
+  <h3>Turning a module off</h3>
+  <p class="prose">Disabling is not deleting. <code>module.disabled</code> revokes access and stops
+     billing, but the tenant's data stays in place for a retention window so the module can be switched
+     back on without a re-import. Offboarding is a separate, explicit action with its own export step.</p>
+</section>
+
+<!-- ═════════════════ 9. SAGA ═════════════════ -->
+<section class="sec-wrap" id="saga">
+  <p class="kicker">Mechanisms · 11</p>
+  <h2 class="sec">Zero to live in 24 hours</h2>
+  <div class="prose">
+    <p>The provisioning saga behind the guarantee, mapped to the hours the pitch claims. Every step is
+       idempotent and independently retryable, so a failure at hour 12 does not unwind hour 4 — the
+       specialist retries that step from the admin console.</p>
+  </div>
+
+  <div class="diagram natural">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor SP as Specialist
+    participant AC as Console
+    participant RG as Registry
+    participant PR as Provisioning
+    participant EN as Entitle
+    participant DS as Services
+    participant CR as Twenty CRM
+    participant BL as Billing
+    participant KF as Kafka
+    participant NT as Notify
+    actor MG as Merchant
+
+    Note over SP,MG: HOUR 0 — intake call
+    SP->>AC: Create tenant, record trade and hours
+    SP->>AC: Select modules — POS, Payments, Ads
+    AC->>RG: Resolve selection
+    RG-->>AC: Catalog, Inventory and CRM also required
+    AC->>PR: Provision tenant with resolved module set
+
+    Note over PR,CR: HOUR 4 — build and configure
+    PR->>EN: Write enabled module set
+    EN->>KF: module.enabled
+    PR->>DS: Seed catalog from industry template
+    PR->>DS: Generate site, tax rules, trade-specific setup
+    PR->>DS: Create staff accounts and roles
+    PR->>CR: Create workspace, owner as super admin
+    PR->>CR: Apply industry object blueprint and webhooks
+    CR-->>PR: Workspace ready
+
+    Note over PR,BL: HOUR 12 — payments and hardware
+    PR->>DS: Open connected account with processor
+    PR->>DS: Pair terminals and printers
+    PR->>DS: Import and reconcile existing data
+    PR->>BL: Open subscription on the agreed tier
+    BL-->>PR: Subscription active
+
+    Note over PR,MG: HOUR 24 — live and trained
+    PR->>KF: tenant.provisioned
+    KF->>NT: Welcome, credentials, training links
+    NT->>MG: Email and SMS
+    MG->>AC: First real order taken
+    Note over SP,MG: SLA timer stops. Missed, and month one is free.
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Provisioning is a saga, not a transaction</span>
+    <p>Seeding a catalog, opening a processor account and linking ad accounts touch different services
+       and third parties, and some of them will fail. There is no distributed transaction to roll back.
+       Each step records its own state and is separately retryable, with compensating actions where a
+       rollback is meaningful. That is what makes a 24-hour guarantee operationally survivable rather
+       than a promise you break the first time a processor is slow to approve an account.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 10. CRM ═════════════════ -->
+<section class="sec-wrap" id="crm">
+  <p class="kicker">Mechanisms · 12</p>
+  <h2 class="sec">Twenty CRM — multi-tenancy, identity and the data pipeline</h2>
+  <div class="prose">
+    <p>Twenty is a forked open-source product, not a service you write, so it keeps its own deployment,
+       its own database and its own tenancy model: one PostgreSQL schema per workspace, where one
+       workspace is one merchant. It integrates at three seams — identity, provisioning and data.</p>
+    <p>It is served from a <strong>subdomain</strong> — <code>crm.twentyfour</code> — and authenticates
+       by <strong>sharing the session cookie</strong> issued on the parent domain, so there is no second
+       login and no redirect flow. That cookie is readable by every subdomain beneath the parent, so
+       keep that namespace under your control and never place a tenant-controlled hostname under it.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    subgraph Users ["People"]
+        Owner["Merchant Owner<br/>workspace super admin"]
+        StaffUser["Merchant Staff<br/>workspace member"]
+    end
+
+    subgraph Twenty ["Twenty CRM — forked OSS deployment"]
+        TwUI["Twenty Frontend<br/>rebranded fork"]
+        TwAPI["Twenty Server<br/>GraphQL · REST · webhooks"]
+        TwMeta["Workspace &amp; metadata registry"]
+    end
+    TwPG[("PostgreSQL — one schema per workspace")]
+
+    subgraph Plat ["TwentyFour platform"]
+        AuthP["Auth Service — OIDC provider"]
+        ProvP["Provisioning Orchestrator"]
+        StaffP["Staff &amp; Scheduling"]
+        SyncP["CRM Sync Service"]
+        MerchP["Merchant Dashboard"]
+    end
+    KafkaP[["Kafka"]]
+    MapDB[("Mapping store<br/>platform id ↔ twenty record id")]
+
+    Owner --> TwUI
+    StaffUser --> TwUI
+    TwUI -->|"shared session cookie"| AuthP
+    AuthP -->|"tenant → workspace claim"| TwAPI
+
+    ProvP -->|"create workspace"| TwAPI
+    ProvP -->|"owner as super admin"| TwAPI
+    ProvP -->|"industry object blueprint"| TwAPI
+    ProvP -->|"register outbound webhooks"| TwAPI
+
+    StaffP -.->|"staff.added / removed"| KafkaP
+    KafkaP -.->|"customer, booking, order, payment, invoice"| SyncP
+    SyncP -->|"upsert People, Companies, custom objects"| TwAPI
+    SyncP -->|"upsert workspace member + mapped role"| TwAPI
+    SyncP <--> MapDB
+
+    TwAPI -.->|"webhooks — task assigned, stage changed, note added"| SyncP
+    SyncP -.->|"crm.task.completed / stage.changed"| KafkaP
+    TwUI -->|"deep link to booking / order / invoice"| MerchP
+
+    TwAPI --> TwPG
+    TwMeta --> TwPG
+
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef oss fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class Owner,StaffUser,MerchP client;
+    class AuthP,StaffP,SyncP service;
+    class ProvP control;
+    class KafkaP,MapDB,TwPG infra;
+    class TwUI,TwAPI,TwMeta oss;
+</pre>
+  </div>
+
+  <h3>The three seams</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Seam</th><th>Mechanism</th><th>Why this way</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Identity</td><td>Twenty runs on <code>crm.</code> and shares the session
+        cookie issued on the parent domain. The forked Twenty validates it against Auth and resolves
+        the tenant's workspace.</td>
+        <td>A merchant signed into the dashboard is already signed into the CRM, with no redirect
+            dance. Cheaper than full OIDC, and available because Twenty is a fork you control.</td></tr>
+      <tr><td class="svc">Provisioning</td><td>The saga creates the workspace, sets the owner as
+        workspace super admin, applies an industry object blueprint and registers webhooks.</td>
+        <td>A merchant should land in a CRM already shaped for their trade, not an empty one.</td></tr>
+      <tr><td class="svc">Data</td><td>CRM Sync consumes Kafka and calls Twenty's GraphQL API; Twenty's
+        webhooks come back through the same service onto Kafka.</td>
+        <td>Never write into a forked schema directly — that is what makes the next upstream merge
+            impossible.</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <div class="note warn">
+    <span class="lbl">Twenty is a fork, and that has consequences</span>
+    <p><strong>It keeps its own database.</strong> Twenty's schema-per-workspace model does not match
+       the shared-table plus <code>tenant_id</code> model used everywhere else. Do not reconcile them —
+       give Twenty its own PostgreSQL instance so thousands of schemas, and its migration cadence, stay
+       off your primary.</p>
+    <p><strong>The fork is owned by TwentyFour and merged from upstream every 15 days.</strong> A
+       fixed cadence is what keeps merging possible — the cost of each merge stays roughly constant,
+       whereas letting it slide turns the next one into a project. Put it on the calendar with a named
+       owner, and treat a skipped cycle as debt rather than a saved fortnight.</p>
+    <p><strong>Keep the fork thin.</strong> Every upstream file you change is a merge conflict forever.
+       Branding, auth wiring and the object blueprint are worth it; behavioural changes are usually
+       cheaper as custom objects, workflows or an external service.</p>
+    <p><strong>Staff belong to the platform, not to Twenty.</strong> Staff are created in the Staff
+       service and propagated by <code>staff.added</code>, which upserts the workspace member with a
+       role mapped from your RBAC. Letting staff be created in both places gives you two identity
+       stores that drift. The owner is the one exception, created as super admin during provisioning.</p>
+  </div>
+
+  <h3>What actually gets synced</h3>
+  <p class="prose">Mirroring every platform record into the CRM is expensive and creates a consistency
+     problem you do not need. Sync what has to be searchable, filterable and assignable inside Twenty —
+     contacts, companies, and summary objects for bookings, orders and invoices carrying status, amount
+     and a link. Deep-link back to the merchant dashboard for the full record. The mapping store holding
+     platform ID against Twenty record ID is what makes those upserts idempotent; it is the first thing
+     to build, not an afterthought.</p>
+</section>
+
+<!-- ═════════════════ 11. EVENTS ═════════════════ -->
+<section class="sec-wrap" id="events">
+  <p class="kicker">Mechanisms · 13</p>
+  <h2 class="sec">Event flow and topic catalog</h2>
+  <div class="prose">
+    <p>What decouples the modules. A sale, a booking or a module change is published once and
+       independently consumed — new consumers are added without touching the producer. Inventory and
+       CRM Sync appear on both sides: they publish their own events and consume others'.</p>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph Producers ["Producers"]
+        pAuth["Auth"]
+        pProv["Provisioning Orchestrator"]
+        pEnt["Entitlement"]
+        pPOS["POS &amp; Orders"]
+        pBook["Bookings"]
+        pStaff["Staff &amp; Scheduling"]
+        pPay["Payments"]
+        pInv["Inventory"]
+        pSched["Scheduler"]
+        pCRM["CRM Sync — Twenty webhooks"]
+    end
+
+    Kafka[["Kafka Event Bus"]]
+
+    subgraph Consumers ["Consumers"]
+        cGate["Tenant API Gateway"]
+        cInv["Inventory"]
+        cCRM["CRM Sync → Twenty"]
+        cInvoice["Invoice &amp; Receipt"]
+        cLedger["Ledger &amp; Reconciliation"]
+        cBilling["Subscription Billing"]
+        cNotify["Notification"]
+        cAudit["Audit Log"]
+        cAIM["AI Marketing Engine"]
+    end
+
+    subgraph Sinks ["Sinks"]
+        CH[("ClickHouse")]
+        Comms["Email / SMS / Push"]
+    end
+
+    pAuth --> Kafka
+    pProv --> Kafka
+    pEnt --> Kafka
+    pPOS --> Kafka
+    pBook --> Kafka
+    pStaff --> Kafka
+    pPay --> Kafka
+    pInv --> Kafka
+    pSched --> Kafka
+    pCRM --> Kafka
+
+    Kafka -.-> cGate
+    Kafka -.-> cInv
+    Kafka -.-> cCRM
+    Kafka -.-> cInvoice
+    Kafka -.-> cLedger
+    Kafka -.-> cBilling
+    Kafka -.-> cNotify
+    Kafka -.-> cAudit
+    Kafka -.-> cAIM
+    Kafka -.->|"CDC + event sink connector"| CH
+    cNotify -->|"deliver"| Comms
+
+    classDef service fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    classDef control fill:#ffeef0,stroke:#c0392b,stroke-width:1.5px,color:#6d1b12;
+    classDef client fill:#eef4ff,stroke:#3b6fd4,stroke-width:1.5px,color:#12305e;
+    classDef infra fill:#fff6e8,stroke:#c98420,stroke-width:1.5px,color:#5c3a05;
+    classDef external fill:#f7f0fa,stroke:#8557a8,stroke-width:1.5px,color:#3d1f52;
+    class pAuth,pPOS,pBook,pStaff,pPay,pInv,pSched,pCRM,cInv,cCRM,cInvoice,cLedger,cBilling,cNotify,cAudit,cAIM service;
+    class pProv,pEnt control;
+    class cGate client;
+    class Kafka,CH infra;
+    class Comms external;
+</pre>
+  </div>
+  <p class="figcap">Topic names are omitted from the diagram deliberately — the bus is a hub, and
+     fifteen labelled spokes are unreadable. The catalog below is the authoritative list.</p>
+
+  <h3>Topic catalog</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Topic</th><th>Producer</th><th>Consumers</th><th>Carries</th></tr></thead>
+    <tbody>
+      <tr><td><code>user.created</code></td><td>Auth</td><td>CRM Sync, Notification, Audit</td><td>User, tenant, role</td></tr>
+      <tr><td><code>tenant.provisioned</code></td><td>Provisioning</td><td>Notification, SaaS Billing, Audit, ClickHouse</td><td>Tenant, resolved module set, SLA stop</td></tr>
+      <tr><td><code>module.enabled</code> · <code>module.disabled</code></td><td>Entitlement</td><td>Gateway (cache bust), Notification, Audit</td><td>Tenant, module, actor, timestamp</td></tr>
+      <tr><td><code>tier.changed</code></td><td>Entitlement</td><td>Subscription Billing, Notification, Audit</td><td>Tenant, old tier, new tier, effective date</td></tr>
+      <tr><td><code>staff.added</code> · <code>staff.removed</code></td><td>Staff &amp; Scheduling</td><td>CRM Sync, Auth, Audit</td><td>Staff, mapped role, tenant</td></tr>
+      <tr><td><code>order.placed</code> · <code>order.voided</code></td><td>POS &amp; Orders</td><td>Inventory, CRM Sync, Ledger, ClickHouse</td><td>Lines, totals, tax, channel</td></tr>
+      <tr><td><code>booking.created</code> · <code>cancelled</code> · <code>no_show</code></td><td>Bookings</td><td>Inventory, CRM Sync, Notification, Ledger</td><td>Slot, staff, deposit state</td></tr>
+      <tr><td><code>payment.succeeded</code> · <code>refunded</code></td><td>Payments</td><td>Invoicing, Ledger, CRM Sync, Notification, ClickHouse</td><td>Amount, method, processor ref</td></tr>
+      <tr><td><code>stock.low</code> · <code>stock.adjusted</code></td><td>Inventory</td><td>Notification, CRM Sync, ClickHouse</td><td>SKU, level, reason</td></tr>
+      <tr><td><code>invoice.issued</code></td><td>Invoice &amp; Receipt</td><td>Notification, CRM Sync, Ledger</td><td>Document ref, total, due date</td></tr>
+      <tr><td><code>cron.tick</code></td><td>Scheduler</td><td>AI Marketing, Ledger, Notification</td><td>Schedule name, window</td></tr>
+      <tr><td><code>crm.task.completed</code> · <code>crm.stage.changed</code></td><td>CRM Sync, relaying Twenty webhooks</td><td>Audit, ClickHouse, Notification</td><td>Record, actor, previous state</td></tr>
+      <tr><td><code>impersonation.started</code> · <code>ended</code></td><td>Support &amp; Impersonation</td><td>Audit, Notification</td><td>Staff, tenant, scope, expiry</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<!-- ═════════════════ 12. DASHBOARDS ═════════════════ -->
+<section class="sec-wrap" id="dashboards">
+  <p class="kicker">Reference · 14</p>
+  <h2 class="sec">What each dashboard owns</h2>
+  <div class="cols">
+    <div class="panel">
+      <h4>Merchant Dashboard <span class="tag t-sold">tenant plane</span></h4>
+      <ul>
+        <li>Navigation rendered from the tenant's entitlement record — a module you did not sell is simply not there</li>
+        <li>Day-to-day operation of each entitled module: orders, bookings, stock, site, campaigns, contacts</li>
+        <li>Business profile, opening hours, tax settings, staff accounts and roles</li>
+        <li>Their own revenue and occupancy reporting</li>
+        <li>Their subscription, invoices and payment method</li>
+        <li>Notification preferences and quiet hours</li>
+        <li>Requests to add a module, routed to your team for approval</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h4>Admin Console <span class="tag t-core">control plane</span></h4>
+      <ul>
+        <li>Tenant directory: create, search, suspend, offboard</li>
+        <li>The module picker — select per tenant, see resolved dependencies and resulting price</li>
+        <li>Live provisioning status against the 24-hour SLA, with retry on any failed step</li>
+        <li>Module Registry: define modules, dependencies, price points, config schema</li>
+        <li>Platform billing: MRR, dunning, failed payments, module attach rate, churn</li>
+        <li>Support impersonation with a scoped, time-boxed, fully audited token</li>
+        <li>Audit log search across every automated and human decision</li>
+        <li>Integration health: processor, ad platforms, comms providers</li>
+        <li>Feature flags and staged rollout</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════ 13. CROSS-CUTTING ═════════════════ -->
+<section class="sec-wrap" id="crosscutting">
+  <p class="kicker">Reference · 15</p>
+  <h2 class="sec">Cross-cutting concerns</h2>
+
+  <div class="prose">
+    <h3>Tenant isolation</h3>
+    <p>Every service owns a private schema in PostgreSQL — no service reads another's tables; it calls
+       the owning service or consumes its events. Within those schemas, isolation is by mandatory
+       <code>tenant_id</code> with row-level security. That is the right default at SMB volume and lets
+       one shared deployment serve every merchant. A per-tenant schema or database is worth keeping as
+       an enterprise-tier option, but designing for it now would cost you the economics that make the
+       product work at this price point.</p>
+
+    <h3>Security boundaries</h3>
+    <ul>
+      <li><strong>Admin plane separation.</strong> Its own gateway, auth realm, MFA and IP allowlist. No
+          shared session with tenant traffic.</li>
+      <li><strong>Impersonation is scoped and expiring.</strong> A support token names the tenant and the
+          permissions it grants, expires on a timer, and emits
+          <code>impersonation.started</code>/<code>ended</code> to the audit log. It is never a
+          long-lived superuser session.</li>
+      <li><strong>Entitlement is a security control, not a UI concern.</strong> Hiding a nav item is not
+          access control; the gateway rejection is.</li>
+      <li><strong>The audit log is append-only</strong> and consumes from Kafka rather than being written
+          to directly, so a compromised service cannot rewrite its own history.</li>
+    </ul>
+
+    <h3>Money, currency and jurisdiction</h3>
+    <ul>
+      <li><strong>Never store money as a float.</strong> Integer minor units plus an explicit ISO
+          currency code, everywhere, including in event payloads.</li>
+      <li><strong>Rounding belongs to the market's own implementation,</strong> not to a language
+          default. HUF and BDT do not round alike, and getting it wrong shows up as minor-unit drift
+          that reconciliation only surfaces months later.</li>
+      <li><strong>An invoice is immutable once cleared.</strong> Corrections are new documents that
+          reference the original — never edits. Both NAV-style real-time regimes and NBR expect this.</li>
+      <li><strong>Historic documents re-render exactly as issued.</strong> A rate change must never
+          retroactively alter last year's invoices, so the market's Invoice service stores the rendered
+          artifact rather than recomputing it.</li>
+      <li><strong>A government API being down must never block a sale.</strong> Issue, queue, submit,
+          reconcile. The market's Invoice service owns that queue and its alerting.</li>
+    </ul>
+
+    <h3>Failure and retry semantics</h3>
+    <ul>
+      <li><strong>Events are at-least-once.</strong> Every consumer must be idempotent — keyed on the
+          event ID, or on a natural key like the order reference.</li>
+      <li><strong>Provisioning steps are individually retryable</strong> and carry their own state, so a
+          partial failure is resumable rather than restart-from-scratch.</li>
+      <li><strong>External calls are the failure surface.</strong> Card processor, ad platforms, comms
+          providers and the LLM API all need timeouts, circuit breakers and a dead-letter path. A slow
+          processor must not take checkout down.</li>
+      <li><strong>Cache invalidation is event-driven, not TTL-driven,</strong> for entitlement. A module
+          switched off must stop working now, not in five minutes.</li>
+    </ul>
+
+    <h3>Why ClickHouse is fed only from Kafka</h3>
+    <p>Services double-writing to an analytics store drift from the system of record the first time one
+       write succeeds and the other does not. A single CDC and event sink connector means ClickHouse is
+       a projection of what actually happened, and the reporting API is the only thing that reads it.</p>
+  </div>
+</section>
+
+<!-- ═════════════════ 14. OPEN QUESTIONS ═════════════════ -->
+<section class="sec-wrap" id="open">
+  <p class="kicker">Reference · 16</p>
+  <h2 class="sec">Decisions taken, and what is still open</h2>
+
+  <h3>Settled</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Question</th><th>Decision</th><th>What it removed</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Pricing model</td><td><strong>Tier-based subscription.</strong> Four tiers — Starter, Growth, Max, Enterprise. No per-module pricing.</td><td>Price summation over module sets.</td></tr>
+      <tr><td class="svc">Tier structure</td><td><strong>Starter, Growth and Max carry fixed module sets; Enterprise is custom-provisioned per customer.</strong></td><td>Ambiguity about whether a specialist may deviate — for Enterprise the override <em>is</em> the tier.</td></tr>
+      <tr><td class="svc">Tier contents</td><td><strong>Set.</strong> Starter = industry tool set; Growth adds website and AI marketing; Max adds AI Creative and CRM; <strong>Enterprise = everything in Max</strong> plus account team, SLA, custom integration and API access. Seats 3 / 5 / 15, provisional.</td><td>The inverted ladder at the top, and the last commercial blocker on the Registry's tier table.</td></tr>
+      <tr><td class="svc">Kitchen Display</td><td><strong>Part of POS &amp; Orders</strong>, switched on by the industry profile for food-service trades. Never separately sold or shown.</td><td>A module nobody would ever knowingly choose, and a tier that meant different things per trade.</td></tr>
+      <tr><td class="svc">Business type</td><td>Captured by a <strong>selector on self-serve onboarding</strong> and by the specialist during intake. It resolves the industry profile.</td><td>Any need to ask a merchant which capabilities they want.</td></tr>
+      <tr><td class="svc">Marketing alignment</td><td><strong>Done.</strong> <code>index.html</code>, <code>script.js</code> and <code>pitch-deck.txt</code> now sell Starter / Growth / Max / Enterprise, with the comparison table and staff limits rebuilt to match.</td><td>The gap between what the product does and what the site advertises.</td></tr>
+      <tr><td class="svc">Custom domain &amp; API access</td><td><strong>Shipped as "coming soon"</strong> on their tiers rather than deferred silently.</td><td>The risk of a Max or Enterprise customer believing a perk is live when it is not.</td></tr>
+      <tr><td class="svc">Market variation</td><td><strong>One market per VPS.</strong> Payments, Invoicing and Billing pods swapped per market.</td><td>Country packs, runtime adapter selection, every branch on a country code.</td></tr>
+      <tr><td class="svc">Legal entity</td><td><strong>One entity per market</strong>, matching the deployment boundary.</td><td>Multi-entity bookkeeping inside the product.</td></tr>
+      <tr><td class="svc">Ledger</td><td><strong>One ledger per environment</strong> — one entity, one currency, one set of books.</td><td>Consolidation logic, FX handling, per-entity partitioning.</td></tr>
+      <tr><td class="svc">Release fan-out</td><td><strong>One central codebase.</strong> A release is built once and rolled out to each market environment.</td><td>Per-market forks and the drift they would cause.</td></tr>
+      <tr><td class="svc">Admin console scope</td><td><strong>One console per market</strong>, seeing only that environment's tenants.</td><td>A cross-market console reaching over isolation boundaries.</td></tr>
+      <tr><td class="svc">Module purchase</td><td><strong>Both.</strong> Merchants self-serve a tier change from the subscription page; specialists do it from the admin console. Same Registry resolution, same saga.</td><td>A separate self-serve code path to keep in step.</td></tr>
+      <tr><td class="svc">CRM presentation</td><td><strong>Subdomain with a shared session cookie.</strong></td><td>The OIDC relying-party flow, and the iframe <code>SameSite</code> problem.</td></tr>
+      <tr><td class="svc">Twenty fork</td><td><strong>Owned by TwentyFour, merged from upstream every 15 days.</strong></td><td>The open-ended drift that eventually makes merging impossible.</td></tr>
+      <tr><td class="svc">Custom domains</td><td><strong>Deferred.</strong> Keep the shape future-proof, build later.</td><td>Per-tenant TLS issuance and renewal from near-term scope.</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>Still open</h3>
+  <div class="prose">
+    <ul>
+      <li><strong>Build custom domain</strong> — per-tenant TLS issuance and renewal at the Host NGINX
+          layer. Currently advertised on Max as coming soon.</li>
+      <li><strong>Build API access</strong> — a gateway surface plus a service issuing keys, scopes and
+          per-tenant rate limits. Currently advertised on Enterprise as coming soon.</li>
+      <li><strong>Which modules are self-serve capable</strong> — the Registry flag needs setting per
+          module. Anything needing KYC, OAuth consent or hardware pairing must escalate to a specialist.</li>
+      <li><strong>Prices per tier, and final seat counts</strong> — both Registry values, no
+          architectural impact.</li>
+      <li><strong>Which trade capabilities exist beyond Kitchen Display</strong> — table and floor-plan
+          management is the obvious next one. Each needs a profile flag and a service, not a module.</li>
+      <li><strong>Group consolidation</strong> — with one ledger per entity, nothing sees the group.
+          Fine as a spreadsheet at two markets; name an owner before it is four.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ═════════════════ 17. STACK ═════════════════ -->
+<section class="sec-wrap" id="stack">
+  <p class="kicker">Reference · 17</p>
+  <h2 class="sec">Stack &amp; infrastructure</h2>
+  <div class="prose">
+    <p>Everything below is open source and self-hosted. Licences are listed because the landscape moved
+       recently — several well-known tools left open source for source-available licences, and the
+       choices here are the ones that did not.</p>
+    <p>AGPL components are used as intended: self-hosted, unmodified, for our own product. That is
+       squarely within the licence and needs no special handling.</p>
+  </div>
+
+  <h3>Where each proxy sits</h3>
+  <p class="figcap">Three proxies, three jobs. NGINX handles the two where raw throughput and static
+     file serving matter; Traefik handles the one where dynamic reconfiguration matters.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    Client["Clients"]
+    HostN["NGINX<br/>host proxy<br/>TLS · custom domains"]
+    Traefik["Traefik<br/>in-cluster ingress<br/>ships with k3s"]
+    WebN["NGINX<br/>frontend pod<br/>serves SPA bundles"]
+    GW["Tenant Gateway<br/>Go"]
+    AGW["Admin Gateway<br/>Go"]
+
+    Client --> HostN
+    HostN -->|"everything"| Traefik
+    Traefik -->|"host routes"| WebN
+    Traefik -->|"/api/*"| GW
+    Traefik -->|"/admin/api/*"| AGW
+
+    classDef nginx fill:#eef4ff,stroke:#3b6fd4,stroke-width:2px,color:#12305e;
+    classDef traefik fill:#f2ecff,stroke:#6b4fbb,stroke-width:2px,color:#33246b;
+    classDef svc fill:#f1f7ed,stroke:#4f8a3d,stroke-width:1.5px,color:#1f3d16;
+    class Client,HostN,WebN nginx;
+    class Traefik traefik;
+    class GW,AGW svc;
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Why Traefik there and NGINX everywhere else</span>
+    <p>NGINX is faster, leaner and better at serving static files — which is exactly why it keeps the
+       two jobs where those properties matter: terminating TLS at the host edge, and serving the SPA
+       bundles.</p>
+    <p>The in-cluster ingress needs something different: it watches the Kubernetes API and reconfigures
+       itself as services change. NGINX's static-config model is a liability there, and
+       <code>ingress-nginx</code> — which worked by regenerating <code>nginx.conf</code> and reloading —
+       <strong>has been retired by the Kubernetes project</strong>. Do not reach for it. Traefik is
+       MIT-licensed, ships with k3s so there is nothing to install, and speaks both the Ingress API and
+       its successor the Gateway API.</p>
+  </div>
+
+  <h3>The stack</h3>
+  <div class="tbl"><div class="tbl-scroll"><table>
+    <thead><tr><th>Layer</th><th>Choice</th><th>Licence</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Frontend</td><td>React + TypeScript</td><td>MIT</td><td>Three SPAs: storefront, merchant, admin</td></tr>
+      <tr><td class="svc">Static serving</td><td>NGINX</td><td>BSD-2</td><td>Frontend pod</td></tr>
+      <tr><td class="svc">Host proxy</td><td>NGINX</td><td>BSD-2</td><td>TLS, custom domains, proxy only</td></tr>
+      <tr><td class="svc">Ingress</td><td>Traefik</td><td>MIT</td><td>Ships with k3s; Ingress + Gateway API</td></tr>
+      <tr><td class="svc">Services</td><td>Go</td><td>BSD-3</td><td>Everything we write</td></tr>
+      <tr><td class="svc">CRM</td><td>NestJS / TypeScript</td><td>MIT</td><td>The Twenty fork only — not Go</td></tr>
+      <tr><td class="svc">Internal APIs</td><td>gRPC + Protobuf, managed with Buf</td><td>Apache 2.0</td><td>REST/JSON at the edge</td></tr>
+      <tr><td class="svc">System of record</td><td>PostgreSQL</td><td>PostgreSQL</td><td>Schema per service</td></tr>
+      <tr><td class="svc">Cache &amp; sessions</td><td>Redis</td><td>AGPLv3</td><td><strong>Pin ≥ 8.0</strong> — 7.4 is RSAL/SSPL only</td></tr>
+      <tr><td class="svc">Event bus</td><td>Apache Kafka, KRaft mode</td><td>Apache 2.0</td><td>KRaft removes ZooKeeper</td></tr>
+      <tr><td class="svc">Schema registry</td><td>Apicurio</td><td>Apache 2.0</td><td>Confluent's is not OSI-licensed</td></tr>
+      <tr><td class="svc">CDC</td><td>Debezium + Kafka Connect</td><td>Apache 2.0</td><td>Postgres → Kafka → ClickHouse</td></tr>
+      <tr><td class="svc">Analytics</td><td>ClickHouse</td><td>Apache 2.0</td><td>Read-only for reporting</td></tr>
+      <tr><td class="svc">Object storage</td><td>MinIO</td><td>AGPLv3</td><td>Written only by Media &amp; Document</td></tr>
+      <tr><td class="svc">Orchestration</td><td>k3s</td><td>Apache 2.0</td><td>Full K8s API, single-VPS friendly</td></tr>
+      <tr><td class="svc">Deployment</td><td>Argo CD</td><td>Apache 2.0</td><td>This <em>is</em> the release fan-out across markets</td></tr>
+      <tr><td class="svc">Migrations</td><td>goose</td><td>MIT</td><td>Per service, per environment</td></tr>
+      <tr><td class="svc">Jobs &amp; saga</td><td>River</td><td>MPL 2.0</td><td>Postgres-backed, Go-native</td></tr>
+      <tr><td class="svc">Secrets</td><td>OpenBao</td><td>MPL 2.0</td><td>LF fork of Vault; transit engine for tenant credentials</td></tr>
+      <tr><td class="svc">Feature flags</td><td>Unleash OSS</td><td>Apache 2.0</td><td>Staged rollout in the admin console</td></tr>
+      <tr><td class="svc">PDF generation</td><td>Gotenberg</td><td>MIT</td><td>Fiscal documents are layout-sensitive</td></tr>
+      <tr><td class="svc">Backups / PITR</td><td>CloudNativePG</td><td>Apache 2.0</td><td>Fiscal retention is a legal requirement</td></tr>
+      <tr><td class="svc">Tracing</td><td>OpenTelemetry + Tempo</td><td>Apache 2.0 / AGPLv3</td><td>A request crosses gateway → BFF → 3 services</td></tr>
+      <tr><td class="svc">Metrics</td><td>Prometheus</td><td>Apache 2.0</td><td></td></tr>
+      <tr><td class="svc">Logs</td><td>Loki</td><td>AGPLv3</td><td></td></tr>
+      <tr><td class="svc">Dashboards</td><td>Grafana</td><td>AGPLv3</td><td></td></tr>
+      <tr><td class="svc">Error tracking</td><td>GlitchTip</td><td>MIT</td><td>Sentry-compatible; Sentry itself is now source-available</td></tr>
+      <tr><td class="svc">Contract tests</td><td>Pact</td><td>MIT</td><td>Gates every market implementation — see below</td></tr>
+    </tbody>
+  </table></div></div>
+
+  <h3>Four things the table does not say</h3>
+  <div class="prose">
+    <ul>
+      <li><strong>The transactional outbox is a pattern, not a product.</strong> Nothing above gives you
+        atomic "write to Postgres and publish to Kafka". Without an outbox table drained by a relay you
+        will lose events or emit phantom ones — and inventory, the ledger and the CRM all derive from
+        events. This is the highest-value thing to get right first.</li>
+      <li><strong>Contract tests are what make the market-swappable design real.</strong> Payments,
+        Invoicing and Billing are only interchangeable if a new market's implementation must pass a
+        suite before it deploys. Without that, "swappable" is an aspiration rather than a property.</li>
+      <li><strong>River now, Temporal later.</strong> Temporal is MIT and genuinely better at durable
+        workflows, but it is several services plus its own datastore, multiplied by every market VPS.
+        River uses the PostgreSQL already running. Model the provisioning saga as an explicit state
+        machine and move to Temporal when a second long-running workflow earns it.</li>
+      <li><strong>Twenty is not Go.</strong> The CRM fork is NestJS and TypeScript, so the stack carries
+        a Node runtime, a second build pipeline and a second dependency-scanning surface. Not optional —
+        it follows from owning the fork.</li>
+    </ul>
+  </div>
+
+  <h3>Deliberately not added</h3>
+  <div class="prose">
+    <ul>
+      <li><strong>Keycloak.</strong> With Twenty authenticating by shared session cookie rather than
+        OIDC, the main reason to run a separate identity provider disappears. A Go Auth service with
+        argon2id and PASETO, plus TOTP for the admin plane, is less code and far less weight than a
+        Java IdP.</li>
+      <li><strong>A search engine.</strong> PostgreSQL full-text search until a specific query is
+        demonstrably too slow. Meilisearch or Typesense then, not before.</li>
+      <li><strong>Redpanda.</strong> Attractive operationally — single Go binary, no JVM — but it ships
+        under the Business Source Licence, which is source-available rather than open source.</li>
+      <li><strong>Our own SMTP.</strong> Deliverability at volume is IP warmup, reputation management
+        and blocklist recovery. A full-time job unrelated to the product.</li>
+    </ul>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">The boundary open source does not cross</span>
+    <p>Delivery and payment rails terminate at commercial providers: <strong>SMTP, SMS, card and wallet
+       processing, ad platforms and the LLM API.</strong> Self-hosting is not the goal there, and in
+       several cases is not possible.</p>
+    <p>Note where they sit architecturally — <strong>inside the market-swappable boundary.</strong>
+       Hungary and Bangladesh will not share an SMS aggregator any more than they share a payment
+       provider. Provider credentials and adapters belong in per-environment configuration; the
+       Notification service itself stays market-neutral.</p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad:true,
+    theme:'base',
+    flowchart:{curve:'basis', nodeSpacing:34, rankSpacing:66, useMaxWidth:true},
+    sequence:{useMaxWidth:false, actorMargin:30, boxMargin:9, mirrorActors:false},
+    themeVariables:{
+      fontFamily:'ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif',
+      fontSize:'15px',
+      lineColor:'#55555a',
+      clusterBkg:'#fafaf7',
+      clusterBorder:'#cfcfc7'
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# compiled binaries
+/core
+services/*/core
+services/*/dashboard
+# frontend
+node_modules/
+dist/
+*.tsbuildinfo

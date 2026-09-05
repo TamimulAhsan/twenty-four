@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package twentyfour.common.v1;
+
+// Money is always integer minor units plus an explicit ISO 4217 code.
+// Never a float, never a bare number. The exponent differs by currency —
+// HUF has no subunit in circulation, BDT has two — so an amount without its
+// currency is meaningless and a float amount is a rounding bug waiting to happen.
+message Money {
+  // Amount in the currency's smallest unit. 500 HUF is 500; 5.00 BDT is 500.
+  int64 minor = 1;
+  // ISO 4217 alphabetic code, e.g. "HUF", "BDT".
+  string currency = 2;
+}
+
+// TaxRate as basis points, so 27% is 2700. Integers avoid the float problem
+// in the multiplier as well as the amount.
+message TaxRate {
+  int32 basis_points = 1;
+}

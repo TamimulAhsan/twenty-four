@@ -1,0 +1,43 @@
+# Dev-only Postgres. Production uses CloudNativePG with PITR — see graph.html §17.
+apiVersion: v1
+kind: Secret
+metadata: { name: postgres, namespace: twentyfour }
+stringData:
+  POSTGRES_USER: twentyfour
+  POSTGRES_PASSWORD: devpassword
+  POSTGRES_DB: twentyfour
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: postgres, namespace: twentyfour }
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:18-alpine
+          envFrom: [{ secretRef: { name: postgres } }]
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "twentyfour"] }
+            initialDelaySeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 2Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: twentyfour }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]

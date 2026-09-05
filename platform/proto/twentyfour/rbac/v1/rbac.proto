@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package twentyfour.rbac.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// RBACService answers one question: may this subject perform this action?
+//
+// It deliberately knows nothing about credentials, passwords or sessions —
+// that is Auth's job. It receives a subject ID that Auth has already
+// authenticated, and decides what that subject is permitted to do.
+//
+// It is also NOT the Entitlement service. RBAC answers "is this person
+// allowed?"; Entitlement answers "did this business buy it?". Conflating them
+// is how a subscription tier ends up encoded in a permission table.
+service RBACService {
+  // The hot path. Called by the gateway on every request, so it must be fast
+  // and must never fail open.
+  rpc Check(CheckRequest) returns (CheckResponse);
+  // Batch form, so a dashboard can decide which nav items to render in one call.
+  rpc CheckMany(CheckManyRequest) returns (CheckManyResponse);
+
+  rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+  rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
+  rpc GetSubjectRoles(GetSubjectRolesRequest) returns (GetSubjectRolesResponse);
+
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse);
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse);
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse);
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse);
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
+}
+
+// Which plane a role belongs to. The two never mix: a merchant role can never
+// grant admin-console access, whatever a bug elsewhere does.
+enum Plane {
+  PLANE_UNSPECIFIED = 0;
+  // Merchant staff, scoped to one tenant.
+  PLANE_TENANT = 1;
+  // TwentyFour specialists, operating across tenants.
+  PLANE_ADMIN = 2;
+}
+
+// A permission is "<domain>:<resource>:<action>", e.g. "pos:order:create".
+// Wildcards are allowed only in role definitions, never in a check.
+message Permission {
+  string key = 1;
+  string description = 2;
+  string domain = 3;
+}
+
+message Role {
+  string id = 1;
+  // Empty for system roles, which every tenant inherits.
+  string tenant_id = 2;
+  string key = 3;
+  string name = 4;
+  string description = 5;
+  Plane plane = 6;
+  repeated string permissions = 7;
+  // System roles cannot be edited or deleted by a tenant.
+  bool system = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message CheckRequest {
+  string tenant_id = 1;
+  string subject_id = 2;
+  // Concrete permission key. Must not contain a wildcard.
+  string permission = 3;
+  Plane plane = 4;
+}
+message CheckResponse {
+  bool allowed = 1;
+  // Which role granted it, for the audit log. Empty when denied.
+  string granted_by_role = 2;
+}
+
+message CheckManyRequest {
+  string tenant_id = 1;
+  string subject_id = 2;
+  repeated string permissions = 3;
+  Plane plane = 4;
+}
+message CheckManyResponse {
+  // permission key -> allowed
+  map<string, bool> results = 1;
+}
+
+message AssignRoleRequest {
+  string tenant_id = 1;
+  string subject_id = 2;
+  string role_key = 3;
+  // Who performed the assignment, for the audit trail.
+  string actor_id = 4;
+}
+message AssignRoleResponse { RoleBinding binding = 1; }
+
+message RoleBinding {
+  string id = 1;
+  string tenant_id = 2;
+  string subject_id = 3;
+  string role_key = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message RevokeRoleRequest {
+  string tenant_id = 1;
+  string subject_id = 2;
+  string role_key = 3;
+  string actor_id = 4;
+}
+message RevokeRoleResponse { bool revoked = 1; }
+
+message GetSubjectRolesRequest {
+  string tenant_id = 1;
+  string subject_id = 2;
+}
+message GetSubjectRolesResponse {
+  repeated Role roles = 1;
+  // Flattened set of every permission the subject holds.
+  repeated string permissions = 2;
+}
+
+message ListRolesRequest {
+  string tenant_id = 1;
+  Plane plane = 2;
+  bool include_system = 3;
+}
+message ListRolesResponse { repeated Role roles = 1; }
+
+message GetRoleRequest {
+  string tenant_id = 1;
+  string role_key = 2;
+}
+message GetRoleResponse { Role role = 1; }
+
+message CreateRoleRequest {
+  string tenant_id = 1;
+  Role role = 2;
+  string actor_id = 3;
+}
+message CreateRoleResponse { Role role = 1; }
+
+message UpdateRoleRequest {
+  string tenant_id = 1;
+  Role role = 2;
+  string actor_id = 3;
+}
+message UpdateRoleResponse { Role role = 1; }
+
+message DeleteRoleRequest {
+  string tenant_id = 1;
+  string role_key = 2;
+  string actor_id = 3;
+}
+message DeleteRoleResponse { bool deleted = 1; }
+
+message ListPermissionsRequest { string domain = 1; }
+message ListPermissionsResponse { repeated Permission permissions = 1; }

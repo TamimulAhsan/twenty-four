@@ -1,0 +1,40 @@
+# RBAC: decides what an already-authenticated subject may do. It never sees a
+# password, and nothing calls it to find out who someone is.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rbac
+  namespace: twentyfour
+  labels: { app: rbac, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: rbac } }
+  template:
+    metadata: { labels: { app: rbac, tier: backend } }
+    spec:
+      containers:
+        - name: rbacd
+          image: localhost:5000/twentyfour/rbac:dev
+          imagePullPolicy: Always
+          args: ["-addr", ":9101"]
+          ports: [{ containerPort: 9101, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: rbac } }
+          readinessProbe:
+            grpc: { port: 9101 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9101 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: rbac, namespace: twentyfour }
+spec:
+  selector: { app: rbac }
+  ports: [{ port: 9101, targetPort: 9101, name: grpc }]

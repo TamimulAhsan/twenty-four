@@ -1,0 +1,24 @@
+# Redis 8+ only — 7.4 is RSAL/SSPL, the AGPLv3 option starts at 8.0.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: twentyfour }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: docker.io/library/redis:8-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: twentyfour }
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

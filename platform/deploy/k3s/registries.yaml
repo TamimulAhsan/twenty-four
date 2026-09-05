@@ -1,0 +1,6 @@
+# Installed to /etc/rancher/k3s/registries.yaml
+# Lets k3s pull podman-built images from the local dev registry.
+mirrors:
+  "localhost:5000":
+    endpoint:
+      - "http://localhost:5000"

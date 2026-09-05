@@ -1,0 +1,48 @@
+# The page every application falls back to when it is scaled down or failing.
+# It stays up when nothing else does, so it carries no dependencies of its own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-unavailable
+  namespace: twentyfour
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: web-unavailable } }
+  template:
+    metadata: { labels: { app: web-unavailable } }
+    spec:
+      containers:
+        - name: nginx
+          image: localhost:5000/twentyfour/web-unavailable:dev
+          imagePullPolicy: Always
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 2
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: web-unavailable, namespace: twentyfour }
+spec:
+  selector: { app: web-unavailable }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+# When a backend has no endpoints Traefik returns 502/503. Without this the
+# merchant sees the browser's own error page, which looks like their internet
+# is broken rather than like we are working on something.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: web-unavailable
+  namespace: twentyfour
+spec:
+  errors:
+    status:
+      - "500-599"
+    service:
+      name: web-unavailable
+      port: 80
+    query: "/{status}"

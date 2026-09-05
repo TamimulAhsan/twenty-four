@@ -1,0 +1,19 @@
+# Credentials, sessions, tokens. Built from the workspace root because this service imports the
+# generated protobuf module, which lives outside its own directory.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+
+COPY gen/ ./gen/
+COPY services/auth/ ./services/auth/
+
+# A workspace containing only what this image needs. Reusing the repository's
+# go.work would pull in every other service and fail on the ones not copied.
+RUN go work init ./gen ./services/auth
+
+RUN go build -trimpath -ldflags="-s -w" -o /out/authd ./services/auth/cmd/authd
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/authd /authd
+EXPOSE 9102
+USER nonroot:nonroot
+ENTRYPOINT ["/authd"]

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Temporarily unavailable · TwentyFour</title>
+    <style>
+      /* Self-contained on purpose. This page is what renders when something is
+         down, so it must not depend on anything that could also be down: no
+         fonts, no scripts, no stylesheets fetched from elsewhere. */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #0b0b0c;
+        --muted: #71717a;
+        --line: #e6e6e8;
+        --accent: #2f5bff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0b0b0c; --fg: #fafafa; --muted: #a1a1aa; --line: #26262a; }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 30rem; text-align: left; }
+      .mark {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-weight: 700; letter-spacing: -0.02em; font-size: 15px;
+      }
+      .dot {
+        width: 22px; height: 22px; border-radius: 7px;
+        background: var(--accent); display: grid; place-items: center;
+      }
+      .dot svg { display: block; }
+      h1 {
+        margin: 28px 0 10px;
+        font-size: clamp(24px, 4vw, 30px);
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+      }
+      p { margin: 0 0 14px; color: var(--muted); }
+      .card {
+        margin-top: 26px; padding: 14px 16px;
+        border: 1px solid var(--line); border-radius: 12px;
+        display: flex; gap: 12px; align-items: flex-start;
+      }
+      .card svg { flex: none; margin-top: 2px; color: var(--muted); }
+      .card p { margin: 0; font-size: 14px; }
+      .actions { margin-top: 26px; display: flex; gap: 10px; flex-wrap: wrap; }
+      button, a.btn {
+        appearance: none; cursor: pointer; text-decoration: none;
+        font: inherit; font-size: 14px; font-weight: 500;
+        padding: 9px 16px; border-radius: 9px;
+        border: 1px solid var(--line); background: transparent; color: var(--fg);
+      }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button:hover, a.btn:hover { border-color: var(--muted); }
+      button.primary:hover { opacity: 0.92; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="mark">
+        <span class="dot">
+          <!-- Lucide zap, 14px, stroke 2.2, matching the product's icon set. -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14h7l-1 8 10-12h-7l1-8z" />
+          </svg>
+        </span>
+        TwentyFour
+      </span>
+
+      <h1>This part is temporarily unavailable.</h1>
+      <p>
+        We are working on it now. Everything else keeps running, so your other
+        screens are unaffected and nothing you have entered is lost.
+      </p>
+
+      <div class="card">
+        <!-- Lucide clock -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+        </svg>
+        <p>
+          If you were taking payments, the till holds its open orders locally and
+          they will still be there when this comes back.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="primary" onclick="location.reload()">Try again</button>
+        <a class="btn" href="/">Go to the dashboard</a>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twentyfour — Your business, fully online by this time tomorrow.</title>
+<meta name="description" content="One operating system for the whole business — website, bookings, payments, point of sale, marketing and customer records. Live in 24 hours or you don't pay.">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div style="min-height:100vh;background:#fff">
+
+<header>
+  <div class="wrap header-inner">
+    <button type="button" class="brand" data-action="goHome" aria-label="Twentyfour — home">
+      <span class="brand-mark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg></span>
+      <span class="brand-name">Twentyfour</span>
+    </button>
+    <nav class="main-nav" aria-label="Primary">
+      <button type="button" class="nav-link" data-action="goHome">Platform</button>
+      <button type="button" class="nav-link" data-action="goPricing">Pricing</button>
+      <button type="button" class="nav-link" data-action="goAbout">Company</button>
+      <button type="button" class="nav-link" data-action="goContact">Contact</button>
+    </nav>
+    <div class="header-actions">
+      <button type="button" class="nav-signin" data-action="goContact">Sign in</button>
+      <button type="button" class="btn btn-primary btn-sm" data-action="goContact">
+        Book a demo
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ================= HOME ================= -->
+<main id="page-home" class="page active" data-screen-label="Home">
+
+  <section class="wrap" style="padding-top:clamp(56px,7vw,104px);padding-bottom:clamp(40px,5vw,72px)">
+    <div style="display:inline-flex;align-items:center;gap:10px;border:1px solid #E6E6E8;border-radius:999px;padding:7px 14px 7px 10px;margin-bottom:clamp(28px,4vw,44px)">
+      <span style="width:7px;height:7px;border-radius:99px;background:#00A96E;animation:tf-blink 1.8s ease-in-out infinite"></span>
+      <span class="mono" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#52525B">Live in 24 hours — or you don't pay</span>
+    </div>
+    <h1 style="margin:0;font-size:clamp(42px,6.6vw,104px);line-height:.94;letter-spacing:-.045em;font-weight:700;max-width:16ch">Your business, fully online by this time tomorrow.</h1>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(28px,4vw,64px);margin-top:clamp(32px,4vw,56px);align-items:end">
+      <p class="muted" style="margin:0;font-size:clamp(16px,1.35vw,19px);line-height:1.55;max-width:52ch">One operating system for the whole business — website, bookings, payments, point of sale, marketing and customer records. Configured for your industry, deployed by our team, running within a single working day.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <button type="button" class="btn btn-primary" data-action="goContact">
+          Book a demo
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        </button>
+        <button type="button" class="btn btn-outline" data-action="goPricing">See pricing</button>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid #E6E6E8;border-bottom:1px solid #E6E6E8;background:#FAFAFA">
+    <div class="wrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+      <div style="padding:clamp(24px,3vw,36px) 0;border-right:1px solid #E6E6E8;padding-right:24px">
+        <div style="font-size:clamp(30px,3.4vw,46px);font-weight:700;letter-spacing:-.04em;line-height:1"><span id="cBiz">0</span></div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Businesses running</div>
+      </div>
+      <div style="padding:clamp(24px,3vw,36px) 0 clamp(24px,3vw,36px) clamp(20px,2.5vw,36px);border-right:1px solid #E6E6E8">
+        <div style="font-size:clamp(30px,3.4vw,46px);font-weight:700;letter-spacing:-.04em;line-height:1"><span id="cHours">0</span><span style="font-size:.45em;font-weight:600;color:#71717A;margin-left:4px">hrs</span></div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Median time to launch</div>
+      </div>
+      <div style="padding:clamp(24px,3vw,36px) 0 clamp(24px,3vw,36px) clamp(20px,2.5vw,36px);border-right:1px solid #E6E6E8">
+        <div style="font-size:clamp(30px,3.4vw,46px);font-weight:700;letter-spacing:-.04em;line-height:1"><span id="cUptime">0.00</span><span style="font-size:.45em;font-weight:600;color:#71717A;margin-left:2px">%</span></div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Platform uptime, 12 mo</div>
+      </div>
+      <div style="padding:clamp(24px,3vw,36px) 0 clamp(24px,3vw,36px) clamp(20px,2.5vw,36px)">
+        <div style="font-size:clamp(30px,3.4vw,46px);font-weight:700;letter-spacing:-.04em;line-height:1"><span id="cNiche">0</span><span style="font-size:.45em;font-weight:600;color:#71717A;margin-left:2px">+</span></div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Industry configurations</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-bottom:1px solid #E6E6E8;overflow:hidden;padding:26px 0" aria-hidden="true">
+    <div class="marquee-track">
+      <span class="marquee-item">Casa Milano</span>
+      <span class="marquee-item">Nord Hotels</span>
+      <span class="marquee-item">Studio Bruin</span>
+      <span class="marquee-item">Clinique Sept</span>
+      <span class="marquee-item">Basecamp Fitness</span>
+      <span class="marquee-item">Hoffmann &amp; Söhne</span>
+      <span class="marquee-item">Vela Immobiliare</span>
+      <span class="marquee-item">Le Petit Marché</span>
+      <span class="marquee-item">Casa Milano</span>
+      <span class="marquee-item">Nord Hotels</span>
+      <span class="marquee-item">Studio Bruin</span>
+      <span class="marquee-item">Clinique Sept</span>
+      <span class="marquee-item">Basecamp Fitness</span>
+      <span class="marquee-item">Hoffmann &amp; Söhne</span>
+      <span class="marquee-item">Vela Immobiliare</span>
+      <span class="marquee-item">Le Petit Marché</span>
+    </div>
+  </section>
+
+  <section data-reveal class="wrap" style="padding-top:clamp(64px,8vw,124px);padding-bottom:clamp(64px,8vw,124px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:clamp(24px,4vw,72px);align-items:start;margin-bottom:clamp(40px,5vw,72px)">
+      <div>
+        <div class="eyebrow">01 — The deployment</div>
+        <h2 class="section-title" style="max-width:18ch">A single working day, start to finish.</h2>
+      </div>
+      <p class="muted" style="margin:0;font-size:16px;line-height:1.6;max-width:46ch;padding-top:6px">No implementation project. No agency retainer. A specialist is assigned to your account at kickoff and stays with it until the last system is live and your staff has been trained on it.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));border-top:1px solid #0B0B0C">
+      <div style="padding:28px 24px 32px 0;border-right:1px solid #E6E6E8">
+        <div style="width:40px;height:40px;border-radius:11px;background:#2F5BFF;display:grid;place-items:center;margin-bottom:20px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z" /></svg>
+        </div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:8px">HOUR 0</div>
+        <div style="font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Intake call</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Forty minutes. We map your services, hours, menu or inventory, payment methods and the way you already work.</p>
+      </div>
+      <div style="padding:28px 24px 32px clamp(18px,2vw,32px);border-right:1px solid #E6E6E8">
+        <div style="width:40px;height:40px;border-radius:11px;background:#FF5B22;display:grid;place-items:center;margin-bottom:20px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 9h18M6 7h.01M9 7h.01" /></svg>
+        </div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:8px">HOUR 4</div>
+        <div style="font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Build &amp; configure</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Your site, booking rules, tax settings, floor plan or room types and staff accounts are assembled from your industry template.</p>
+      </div>
+      <div style="padding:28px 24px 32px clamp(18px,2vw,32px);border-right:1px solid #E6E6E8">
+        <div style="width:40px;height:40px;border-radius:11px;background:#7B4DFF;display:grid;place-items:center;margin-bottom:20px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h20v12H2zM2 10h20M6 15h4" /></svg>
+        </div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:8px">HOUR 12</div>
+        <div style="font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Payments &amp; hardware</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Card processing verified, terminals and printers paired, existing customer and booking data imported and reconciled.</p>
+      </div>
+      <div style="padding:28px 0 32px clamp(18px,2vw,32px)">
+        <div style="width:40px;height:40px;border-radius:11px;background:#00A96E;display:grid;place-items:center;margin-bottom:20px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </div>
+        <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:8px">HOUR 24</div>
+        <div style="font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Live and trained</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">You take real orders and real bookings. Your team has been walked through every screen they will touch.</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-reveal style="background:#0B0B0C;color:#fff">
+    <div class="wrap" style="padding-top:clamp(64px,8vw,124px);padding-bottom:clamp(64px,8vw,124px)">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:clamp(24px,4vw,72px);align-items:end;margin-bottom:clamp(36px,4vw,56px)">
+        <div>
+          <div class="eyebrow" style="color:#8E8E96">02 — The product</div>
+          <h2 class="section-title" style="max-width:16ch">One back office. Every moving part.</h2>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button type="button" class="demo-tab active" data-action="t0">Orders</button>
+          <button type="button" class="demo-tab" data-action="t1">Bookings</button>
+          <button type="button" class="demo-tab" data-action="t2">Marketing</button>
+          <button type="button" class="demo-tab" data-action="t3">Customers</button>
+        </div>
+      </div>
+
+      <div style="background:#fff;color:#0B0B0C;border-radius:16px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.6)">
+        <div style="height:2px;background:#F4F4F5">
+          <div style="height:2px;background:#2F5BFF;animation:tf-progress 6s linear infinite"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid #E6E6E8;background:#FAFAFA">
+          <span style="width:9px;height:9px;border-radius:99px;background:#E6E6E8"></span>
+          <span style="width:9px;height:9px;border-radius:99px;background:#E6E6E8"></span>
+          <span style="width:9px;height:9px;border-radius:99px;background:#E6E6E8"></span>
+          <span class="mono" style="font-size:11px;color:#71717A;margin-left:10px">app.twentyfour.io / <span id="demoPath">orders</span></span>
+        </div>
+
+        <div class="demo-panel active">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));animation:tf-slidein .45s ease both">
+          <div style="padding:clamp(20px,2.4vw,32px);border-right:1px solid #E6E6E8">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+              <div style="font-size:17px;font-weight:700;letter-spacing:-.025em">Live tickets</div>
+              <span class="mono" style="font-size:11px;color:#00A96E;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:99px;background:#00A96E;animation:tf-blink 1.6s infinite"></span>KITCHEN ONLINE</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+                <div style="width:36px;height:36px;border-radius:9px;background:#FF5B22;display:grid;place-items:center;flex:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M17 3c-1.5 2-2 4-2 6h4c0-2-.5-4-2-6zM17 9v12" /></svg></div>
+                <div style="flex:1">
+                  <div style="font-size:14.5px;font-weight:600">Table 12 — 4 covers</div>
+                  <div style="font-size:12.5px;color:#71717A">2× Tagliatelle, 1× Branzino, 1× Insalata</div>
+                </div>
+                <div class="mono" style="font-size:13px;font-weight:500">€ 84,50</div>
+              </div>
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+                <div style="width:36px;height:36px;border-radius:9px;background:#2F5BFF;display:grid;place-items:center;flex:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" /></svg></div>
+                <div style="flex:1">
+                  <div style="font-size:14.5px;font-weight:600">Delivery #2841</div>
+                  <div style="font-size:12.5px;color:#71717A">Via Sant'Andrea 8 — driver assigned</div>
+                </div>
+                <div class="mono" style="font-size:13px;font-weight:500">€ 31,00</div>
+              </div>
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px;display:flex;align-items:center;gap:14px;opacity:.55">
+                <div style="width:36px;height:36px;border-radius:9px;background:#A1A1AA;display:grid;place-items:center;flex:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></div>
+                <div style="flex:1">
+                  <div style="font-size:14.5px;font-weight:600">Table 4 — settled</div>
+                  <div style="font-size:12.5px;color:#71717A">Card · Receipt sent by e-mail</div>
+                </div>
+                <div class="mono" style="font-size:13px;font-weight:500">€ 62,20</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:clamp(20px,2.4vw,32px);background:#FAFAFA">
+            <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:14px">TODAY</div>
+            <div style="font-size:clamp(34px,4vw,52px);font-weight:700;letter-spacing:-.045em;line-height:1">€ 4.128,60</div>
+            <div style="font-size:13.5px;color:#00A96E;font-weight:600;margin-top:6px">▲ 18,4% vs. last Tuesday</div>
+            <div style="display:flex;align-items:end;gap:7px;height:104px;margin-top:26px">
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:34%"></div>
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:52%"></div>
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:41%"></div>
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:68%"></div>
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:57%"></div>
+              <div style="flex:1;background:#0B0B0C;border-radius:4px 4px 0 0;height:88%"></div>
+              <div style="flex:1;background:#E6E6E8;border-radius:4px 4px 0 0;height:24%"></div>
+            </div>
+            <div class="mono" style="display:flex;justify-content:space-between;font-size:10.5px;color:#A1A1AA;margin-top:8px"><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span><span>M</span><span>T</span></div>
+          </div>
+        </div>
+        </div>
+
+        <div class="demo-panel">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));animation:tf-slidein .45s ease both">
+          <div style="padding:clamp(20px,2.4vw,32px);border-right:1px solid #E6E6E8">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-.025em;margin-bottom:20px">Thursday, 14 May</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:14px;align-items:center;border-left:3px solid #7B4DFF;background:#FAFAFA;border-radius:0 10px 10px 0;padding:12px 16px">
+                <span class="mono" style="font-size:12px;color:#71717A;width:46px">09:30</span>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:600">Colour &amp; cut — E. Moreau</div><div style="font-size:12.5px;color:#71717A">90 min · Stylist: Ana</div></div>
+                <span class="mono" style="font-size:10.5px;background:#00A96E;color:#fff;padding:3px 8px;border-radius:5px">PAID</span>
+              </div>
+              <div style="display:flex;gap:14px;align-items:center;border-left:3px solid #2F5BFF;background:#FAFAFA;border-radius:0 10px 10px 0;padding:12px 16px">
+                <span class="mono" style="font-size:12px;color:#71717A;width:46px">11:15</span>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:600">Suite 402 — early check-in</div><div style="font-size:12.5px;color:#71717A">2 nights · Booked direct</div></div>
+                <span class="mono" style="font-size:10.5px;background:#0B0B0C;color:#fff;padding:3px 8px;border-radius:5px">HOLD</span>
+              </div>
+              <div style="display:flex;gap:14px;align-items:center;border-left:3px solid #FF5B22;background:#FAFAFA;border-radius:0 10px 10px 0;padding:12px 16px">
+                <span class="mono" style="font-size:12px;color:#71717A;width:46px">14:00</span>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:600">Consultation — J. Ferrand</div><div style="font-size:12.5px;color:#71717A">30 min · Room 2</div></div>
+                <span class="mono" style="font-size:10.5px;background:#00A96E;color:#fff;padding:3px 8px;border-radius:5px">PAID</span>
+              </div>
+              <div style="display:flex;gap:14px;align-items:center;border-left:3px solid #E6E6E8;border-radius:0 10px 10px 0;padding:12px 16px">
+                <span class="mono" style="font-size:12px;color:#A1A1AA;width:46px">16:30</span>
+                <div style="flex:1;color:#A1A1AA;font-size:14.5px">Open slot — published online</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:clamp(20px,2.4vw,32px);background:#FAFAFA">
+            <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:14px">OCCUPANCY</div>
+            <div style="font-size:clamp(34px,4vw,52px);font-weight:700;letter-spacing:-.045em;line-height:1">82%</div>
+            <div style="font-size:13.5px;color:#52525B;margin-top:6px">14 of 17 slots filled · 3 held for walk-ins</div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:26px">
+              <div style="aspect-ratio:1;border-radius:6px;background:#E6E6E8"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#E6E6E8"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div>
+              <div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#E6E6E8"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div><div style="aspect-ratio:1;border-radius:6px;background:#7B4DFF"></div><div style="aspect-ratio:1;border-radius:6px;background:#0B0B0C"></div>
+            </div>
+            <div style="font-size:12.5px;color:#71717A;margin-top:16px">Double-booking, buffer times and no-show deposits are enforced automatically.</div>
+          </div>
+        </div>
+        </div>
+
+        <div class="demo-panel">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));animation:tf-slidein .45s ease both">
+          <div style="padding:clamp(20px,2.4vw,32px);border-right:1px solid #E6E6E8">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-.025em;margin-bottom:6px">Campaigns running</div>
+            <div style="font-size:13px;color:#71717A;margin-bottom:20px">Budget reallocated every six hours against booked revenue.</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                  <span style="width:24px;height:24px;border-radius:7px;background:#2F5BFF"></span>
+                  <span style="font-size:14.5px;font-weight:600;flex:1">Meta — Weekend covers</span>
+                  <span class="mono" style="font-size:12px">€ 42/day</span>
+                </div>
+                <div style="height:6px;border-radius:99px;background:#F4F4F5;overflow:hidden"><div style="height:6px;width:74%;background:#2F5BFF;border-radius:99px"></div></div>
+              </div>
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                  <span style="width:24px;height:24px;border-radius:7px;background:#0B0B0C"></span>
+                  <span style="font-size:14.5px;font-weight:600;flex:1">TikTok — Local reach</span>
+                  <span class="mono" style="font-size:12px">€ 18/day</span>
+                </div>
+                <div style="height:6px;border-radius:99px;background:#F4F4F5;overflow:hidden"><div style="height:6px;width:38%;background:#FF3D8A;border-radius:99px"></div></div>
+              </div>
+              <div style="border:1px solid #E6E6E8;border-radius:11px;padding:14px 16px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                  <span style="width:24px;height:24px;border-radius:7px;background:#FFC300"></span>
+                  <span style="font-size:14.5px;font-weight:600;flex:1">Google — Intent search</span>
+                  <span class="mono" style="font-size:12px">€ 55/day</span>
+                </div>
+                <div style="height:6px;border-radius:99px;background:#F4F4F5;overflow:hidden"><div style="height:6px;width:91%;background:#00A96E;border-radius:99px"></div></div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:clamp(20px,2.4vw,32px);background:#FAFAFA">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div style="width:28px;height:28px;border-radius:8px;background:#7B4DFF;display:grid;place-items:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" /></svg></div>
+              <span class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A">AUTOMATED DECISION</span>
+            </div>
+            <p style="margin:0;font-size:15.5px;line-height:1.55;font-weight:500">Search spend increased by €13/day. Two TikTok creatives paused after 48 hours below target cost per booking. Weekend lunch promoted to Meta between 11:00 and 14:00.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:24px">
+              <div style="border:1px solid #E6E6E8;background:#fff;border-radius:11px;padding:14px"><div class="mono" style="font-size:10.5px;color:#71717A;letter-spacing:.1em">COST / BOOKING</div><div style="font-size:26px;font-weight:700;letter-spacing:-.04em;margin-top:6px">€ 3,10</div></div>
+              <div style="border:1px solid #E6E6E8;background:#fff;border-radius:11px;padding:14px"><div class="mono" style="font-size:10.5px;color:#71717A;letter-spacing:.1em">RETURN</div><div style="font-size:26px;font-weight:700;letter-spacing:-.04em;margin-top:6px">6,4×</div></div>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <div class="demo-panel">
+        <div style="animation:tf-slidein .45s ease both;padding:clamp(20px,2.4vw,32px)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-.025em">Pipeline</div>
+            <span class="mono" style="font-size:11px;color:#71717A">38 open · € 61.400 weighted</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:8px;height:8px;border-radius:99px;background:#2F5BFF"></span><span style="font-size:13px;font-weight:600">Enquiry</span><span class="mono" style="font-size:11px;color:#A1A1AA;margin-left:auto">12</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px"><div style="font-size:13.5px;font-weight:600">Corporate dinner — 30 pax</div><div class="mono" style="font-size:11px;color:#71717A;margin-top:5px">€ 2.400</div></div>
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px"><div style="font-size:13.5px;font-weight:600">Wedding block — 8 rooms</div><div class="mono" style="font-size:11px;color:#71717A;margin-top:5px">€ 5.100</div></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:8px;height:8px;border-radius:99px;background:#FFC300"></span><span style="font-size:13px;font-weight:600">Quoted</span><span class="mono" style="font-size:11px;color:#A1A1AA;margin-left:auto">9</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px"><div style="font-size:13.5px;font-weight:600">Monthly retainer — Vela</div><div class="mono" style="font-size:11px;color:#71717A;margin-top:5px">€ 1.800</div></div>
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px"><div style="font-size:13.5px;font-weight:600">Bridal party — 6 services</div><div class="mono" style="font-size:11px;color:#71717A;margin-top:5px">€ 940</div></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:8px;height:8px;border-radius:99px;background:#7B4DFF"></span><span style="font-size:13px;font-weight:600">Negotiation</span><span class="mono" style="font-size:11px;color:#A1A1AA;margin-left:auto">11</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px"><div style="font-size:13.5px;font-weight:600">Annual contract — Nord</div><div class="mono" style="font-size:11px;color:#71717A;margin-top:5px">€ 12.000</div></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:8px;height:8px;border-radius:99px;background:#00A96E"></span><span style="font-size:13px;font-weight:600">Won</span><span class="mono" style="font-size:11px;color:#A1A1AA;margin-left:auto">6</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px solid #E6E6E8;border-radius:10px;padding:12px;background:#FAFAFA"><div style="font-size:13.5px;font-weight:600">Seasonal menu launch</div><div class="mono" style="font-size:11px;color:#00A96E;margin-top:5px">€ 3.250 · closed</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+      <p class="mono" style="margin:22px 0 0;font-size:13px;color:#8E8E96">Interface shown with sample data.</p>
+    </div>
+  </section>
+
+  <section data-reveal class="wrap" style="padding-top:clamp(64px,8vw,124px);padding-bottom:clamp(64px,8vw,124px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:clamp(24px,4vw,72px);align-items:end;margin-bottom:clamp(36px,4vw,56px)">
+      <div>
+        <div class="eyebrow">03 — Configurations</div>
+        <h2 class="section-title" style="max-width:17ch">Built for your trade, not for software in general.</h2>
+      </div>
+      <p class="muted" style="margin:0;font-size:16px;line-height:1.6;max-width:44ch">Each configuration ships with the workflows, tax rules, documents and terminology that industry actually uses. Nothing generic to strip out.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:#E6E6E8;border:1px solid #E6E6E8;border-radius:14px;overflow:hidden">
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#FF5B22;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M17 3c-1.5 2-2 4-2 6h4c0-2-.5-4-2-6zM17 9v12" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Restaurants &amp; cafés</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Point of sale, table plan, reservations, kitchen display, delivery, split billing, fiscal receipts.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#2F5BFF;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 18h18M3 18v3M21 18v3M7 10V7h6v3" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Hotels &amp; rentals</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Direct booking engine, rates and availability, channel sync, check-in, housekeeping, city tax.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#7B4DFF;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6 15a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8.1 8.1 20 20M8.1 15.9 20 4" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Salons &amp; studios</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Stylist calendars, service menus, deposits, no-show protection, packages, commission reports.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#00A96E;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Clinics &amp; practices</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Appointments, patient records, consent forms, recalls, invoicing and GDPR-compliant storage.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#FF3D8A;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Gyms &amp; wellness</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Memberships, recurring billing, class schedules, capacity limits, door access, attendance.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#FFC300;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7zM9 7V5a3 3 0 0 1 6 0v2" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Retail &amp; boutiques</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Online store, in-store checkout, one stock pool, variants, click &amp; collect, returns.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#00B8D9;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5M10 21v-6h4v6" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Real estate</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Listings, viewing scheduler, enquiry routing, document signing, vendor and buyer records.</p>
+      </div>
+      <div class="config-card">
+        <div style="width:42px;height:42px;border-radius:11px;background:#0B0B0C;display:grid;place-items:center;margin-bottom:18px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM16.5 13.5v6M13.5 16.5h6" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Everything else</div>
+        <p class="muted" style="margin:0;font-size:14px;line-height:1.6">Workshops, tutors, trades, veterinary, photographers. Tell us the trade — we build the configuration.</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-reveal style="border-top:1px solid #E6E6E8;background:#FAFAFA">
+    <div class="wrap" style="padding-top:clamp(64px,8vw,110px);padding-bottom:clamp(64px,8vw,110px)">
+      <div class="eyebrow">04 — Plans</div>
+      <h2 class="section-title" style="margin-bottom:clamp(36px,4vw,56px);max-width:17ch">Four tiers. Each one adds a layer, never a rebuild.</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+        <div style="background:#fff;border:1px solid #E6E6E8;border-radius:14px;padding:28px 26px 30px">
+          <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:14px">TIER 01</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:10px">Growth</div>
+          <p class="muted" style="margin:0 0 18px;font-size:14.5px;line-height:1.6">Everything required to operate: the day-to-day tools of your trade, deployed and staffed.</p>
+          <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600"><span style="width:22px;height:22px;border-radius:6px;background:#2F5BFF;display:grid;place-items:center;flex:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span>Website, POS, bookings, payments</div>
+        </div>
+        <div style="background:#fff;border:1px solid #E6E6E8;border-radius:14px;padding:28px 26px 30px">
+          <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#71717A;margin-bottom:14px">TIER 02</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:10px">Starter</div>
+          <p class="muted" style="margin:0 0 18px;font-size:14.5px;line-height:1.6">Starter, plus your own website and autonomous acquisition across Meta, Google and TikTok.</p>
+          <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600"><span style="width:22px;height:22px;border-radius:6px;background:#7B4DFF;display:grid;place-items:center;flex:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" /></svg></span>AI marketing engine</div>
+        </div>
+        <div style="background:#0B0B0C;color:#fff;border-radius:14px;padding:28px 26px 30px">
+          <div class="mono" style="font-size:11px;letter-spacing:.13em;color:#8E8E96;margin-bottom:14px">TIER 03</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:10px">Max</div>
+          <p style="margin:0 0 18px;font-size:14.5px;line-height:1.6;color:#B4B4BB">Everything before it, plus AI-generated creative and a full customer relationship system.</p>
+          <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600"><span style="width:22px;height:22px;border-radius:6px;background:#00A96E;display:grid;place-items:center;flex:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8" /></svg></span>Customer relationship suite</div>
+        </div>
+      </div>
+      <div style="margin-top:26px">
+        <button type="button" class="btn-text" data-action="goPricing">Compare all plans<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <section data-reveal style="border-top:1px solid #E6E6E8">
+    <div class="wrap" style="padding-top:clamp(64px,8vw,110px);padding-bottom:clamp(64px,8vw,110px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1px;background:#E6E6E8">
+      <div style="background:#fff;padding-right:clamp(20px,3vw,44px)">
+        <div style="display:flex;gap:3px;margin-bottom:18px" aria-label="5 out of 5 stars">
+          <span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span>
+        </div>
+        <p style="margin:0 0 20px;font-size:clamp(17px,1.6vw,21px);line-height:1.5;letter-spacing:-.02em;font-weight:500">Placeholder testimonial. We closed on a Friday with three systems that did not speak to each other and opened on Saturday with one. The reservation book and the till have not disagreed since.</p>
+        <div style="font-size:14px;font-weight:600">Name Surname</div>
+        <div style="font-size:13.5px;color:#71717A">Owner, Restaurant — placeholder</div>
+      </div>
+      <div style="background:#fff;padding-left:clamp(20px,3vw,44px);padding-right:clamp(20px,3vw,44px)">
+        <div style="display:flex;gap:3px;margin-bottom:18px" aria-label="5 out of 5 stars">
+          <span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span>
+        </div>
+        <p style="margin:0 0 20px;font-size:clamp(17px,1.6vw,21px);line-height:1.5;letter-spacing:-.02em;font-weight:500">Placeholder testimonial. The marketing tier pays for itself. I stopped guessing which platform was working and stopped paying someone to guess for me.</p>
+        <div style="font-size:14px;font-weight:600">Name Surname</div>
+        <div style="font-size:13.5px;color:#71717A">Director, Salon group — placeholder</div>
+      </div>
+      <div style="background:#fff;padding-left:clamp(20px,3vw,44px)">
+        <div style="display:flex;gap:3px;margin-bottom:18px" aria-label="5 out of 5 stars">
+          <span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span><span style="width:15px;height:15px;background:#FFC300;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span>
+        </div>
+        <p style="margin:0 0 20px;font-size:clamp(17px,1.6vw,21px);line-height:1.5;letter-spacing:-.02em;font-weight:500">Placeholder testimonial. Twenty-two rooms, two properties, one screen. Onboarding took a day and nobody on the front desk needed a manual.</p>
+        <div style="font-size:14px;font-weight:600">Name Surname</div>
+        <div style="font-size:13.5px;color:#71717A">General Manager, Hotel — placeholder</div>
+      </div>
+    </div>
+  </section>
+
+  <section data-reveal style="border-top:1px solid #E6E6E8">
+    <div class="wrap" style="padding-top:clamp(64px,8vw,110px);padding-bottom:clamp(64px,8vw,110px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(28px,4vw,80px)">
+      <div>
+        <div class="eyebrow">05 — Questions</div>
+        <h2 class="section-title" style="font-size:clamp(28px,3.4vw,48px);line-height:1.04;max-width:14ch">Answered before you ask.</h2>
+        <p class="muted" style="margin:20px 0 0;font-size:15.5px;line-height:1.6;max-width:36ch">Anything not covered here, our team will answer in writing within one business day.</p>
+      </div>
+      <div>
+        <div class="faq-item" role="button" tabindex="0" data-action="f0">
+          <div class="faq-row"><span class="faq-q">Is 24 hours realistic for my business?</span><span class="faq-sym">+</span></div>
+          <p class="faq-a">Yes, for the overwhelming majority. The clock starts at the intake call and covers configuration, data import, payment activation and training. Complex multi-location or bespoke integration work is quoted separately and stated before you sign.</p>
+        </div>
+        <div class="faq-item" role="button" tabindex="0" data-action="f1">
+          <div class="faq-row"><span class="faq-q">What happens to my existing website and data?</span><span class="faq-sym">+</span></div>
+          <p class="faq-a">We migrate your domain, content, customer list, bookings and product or menu data. Your existing site stays live until the moment we switch over, so there is no window where customers find nothing.</p>
+        </div>
+        <div class="faq-item" role="button" tabindex="0" data-action="f2">
+          <div class="faq-row"><span class="faq-q">Do I need to buy new hardware?</span><span class="faq-sym">+</span></div>
+          <p class="faq-a">Usually not. The point of sale runs in a browser on hardware you already own. Where terminals or printers are required we supply certified units at cost and configure them before delivery.</p>
+        </div>
+        <div class="faq-item" role="button" tabindex="0" data-action="f3">
+          <div class="faq-row"><span class="faq-q">Who controls the advertising budget?</span><span class="faq-sym">+</span></div>
+          <p class="faq-a">You do. You set a ceiling and the platform allocates within it across channels, reporting every change. Media spend is paid to the platforms directly and is not part of your subscription.</p>
+        </div>
+        <div class="faq-item" role="button" tabindex="0" data-action="f4">
+          <div class="faq-row"><span class="faq-q">Am I locked into a contract?</span><span class="faq-sym">+</span></div>
+          <p class="faq-a">Monthly plans are cancellable with thirty days' notice. Your domain remains yours and your data can be exported in full at any time, in open formats, without contacting support.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#0B0B0C;color:#fff">
+    <div class="wrap" style="padding-top:clamp(64px,8vw,120px);padding-bottom:clamp(64px,8vw,120px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(28px,4vw,64px);align-items:center">
+      <h2 style="margin:0;font-size:clamp(32px,4.4vw,64px);line-height:1;letter-spacing:-.045em;font-weight:700;max-width:14ch">Start today. Trade tomorrow.</h2>
+      <div>
+        <p style="margin:0 0 26px;font-size:16.5px;line-height:1.6;color:#B4B4BB;max-width:42ch">Book a forty-minute intake call. If we cannot have you live within twenty-four hours of it, the first month is free.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px">
+          <button type="button" class="btn btn-inverse" data-action="goContact">Book a demo<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+          <button type="button" class="btn btn-outline-inverse" data-action="goPricing">View pricing</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= PRICING ================= -->
+<main id="page-pricing" class="page" data-screen-label="Pricing">
+  <section class="wrap" style="padding-top:clamp(48px,6vw,88px);padding-bottom:clamp(32px,4vw,48px)">
+    <div class="eyebrow">Pricing</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(24px,4vw,64px);align-items:end">
+      <h1 style="margin:0;font-size:clamp(38px,5.2vw,80px);line-height:.98;letter-spacing:-.045em;font-weight:700;max-width:13ch">One price. Every tool your trade needs.</h1>
+      <div>
+        <p class="muted" style="margin:0 0 22px;font-size:16px;line-height:1.6;max-width:40ch">Deployment, migration, training and support are included in every plan. Card processing is charged at cost. No setup fee.</p>
+        <div class="toggle">
+          <button type="button" class="toggle-btn" data-action="setMonthly">Monthly</button>
+          <button type="button" class="toggle-btn active" data-action="setAnnual">Annual<span class="toggle-save">−20%</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" style="padding-bottom:clamp(48px,6vw,88px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:16px">
+      <div style="border:1px solid #E6E6E8;border-radius:16px;padding:30px 26px 32px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <div style="width:34px;height:34px;border-radius:9px;background:#2F5BFF;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3zM3 9h18" /></svg></div>
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.03em">Starter</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:44px;font-weight:700;letter-spacing:-.05em">€<span id="pStarter">71</span></span><span style="font-size:14px;color:#71717A;font-weight:500">/month</span></div>
+        <div class="mono js-bill-note" style="font-size:13px;color:#A1A1AA;margin-top:6px">BILLED ANNUALLY</div>
+        <p class="muted" style="margin:18px 0 22px;font-size:14.5px;line-height:1.6">Start trading. The day-to-day operational tools of your specific trade, deployed and staffed.</p>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:14.5px;line-height:1.45;margin-bottom:26px">
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2F5BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Payments, invoicing &amp; receipts</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2F5BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Industry tool set — POS, bookings, orders</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2F5BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Up to 3 staff accounts</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2F5BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>24-hour deployment &amp; training</div>
+        </div>
+        <button type="button" class="btn btn-outline" style="margin-top:auto;justify-content:center" data-action="goContact">Get started</button>
+      </div>
+
+      <div style="border:1px solid #E6E6E8;border-radius:16px;padding:30px 26px 32px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <div style="width:34px;height:34px;border-radius:9px;background:#7B4DFF;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" /></svg></div>
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.03em">Growth</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:44px;font-weight:700;letter-spacing:-.05em">€<span id="pGrowth">151</span></span><span style="font-size:14px;color:#71717A;font-weight:500">/month</span></div>
+        <div class="mono js-bill-note" style="font-size:13px;color:#A1A1AA;margin-top:6px">BILLED ANNUALLY</div>
+        <p class="muted" style="margin:18px 0 22px;font-size:14.5px;line-height:1.6">Everything in Starter, plus your own website and an acquisition engine that runs your paid channels.</p>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:14.5px;line-height:1.45;margin-bottom:26px">
+          <div style="display:flex;gap:10px;font-weight:600"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B4DFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Everything in Starter</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B4DFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>AI marketing across Meta, TikTok, Google</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B4DFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Custom website</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B4DFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Automatic budget reallocation</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B4DFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Up to 5 staff accounts</div>
+        </div>
+        <button type="button" class="btn btn-outline" style="margin-top:auto;justify-content:center" data-action="goContact">Get started</button>
+      </div>
+
+      <div style="background:#0B0B0C;color:#fff;border-radius:16px;padding:30px 26px 32px;display:flex;flex-direction:column;position:relative">
+        <span class="mono" style="position:absolute;top:-1px;right:26px;background:#00A96E;color:#fff;font-size:10.5px;letter-spacing:.1em;padding:5px 10px;border-radius:0 0 7px 7px">MOST CHOSEN</span>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <div style="width:34px;height:34px;border-radius:9px;background:#00A96E;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M22 19v-2a4 4 0 0 0-3-3.9" /></svg></div>
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.03em">Max</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:44px;font-weight:700;letter-spacing:-.05em">€<span id="pMax">279</span></span><span style="font-size:14px;color:#8E8E96;font-weight:500">/month</span></div>
+        <div class="mono js-bill-note" style="font-size:13px;color:#8E8E96;margin-top:6px">BILLED ANNUALLY</div>
+        <p style="margin:18px 0 22px;font-size:14.5px;line-height:1.6;color:#B4B4BB">Everything in Growth, plus AI-generated creative and a complete customer relationship system.</p>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:14.5px;line-height:1.45;margin-bottom:26px">
+          <div style="display:flex;gap:10px;font-weight:600"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A96E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Everything in Growth</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A96E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Full CRM — pipelines, contacts, history</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A96E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Up to 15 staff accounts</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A96E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>AI creative generation &amp; testing</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A96E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Custom domain <span style="color:#8E8E96;font-size:12px">— coming soon</span></div>
+        </div>
+        <button type="button" class="btn btn-inverse" style="margin-top:auto;justify-content:center" data-action="goContact">Get started</button>
+      </div>
+
+      <div style="border:1px solid #E6E6E8;background:#FAFAFA;border-radius:16px;padding:30px 26px 32px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <div style="width:34px;height:34px;border-radius:9px;background:#FF5B22;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V6l8-3z" /></svg></div>
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.03em">Enterprise</span>
+        </div>
+        <div style="font-size:44px;font-weight:700;letter-spacing:-.05em">Custom</div>
+        <div class="mono" style="font-size:13px;color:#A1A1AA;margin-top:6px">QUOTED PER ESTATE</div>
+        <p class="muted" style="margin:18px 0 22px;font-size:14.5px;line-height:1.6">For groups, franchises and businesses with systems that must be integrated rather than replaced.</p>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:14.5px;line-height:1.45;margin-bottom:26px">
+          <div style="display:flex;gap:10px;font-weight:600"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF5B22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Everything in Max</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF5B22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Custom integrations &amp; API access <span style="color:#A1A1AA;font-size:12px">— coming soon</span></div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF5B22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Dedicated account team &amp; SLA</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF5B22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Single sign-on &amp; audit logging</div>
+          <div style="display:flex;gap:10px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF5B22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6 9 17l-5-5" /></svg>Phased multi-site rollout</div>
+        </div>
+        <button type="button" class="btn btn-primary" style="margin-top:auto;justify-content:center" data-action="goContact">Talk to sales</button>
+      </div>
+    </div>
+    <p class="mono" style="margin:20px 0 0;font-size:12px;color:#A1A1AA">Prices shown are placeholders, excluding VAT. Advertising spend is paid directly to the platforms.</p>
+  </section>
+
+  <section style="border-top:1px solid #E6E6E8;background:#FAFAFA">
+    <div class="wrap" style="padding-top:clamp(56px,7vw,100px);padding-bottom:clamp(56px,7vw,100px)">
+      <h2 style="margin:0 0 clamp(28px,3vw,44px);font-size:clamp(26px,3vw,42px);letter-spacing:-.04em;font-weight:700">Full comparison</h2>
+      <div style="background:#fff;border:1px solid #E6E6E8;border-radius:14px;overflow:hidden">
+        <div class="mono" style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));background:#FAFAFA;border-bottom:1px solid #E6E6E8;font-size:11px;letter-spacing:.1em;color:#71717A">
+        <div class="mono" style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));background:#FAFAFA;border-bottom:1px solid #E6E6E8;font-size:11px;letter-spacing:.1em;color:#71717A"><div style="padding:14px 20px">FEATURE</div><div style="padding:14px 12px;text-align:center">STARTER</div><div style="padding:14px 12px;text-align:center">GROWTH</div><div style="padding:14px 12px;text-align:center">MAX</div><div style="padding:14px 12px;text-align:center">ENTERPRISE</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">Industry tool set (POS / bookings / orders)</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">Payments, invoicing &amp; receipts</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">24-hour deployment &amp; staff training</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">Custom website</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">AI marketing — Meta, Google, TikTok</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">Automatic budget reallocation</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">Advanced reporting</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">AI creative generation &amp; testing</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">Customer relationship suite</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">Custom domain</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center"><span style="font-size:11px;color:#71717A;letter-spacing:.04em">SOON</span></div><div style="padding:14px 12px;text-align:center"><span style="font-size:11px;color:#71717A;letter-spacing:.04em">SOON</span></div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;"><div style="padding:14px 20px">Custom integrations &amp; API access</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center"><span style="font-size:11px;color:#71717A;letter-spacing:.04em">SOON</span></div></div>
+        <div style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));border-bottom:1px solid #F4F4F5;font-size:14.5px;align-items:center;background:#FCFCFD;"><div style="padding:14px 20px">Dedicated account team &amp; SLA</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">—</div><div style="padding:14px 12px;text-align:center">●</div></div>
+        <div class="mono" style="display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(4,minmax(88px,1fr));font-size:14.5px;align-items:center"><div style="padding:14px 20px;font-family:Archivo,sans-serif">Staff accounts</div><div style="padding:14px 12px;text-align:center;font-size:13px">3</div><div style="padding:14px 12px;text-align:center;font-size:13px">5</div><div style="padding:14px 12px;text-align:center;font-size:13px">15</div><div style="padding:14px 12px;text-align:center;font-size:13px">Custom</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid #E6E6E8">
+    <div class="wrap" style="padding-top:clamp(56px,7vw,100px);padding-bottom:clamp(56px,7vw,100px);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:clamp(24px,4vw,56px)">
+      <div>
+        <div style="width:40px;height:40px;border-radius:11px;background:#00A96E;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Live in 24 hours or free</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6;max-width:38ch">If we miss the window from the intake call, your first month is not billed. Written into every agreement.</p>
+      </div>
+      <div>
+        <div style="width:40px;height:40px;border-radius:11px;background:#2F5BFF;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6a7 7 0 1 0 0 12M4 10h9M4 14h9" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">No setup fee, no lock-in</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6;max-width:38ch">Deployment, migration and training are included. Monthly plans cancel with thirty days' notice.</p>
+      </div>
+      <div>
+        <div style="width:40px;height:40px;border-radius:11px;background:#FF5B22;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V6l8-3z" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:8px">Your data stays yours</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6;max-width:38ch">EU hosting, GDPR compliant, full export in open formats at any time without asking permission.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#0B0B0C;color:#fff">
+    <div class="wrap" style="padding-top:clamp(56px,7vw,100px);padding-bottom:clamp(56px,7vw,100px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(28px,4vw,64px);align-items:center">
+      <h2 style="margin:0;font-size:clamp(30px,4vw,58px);line-height:1;letter-spacing:-.045em;font-weight:700;max-width:14ch">Not sure which tier fits?</h2>
+      <div>
+        <p style="margin:0 0 26px;font-size:16.5px;line-height:1.6;color:#B4B4BB;max-width:42ch">Describe the business in two lines. We will tell you which plan covers it and what it will cost, before any call.</p>
+        <button type="button" class="btn btn-inverse" data-action="goContact">Ask us<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= ABOUT ================= -->
+<main id="page-about" class="page" data-screen-label="About">
+  <section class="wrap" style="padding-top:clamp(48px,6vw,88px);padding-bottom:clamp(40px,5vw,72px)">
+    <div class="eyebrow">Company</div>
+    <h1 style="margin:0;font-size:clamp(38px,5.4vw,86px);line-height:.98;letter-spacing:-.045em;font-weight:700;max-width:15ch">Small businesses deserve the software large ones buy.</h1>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(24px,4vw,72px);margin-top:clamp(32px,4vw,56px)">
+      <p class="muted" style="margin:0;font-size:17px;line-height:1.6">Twentyfour was founded on an unremarkable observation: the tools that run a thirty-cover restaurant or an eight-room hotel are worse, more expensive and harder to adopt than the tools that run a corporation. Not because the technology is difficult, but because nobody assembles it for them.</p>
+      <p class="muted" style="margin:0;font-size:17px;line-height:1.6">So we assemble it. One platform, configured per trade, deployed by people rather than by documentation. The measure of our work is not features shipped — it is the number of hours between a business deciding to change and that change being finished.</p>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid #E6E6E8;border-bottom:1px solid #E6E6E8;background:#FAFAFA">
+    <div class="wrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+      <div style="padding:clamp(28px,3vw,40px) 24px clamp(28px,3vw,40px) 0;border-right:1px solid #E6E6E8"><div style="font-size:clamp(28px,3.2vw,44px);font-weight:700;letter-spacing:-.04em">2021</div><div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Founded</div></div>
+      <div style="padding:clamp(28px,3vw,40px) 24px clamp(28px,3vw,40px) clamp(20px,2.5vw,36px);border-right:1px solid #E6E6E8"><div style="font-size:clamp(28px,3.2vw,44px);font-weight:700;letter-spacing:-.04em">64</div><div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">People — placeholder</div></div>
+      <div style="padding:clamp(28px,3vw,40px) 24px clamp(28px,3vw,40px) clamp(20px,2.5vw,36px);border-right:1px solid #E6E6E8"><div style="font-size:clamp(28px,3.2vw,44px);font-weight:700;letter-spacing:-.04em">7</div><div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Markets served</div></div>
+      <div style="padding:clamp(28px,3vw,40px) 0 clamp(28px,3vw,40px) clamp(20px,2.5vw,36px)"><div style="font-size:clamp(28px,3.2vw,44px);font-weight:700;letter-spacing:-.04em">EU</div><div class="mono" style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#71717A;margin-top:8px">Data residency</div></div>
+    </div>
+  </section>
+
+  <section class="wrap" style="padding-top:clamp(56px,7vw,110px);padding-bottom:clamp(56px,7vw,110px)">
+    <div class="eyebrow">Operating principles</div>
+    <h2 class="section-title" style="margin-bottom:clamp(32px,4vw,52px);font-size:clamp(28px,3.4vw,50px);line-height:1.03;max-width:18ch">Four commitments we are willing to be measured against.</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:#E6E6E8;border-top:1px solid #E6E6E8;border-bottom:1px solid #E6E6E8">
+      <div style="background:#fff;padding:28px 24px 30px 0">
+        <div style="width:40px;height:40px;border-radius:11px;background:#2F5BFF;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Speed is a feature</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">A month-long implementation costs a small business more in lost trade than the software costs in a year.</p>
+      </div>
+      <div style="background:#fff;padding:28px 24px 30px clamp(18px,2vw,30px)">
+        <div style="width:40px;height:40px;border-radius:11px;background:#FF5B22;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">One system, not seven</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Every integration between two vendors is a place where numbers stop matching. We remove the seams.</p>
+      </div>
+      <div style="background:#fff;padding:28px 24px 30px clamp(18px,2vw,30px)">
+        <div style="width:40px;height:40px;border-radius:11px;background:#7B4DFF;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Automation with a paper trail</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Anything the platform decides on your behalf is logged in plain language and can be reversed by you.</p>
+      </div>
+      <div style="background:#fff;padding:28px 0 30px clamp(18px,2vw,30px)">
+        <div style="width:40px;height:40px;border-radius:11px;background:#00A96E;display:grid;place-items:center;margin-bottom:18px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V6l8-3z" /></svg></div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-.025em;margin-bottom:10px">Leaving must stay easy</div>
+        <p class="muted" style="margin:0;font-size:14.5px;line-height:1.6">Retention earned by lock-in is not retention. Export is one click and includes everything.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid #E6E6E8;background:#FAFAFA">
+    <div class="wrap" style="padding-top:clamp(56px,7vw,100px);padding-bottom:clamp(56px,7vw,100px);display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:clamp(28px,4vw,72px)">
+      <div>
+        <div class="eyebrow">Track record</div>
+        <h2 class="section-title" style="font-size:clamp(26px,3vw,42px);line-height:1.04;max-width:14ch">How we got here.</h2>
+      </div>
+      <div>
+        <div style="display:flex;gap:24px;border-top:1px solid #E6E6E8;padding:20px 0"><span class="mono" style="font-size:12px;color:#71717A;width:52px;flex:none;padding-top:3px">2021</span><div><div style="font-size:16.5px;font-weight:600;letter-spacing:-.02em">First configuration shipped</div><p class="muted" style="margin:6px 0 0;font-size:14.5px;line-height:1.6;max-width:48ch">Built for a single restaurant group that could not reconcile its till with its booking system.</p></div></div>
+        <div style="display:flex;gap:24px;border-top:1px solid #E6E6E8;padding:20px 0"><span class="mono" style="font-size:12px;color:#71717A;width:52px;flex:none;padding-top:3px">2023</span><div><div style="font-size:16.5px;font-weight:600;letter-spacing:-.02em">The 24-hour guarantee</div><p class="muted" style="margin:6px 0 0;font-size:14.5px;line-height:1.6;max-width:48ch">Deployment was industrialised into a single-day process and written into the standard agreement.</p></div></div>
+        <div style="display:flex;gap:24px;border-top:1px solid #E6E6E8;padding:20px 0"><span class="mono" style="font-size:12px;color:#71717A;width:52px;flex:none;padding-top:3px">2024</span><div><div style="font-size:16.5px;font-weight:600;letter-spacing:-.02em">Marketing engine released</div><p class="muted" style="margin:6px 0 0;font-size:14.5px;line-height:1.6;max-width:48ch">Paid acquisition across Meta, TikTok and Google brought inside the platform and tied to booked revenue.</p></div></div>
+        <div style="display:flex;gap:24px;border-top:1px solid #E6E6E8;border-bottom:1px solid #E6E6E8;padding:20px 0"><span class="mono" style="font-size:12px;color:#71717A;width:52px;flex:none;padding-top:3px">2026</span><div><div style="font-size:16.5px;font-weight:600;letter-spacing:-.02em">Customer suite and multi-site</div><p class="muted" style="margin:6px 0 0;font-size:14.5px;line-height:1.6;max-width:48ch">Growth tier introduced for operators running more than one location or selling to returning clients.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#0B0B0C;color:#fff">
+    <div class="wrap" style="padding-top:clamp(56px,7vw,100px);padding-bottom:clamp(56px,7vw,100px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(28px,4vw,64px);align-items:center">
+      <h2 style="margin:0;font-size:clamp(30px,4vw,58px);line-height:1;letter-spacing:-.045em;font-weight:700;max-width:14ch">Come and see it working.</h2>
+      <div>
+        <p style="margin:0 0 26px;font-size:16.5px;line-height:1.6;color:#B4B4BB;max-width:42ch">A demo uses your actual menu, service list or room types — not a sample account.</p>
+        <button type="button" class="btn btn-inverse" data-action="goContact">Book a demo<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= CONTACT ================= -->
+<main id="page-contact" class="page" data-screen-label="Contact">
+  <section class="wrap" style="padding-top:clamp(48px,6vw,88px);padding-bottom:clamp(56px,7vw,96px)">
+    <div class="eyebrow">Contact</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:clamp(32px,5vw,88px);align-items:start">
+      <div>
+        <h1 style="margin:0;font-size:clamp(34px,4.6vw,68px);line-height:1;letter-spacing:-.045em;font-weight:700;max-width:13ch">Book the intake call.</h1>
+        <p class="muted" style="margin:24px 0 36px;font-size:16.5px;line-height:1.6;max-width:42ch">Forty minutes, no preparation needed. Bring your menu, service list or room types and we will show you the platform running on them.</p>
+        <div style="display:flex;flex-direction:column;gap:1px;background:#E6E6E8;border-top:1px solid #E6E6E8;border-bottom:1px solid #E6E6E8">
+          <div style="background:#fff;padding:20px 0;display:flex;gap:16px;align-items:center">
+            <div style="width:40px;height:40px;border-radius:11px;background:#2F5BFF;display:grid;place-items:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 7l9 6 9-6" /></svg></div>
+            <div><div style="font-size:15.5px;font-weight:600">sales@twentyfour.io</div><div style="font-size:13.5px;color:#71717A">Answered within one business day</div></div>
+          </div>
+          <div style="background:#fff;padding:20px 0;display:flex;gap:16px;align-items:center">
+            <div style="width:40px;height:40px;border-radius:11px;background:#00A96E;display:grid;place-items:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" /></svg></div>
+            <div><div style="font-size:15.5px;font-weight:600">+31 20 000 0000</div><div style="font-size:13.5px;color:#71717A">Mon–Fri, 08:00–19:00 CET — placeholder</div></div>
+          </div>
+          <div style="background:#fff;padding:20px 0;display:flex;gap:16px;align-items:center">
+            <div style="width:40px;height:40px;border-radius:11px;background:#FF5B22;display:grid;place-items:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.5" /></svg></div>
+            <div><div style="font-size:15.5px;font-weight:600">Keizersgracht 000, Amsterdam</div><div style="font-size:13.5px;color:#71717A">Registered office — placeholder</div></div>
+          </div>
+          <div style="background:#fff;padding:20px 0;display:flex;gap:16px;align-items:center">
+            <div style="width:40px;height:40px;border-radius:11px;background:#7B4DFF;display:grid;place-items:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z" /></svg></div>
+            <div><div style="font-size:15.5px;font-weight:600">Existing customer support</div><div style="font-size:13.5px;color:#71717A">In-app chat, 24/7, median first reply under 4 minutes</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border:1px solid #E6E6E8;border-radius:16px;padding:clamp(24px,3vw,38px)">
+        <div id="contact-form-view">
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.03em;margin-bottom:22px">Tell us about the business</div>
+          <form id="contact-form" style="display:grid;gap:16px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">
+              <label style="display:block"><span class="field-label">FULL NAME</span><input class="form-input" type="text" name="name" placeholder="Elena Rossi" required /></label>
+              <label style="display:block"><span class="field-label">WORK E-MAIL</span><input class="form-input" type="email" name="email" placeholder="elena@business.com" required /></label>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">
+              <label style="display:block"><span class="field-label">BUSINESS NAME</span><input class="form-input" type="text" name="bizName" placeholder="Casa Milano" required /></label>
+              <label style="display:block"><span class="field-label">INDUSTRY</span>
+                <select class="form-input" name="type">
+                  <option>Restaurant or café</option><option>Hotel or rental</option><option>Salon or studio</option><option>Clinic or practice</option><option>Gym or wellness</option><option>Retail or boutique</option><option>Real estate</option><option>Other</option>
+                </select>
+              </label>
+            </div>
+            <div style="display:block">
+              <span class="field-label">PLAN OF INTEREST</span>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <button type="button" class="pill" data-plan="0" data-action="pick0">Starter</button>
+                <button type="button" class="pill" data-plan="1" data-action="pick1">Growth</button>
+                <button type="button" class="pill active" data-plan="2" data-action="pick2">Max</button>
+                <button type="button" class="pill" data-plan="3" data-action="pick3">Enterprise</button>
+              </div>
+            </div>
+            <label style="display:block"><span class="field-label">WHAT ARE YOU USING TODAY?</span><textarea class="form-input" name="msg" rows="4" placeholder="Two lines is enough — what you run now and what breaks."></textarea></label>
+            <button type="submit" class="btn btn-primary btn-block">Request the intake call</button>
+            <p style="margin:0;font-size:12.5px;line-height:1.55;color:#A1A1AA">By submitting you agree to be contacted about your enquiry. We do not sell or share contact data.</p>
+          </form>
+        </div>
+        <div id="contact-sent-view" style="padding:40px 0;text-align:center">
+          <div style="width:52px;height:52px;border-radius:14px;background:#00A96E;display:grid;place-items:center;margin:0 auto 22px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:10px">Request received</div>
+          <p style="margin:0 auto;font-size:15px;line-height:1.6;color:#52525B;max-width:34ch">A specialist will write to you with two proposed times within one business day. Demo form is illustrative only.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer style="border-top:1px solid #E6E6E8;background:#FAFAFA">
+  <div class="wrap" style="padding-top:clamp(44px,5vw,68px);padding-bottom:28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:clamp(24px,3vw,48px)">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:24px;height:24px;background:#0B0B0C;border-radius:7px;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg></div>
+        <span style="font-size:16px;font-weight:700;letter-spacing:-.035em">Twentyfour</span>
+      </div>
+      <p style="margin:0;font-size:13.5px;line-height:1.6;color:#71717A;max-width:30ch">The operating platform for businesses that need to be online tomorrow, not next quarter.</p>
+    </div>
+    <div>
+      <div class="mono" style="font-size:10.5px;letter-spacing:.13em;color:#A1A1AA;margin-bottom:14px">PLATFORM</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button type="button" class="footer-link" data-action="goHome">Overview</button>
+        <button type="button" class="footer-link" data-action="goHome">Industry configurations</button>
+        <button type="button" class="footer-link" data-action="goPricing">Pricing</button>
+        <button type="button" class="footer-link" data-action="goPricing">Enterprise</button>
+      </div>
+    </div>
+    <div>
+      <div class="mono" style="font-size:10.5px;letter-spacing:.13em;color:#A1A1AA;margin-bottom:14px">COMPANY</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button type="button" class="footer-link" data-action="goAbout">About</button>
+        <button type="button" class="footer-link" data-action="goAbout">Principles</button>
+        <button type="button" class="footer-link" data-action="goContact">Contact</button>
+        <button type="button" class="footer-link" data-action="goContact">Careers</button>
+      </div>
+    </div>
+    <div>
+      <div class="mono" style="font-size:10.5px;letter-spacing:.13em;color:#A1A1AA;margin-bottom:14px">LEGAL</div>
+      <div style="display:flex;flex-direction:column;gap:9px;font-size:14px;color:#52525B">
+        <span style="cursor:default">Terms of service</span>
+        <span style="cursor:default">Privacy notice</span>
+        <span style="cursor:default">Data processing</span>
+        <span style="cursor:default">Service level</span>
+      </div>
+    </div>
+  </div>
+  <div class="wrap mono" style="padding-top:20px;padding-bottom:34px;border-top:1px solid #E6E6E8;display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;font-size:11.5px;color:#A1A1AA">
+    <span>© 2026 Twentyfour B.V. — All figures and logos on this site are placeholders.</span>
+    <span>EU hosted · GDPR compliant · ISO 27001 in progress</span>
+  </div>
+</footer>
+
+</div>
+<script src="script.js"></script>
+</body>
+</html>

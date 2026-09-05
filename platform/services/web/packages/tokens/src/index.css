@@ -1,0 +1,9 @@
+/* Single entry point for an app's stylesheet.
+ *
+ * Tailwind's automatic source detection starts from the importing file, so an
+ * app that pulls components out of packages/ui must add its own @source line.
+ * See apps/merchant/src/app.css. */
+
+@import "tailwindcss";
+@import "./theme.css";
+@import "./base.css";

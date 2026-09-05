@@ -1,0 +1,49 @@
+# Auth: credentials, sessions and tokens. Calls RBAC in exactly one place, to
+# bind the owner role at signup.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  namespace: twentyfour
+  labels: { app: auth, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: auth } }
+  template:
+    metadata: { labels: { app: auth, tier: backend } }
+    spec:
+      containers:
+        - name: authd
+          image: localhost:5000/twentyfour/auth:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9102"
+            - "-rbac=rbac.twentyfour.svc.cluster.local:9101"
+            # Local development only. The default is 12; a four-character
+            # password must never be accepted anywhere real.
+            - "-min-password=4"
+          ports: [{ containerPort: 9102, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: auth } }
+            # Without a stable key every restart invalidates every session.
+            # In production this comes from OpenBao, not a Secret in git.
+            - name: TOKEN_KEY
+              valueFrom: { secretKeyRef: { name: auth-token-key, key: key } }
+          readinessProbe:
+            grpc: { port: 9102 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9102 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: auth, namespace: twentyfour }
+spec:
+  selector: { app: auth }
+  ports: [{ port: 9102, targetPort: 9102, name: grpc }]

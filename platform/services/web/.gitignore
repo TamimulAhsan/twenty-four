@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# tsc is only ever used to type-check here; Vite does the bundling. If these
+# appear beside a source file, something ran tsc without noEmit and Vite will
+# resolve the stale .js in preference to the .tsx, so edits stop taking effect.
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+apps/*/src/**/*.js
+apps/*/src/**/*.d.ts
+apps/*/vite.config.js

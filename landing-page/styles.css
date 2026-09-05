@@ -1,0 +1,107 @@
+/* ---------- Reset & base ---------- */
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;scroll-behavior:smooth}
+body{margin:0;background:#FFFFFF;color:#0B0B0C;font-family:Archivo,'Helvetica Neue',sans-serif;text-wrap:pretty}
+a{color:#0B0B0C;text-decoration:none}
+a:hover{color:#2F5BFF}
+input,textarea,select,button{font:inherit;color:inherit}
+button{border:none;background:none;padding:0;cursor:pointer;-webkit-appearance:none;appearance:none}
+::selection{background:#0B0B0C;color:#fff}
+img,svg{display:block}
+
+/* ---------- Animations ---------- */
+@keyframes tf-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes tf-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes tf-blink{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes tf-progress{from{width:0%}to{width:100%}}
+@keyframes tf-slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---------- Layout utilities ---------- */
+.wrap{max-width:1320px;margin:0 auto;padding-left:clamp(20px,4vw,56px);padding-right:clamp(20px,4vw,56px)}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#71717A;margin-bottom:18px}
+.section-title{margin:0;font-weight:700;letter-spacing:-.04em;line-height:1.02;font-size:clamp(30px,3.8vw,56px)}
+.muted{color:#52525B}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+[data-reveal]{opacity:0}
+[data-reveal].revealed{animation:tf-rise .7s cubic-bezier(.2,.7,.2,1) both}
+
+/* ---------- Pages ---------- */
+.page{display:none}
+.page.active{display:block}
+
+/* ---------- Header ---------- */
+header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.86);backdrop-filter:blur(14px);border-bottom:1px solid #E6E6E8}
+.header-inner{height:68px;display:flex;align-items:center;gap:40px}
+.brand{display:flex;align-items:center;gap:10px;cursor:pointer;flex:none;background:none}
+.brand-mark{width:26px;height:26px;background:#0B0B0C;border-radius:7px;display:grid;place-items:center;flex:none}
+.brand-name{font-size:17px;font-weight:700;letter-spacing:-.035em}
+.main-nav{display:flex;align-items:center;gap:28px;font-size:14px;font-weight:500;letter-spacing:-.01em}
+.nav-link{cursor:pointer;padding:4px 0;border-bottom:1px solid transparent;background:none}
+.nav-link:hover{border-bottom-color:#0B0B0C}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:14px}
+.nav-signin{font-size:14px;font-weight:500;cursor:pointer;color:#52525B;background:none}
+.nav-signin:hover{color:#0B0B0C}
+
+/* ---------- Buttons ---------- */
+.btn{cursor:pointer;font-size:15px;font-weight:600;padding:14px 24px;border-radius:10px;display:inline-flex;align-items:center;gap:9px;white-space:nowrap}
+.btn-sm{font-size:14px;padding:10px 18px;border-radius:9px}
+.btn-block{display:flex;justify-content:center;width:100%}
+.btn-primary{background:#0B0B0C;color:#fff}
+.btn-primary:hover{background:#2F5BFF}
+.btn-outline{border:1px solid #D4D4D8;background:none}
+.btn-outline:hover{border-color:#0B0B0C;background:#FAFAFA}
+.btn-inverse{background:#fff;color:#0B0B0C}
+.btn-inverse:hover{background:#2F5BFF;color:#fff}
+.btn-outline-inverse{border:1px solid #3A3A40;color:#fff;background:none}
+.btn-outline-inverse:hover{border-color:#fff}
+.btn-text{cursor:pointer;display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:600;border-bottom:1px solid #0B0B0C;padding-bottom:3px;background:none}
+
+/* ---------- Cards / grids ---------- */
+.config-card{background:#fff;padding:26px 24px 28px}
+.config-card:hover{background:#FAFAFA}
+.footer-link{cursor:pointer;background:none;text-align:left;font-size:14px;color:#52525B}
+.footer-link:hover{color:#0B0B0C}
+
+/* ---------- Pills / toggles (state-driven) ---------- */
+.pill{cursor:pointer;font-size:13.5px;font-weight:500;padding:9px 14px;border-radius:8px;border:1px solid #D4D4D8;background:#fff;color:#0B0B0C}
+.pill.active{border-color:#0B0B0C;background:#0B0B0C;color:#fff}
+.toggle{display:inline-flex;background:#F4F4F5;border-radius:10px;padding:4px;gap:4px}
+.toggle-btn{cursor:pointer;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:7px;background:transparent;color:#71717A;display:inline-flex;align-items:center;gap:8px}
+.toggle-btn.active{background:#fff;color:#0B0B0C}
+.toggle-save{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#00A96E}
+.demo-tab{cursor:pointer;font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:8px;border:1px solid #2A2A2E;background:transparent;color:#B4B4BB}
+.demo-tab.active{background:#fff;color:#0B0B0C}
+
+/* ---------- Form ---------- */
+.form-input{width:100%;border:1px solid #D4D4D8;border-radius:9px;padding:11px 13px;font-size:14.5px;outline:none;background:#fff}
+.form-input:focus{border-color:#0B0B0C}
+textarea.form-input{resize:vertical;font-family:Archivo,sans-serif}
+select.form-input{appearance:none}
+.field-label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:#71717A;margin-bottom:7px}
+
+/* ---------- FAQ ---------- */
+.faq-item{border-top:1px solid #E6E6E8;padding:22px 0;cursor:pointer;background:none;width:100%;text-align:left;display:block}
+.faq-item:last-child{border-bottom:1px solid #E6E6E8}
+.faq-row{display:flex;gap:20px;align-items:baseline}
+.faq-q{font-size:17px;font-weight:600;letter-spacing:-.025em;flex:1}
+.faq-sym{font-size:22px;color:#A1A1AA;line-height:1}
+.faq-a{margin:14px 0 0;font-size:15px;line-height:1.65;color:#52525B;max-width:58ch;display:none}
+.faq-item.open .faq-a{display:block}
+
+/* ---------- Product demo panels ---------- */
+.demo-panel{display:none}
+.demo-panel.active{display:block}
+
+/* ---------- Contact form ---------- */
+#contact-sent-view{display:none}
+
+/* ---------- Marquee ---------- */
+.marquee-track{display:flex;align-items:center;gap:clamp(40px,6vw,88px);width:max-content;animation:tf-marquee 42s linear infinite;opacity:.55}
+.marquee-item{font-size:20px;font-weight:700;letter-spacing:-.03em;white-space:nowrap}
+
+/* ---------- Misc responsive ---------- */
+@media (max-width:640px){
+  .header-inner{gap:20px}
+  .main-nav{display:none}
+}

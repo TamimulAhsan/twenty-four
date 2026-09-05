@@ -1,0 +1,21 @@
+/* Fonts are self-hosted. The marketing site pulls Archivo from Google's CDN
+ * and renders in a fallback face with no network; the product must not. */
+@import '@fontsource-variable/archivo';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+@import 'tailwindcss';
+@import '../../tokens/src/theme.css';
+@import '../../tokens/src/base.css';
+
+/* Tailwind scans from the importing file, so components living outside this
+ * app have to be pointed at explicitly or their classes are never generated. */
+/* Where Tailwind looks for class names. This stylesheet is shared by every
+   application, so it scans all of them: a class used only by the till would
+   otherwise be absent from the till's own build. The cost is that each bundle
+   carries a little CSS it does not use, which is far cheaper than a screen
+   rendering unstyled. */
+@source '../../ui/src/**/*.{ts,tsx}';
+@source '../../runtime/src/**/*.{ts,tsx}';
+@source '../src/**/*.{ts,tsx}';
+@source '../../../apps/*/src/**/*.{ts,tsx}';

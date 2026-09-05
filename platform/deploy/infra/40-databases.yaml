@@ -1,0 +1,38 @@
+# Each service owns a private database, so no service can read another's tables
+# even by accident. Postgres only runs its init scripts on a fresh volume, so
+# this Job exists to create them idempotently on an existing one too.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ensure-databases
+  namespace: twentyfour
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: psql
+          image: docker.io/library/postgres:18-alpine
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGUSER, value: twentyfour }
+            - { name: PGDATABASE, value: twentyfour }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: postgres, key: POSTGRES_PASSWORD } }
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until pg_isready -q; do sleep 2; done
+              for db in rbac auth catalog; do
+                # CREATE DATABASE has no IF NOT EXISTS, so ask first.
+                if ! psql -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1; then
+                  psql -c "CREATE DATABASE \"$db\""
+                  echo "created $db"
+                else
+                  echo "$db already present"
+                fi
+              done

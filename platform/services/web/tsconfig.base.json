@@ -1,0 +1,71 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "@twentyfour/mock/browser": [
+        "./packages/mock/src/browser.ts"
+      ],
+      "@twentyfour/entitlement": [
+        "./packages/entitlement/src/index.ts"
+      ],
+      "@twentyfour/analytics": [
+        "./packages/analytics/src/index.ts"
+      ],
+      "@twentyfour/tokens/*": [
+        "./packages/tokens/*"
+      ],
+      "@twentyfour/runtime": [
+        "./packages/runtime/src/index.ts"
+      ],
+      "@twentyfour/tokens": [
+        "./packages/tokens/src/index.ts"
+      ],
+      "@twentyfour/money": [
+        "./packages/money/src/index.ts"
+      ],
+      "@twentyfour/terms": [
+        "./packages/terms/src/index.ts"
+      ],
+      "@twentyfour/mock": [
+        "./packages/mock/src/index.ts"
+      ],
+      "@twentyfour/rbac": [
+        "./packages/rbac/src/index.ts"
+      ],
+      "@twentyfour/api": [
+        "./packages/api/src/index.ts"
+      ],
+      "@twentyfour/ui": [
+        "./packages/ui/src/index.ts"
+      ],
+      "@twentyfour/shell": [
+        "./packages/shell/src/index.ts"
+      ],
+      "@twentyfour/shell/app.css": [
+        "./packages/shell/src/app.css"
+      ]
+    },
+    "types": [
+      "vite/client"
+    ],
+    "noEmit": true
+  }
+}

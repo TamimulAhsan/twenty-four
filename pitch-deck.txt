@@ -1,0 +1,191 @@
+================================================================
+TWENTYFOUR
+Small businesses deserve the software large ones buy.
+================================================================
+
+
+1. THE PROBLEM
+----------------------------------------------------------------
+Small, independent businesses (restaurants, hotels, salons,
+clinics, gyms, retail, real estate) run on 5-7 disconnected
+tools: a website, a booking system, a POS, a payments
+processor, ad accounts, a spreadsheet for customers.
+
+None of it talks to each other. Every integration between two
+vendors is a place where numbers stop matching. Setting it all
+up is a multi-week implementation project most small operators
+can't afford to run and can't afford to get wrong.
+
+
+2. THE SOLUTION
+----------------------------------------------------------------
+One platform that replaces all of it: website, bookings,
+payments, point of sale, marketing, and customer records --
+pre-configured for the customer's specific trade, deployed by
+a real specialist, live within 24 hours.
+
+Not a generic SaaS toolkit the customer has to configure
+themselves. A working business system on day one.
+
+
+3. HOW DEPLOYMENT WORKS (0 -> 24 HOURS)
+----------------------------------------------------------------
+HOUR 0   Intake call (40 min) -- map services, hours, menu or
+         inventory, payment methods, how they already work.
+HOUR 4   Build & configure -- site, booking rules, tax
+         settings, floor plan / room types, staff accounts
+         assembled from the industry template.
+HOUR 12  Payments & hardware -- card processing verified,
+         terminals/printers paired, existing data imported
+         and reconciled.
+HOUR 24  Live and trained -- real orders, real bookings,
+         staff walked through every screen they'll touch.
+
+Guarantee: live in 24 hours, or the first month is free.
+
+
+4. PRODUCT -- FOUR CORE MODULES
+----------------------------------------------------------------
+ORDERS      Point of sale, kitchen display, delivery tracking,
+            live ticket + daily revenue view.
+BOOKINGS    Calendar, occupancy, no-show deposits, buffer
+            times, double-booking prevention.
+MARKETING   AI-run ad spend across Meta, TikTok, Google --
+            automatic budget reallocation every 6 hours against
+            booked revenue, creative testing included.
+CUSTOMERS   Full CRM -- pipeline, contact history, automated
+            follow-up and retention.
+
+Design principle: automation with a paper trail. Anything the
+platform decides on the customer's behalf is logged in plain
+language and can be reversed by them.
+
+
+5. MARKET -- INDUSTRY CONFIGURATIONS
+----------------------------------------------------------------
+Each vertical ships with its own workflows, tax rules,
+documents and terminology -- nothing generic to strip out:
+
+  - Restaurants & cafes     - Gyms & wellness
+  - Hotels & rentals        - Retail & boutiques
+  - Salons & studios        - Real estate
+  - Clinics & practices     - Everything else (custom trades)
+
+40+ industry configurations live today.
+
+
+6. BUSINESS MODEL -- PRICING (MONTHLY / ANNUAL -20%)
+----------------------------------------------------------------
+Four tiers. The tier is what a business buys; the module set
+follows from it. Nothing is priced per module.
+
+STARTER      EUR 89/mo   Industry tool set -- POS, bookings,
+                          orders. Payments, invoicing and
+                          receipts. Up to 3 staff accounts.
+                          Deployment and training included.
+
+GROWTH       EUR 189/mo  Everything in Starter + custom
+                          website, AI marketing engine
+                          (Meta/Google/TikTok) with automatic
+                          budget reallocation.
+                          Up to 5 staff accounts.
+
+MAX          EUR 349/mo  Everything in Growth + AI creative
+  (most chosen)           generation, full CRM (pipelines,
+                          contacts, history), custom domain
+                          (coming soon).
+                          Up to 15 staff accounts.
+
+ENTERPRISE   Custom      Everything in Max + dedicated account
+                          team, SLA, custom integrations and
+                          API access (coming soon).
+                          Staff accounts negotiated.
+
+Included in every plan: deployment, migration, training,
+support. No setup fee. Card processing at cost.
+
+NOTE: prices above are placeholders carried over from the
+previous three-tier structure and are NOT final. Staff account
+limits are also provisional. Both are configuration values --
+they can be changed without engineering work.
+
+
+7. WHY NOW / COMPETITIVE ANGLE
+----------------------------------------------------------------
+Generic SaaS (Shopify, Square, Toast, generic CRMs, etc.):
+  - Fast to sign up, slow to actually run -- customer does
+    the integration work themselves.
+  - Point solutions: pick a tool per function, then stitch
+    them together.
+  - Support optimized for self-serve, not hands-on setup.
+
+Twentyfour:
+  - Deployed BY someone, not configured BY the customer.
+  - One system per business, not one tool per function.
+  - Speed is the product: 24 hours vs weeks-to-months.
+
+The bet: for a business owner running a 30-cover restaurant
+or an 8-room hotel, implementation time is the real cost --
+not the software price. Winning on speed + done-for-you setup
+is a different axis of competition than winning on features.
+
+
+8. TRACTION (ILLUSTRATIVE -- SOURCE DATA MARKED AS PLACEHOLDER)
+----------------------------------------------------------------
+  4,200   businesses running on the platform
+  24 hrs  median time to launch
+  99.98%  platform uptime, trailing 12 months
+  40+     industry configurations live
+
+These figures are pulled directly from the current landing
+page, which itself labels them as placeholder marketing copy --
+confirm real numbers before using this in an investor context.
+
+
+9. COMPANY / MILESTONES
+----------------------------------------------------------------
+Founded 2021. ~64 people (placeholder in source). 7 markets
+served. EU data residency, GDPR compliant.
+
+  2021   First configuration shipped (single restaurant group
+         that couldn't reconcile its till with its booking
+         system).
+  2023   24-hour deployment guarantee industrialized and
+         written into the standard agreement.
+  2024   AI marketing engine released -- paid acquisition
+         across Meta/TikTok/Google tied to booked revenue.
+  2026   Max tier launched: full CRM + AI creative generation
+         for operators pushing repeat and high-value business.
+
+Operating principles the company holds itself to:
+  1. Speed is a feature -- a month-long implementation costs
+     more in lost trade than the software costs in a year.
+  2. One system, not seven -- every vendor-to-vendor
+     integration is a place numbers stop matching.
+  3. Automation with a paper trail -- AI decisions are logged
+     in plain language and reversible.
+  4. Leaving must stay easy -- no lock-in, one-click export,
+     30-day cancellation on monthly plans.
+
+
+10. THE ASK / CLOSING
+----------------------------------------------------------------
+[Fill in deal-specific terms here -- e.g. raise amount, use of
+funds, or if this is a sales pitch: the specific next step you
+want the prospect to take.]
+
+Standing offer to prospects: book a 40-minute intake call.
+If Twentyfour can't have them live within 24 hours of it,
+their first month is free.
+
+Contact: sales@twentyfour.io
+
+
+================================================================
+NOTE ON SOURCES
+================================================================
+All content above is drawn from the Twentyfour marketing site
+copy already implemented in this project (index.html). Figures
+marked "placeholder" in the source (business count, headcount,
+pricing) are flagged as such above -- swap in real numbers
+before using this externally.

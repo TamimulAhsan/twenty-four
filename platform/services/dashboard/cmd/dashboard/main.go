@@ -1,0 +1,160 @@
+// Command dashboard serves a live view of the cluster: what is running, whether
+// it is healthy, and how the pieces are wired to each other. Read-only — it runs
+// kubectl to collect and never mutates anything.
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
+
+type cache struct {
+	mu   sync.RWMutex
+	g    *Graph
+	err  error
+	subs map[chan struct{}]bool
+}
+
+func (c *cache) set(g *Graph, err error) {
+	c.mu.Lock()
+	c.g, c.err = g, err
+	for ch := range c.subs {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+	c.mu.Unlock()
+}
+
+func (c *cache) get() (*Graph, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.g, c.err
+}
+
+func (c *cache) sub() chan struct{} {
+	ch := make(chan struct{}, 1)
+	c.mu.Lock()
+	c.subs[ch] = true
+	c.mu.Unlock()
+	return ch
+}
+
+func (c *cache) unsub(ch chan struct{}) {
+	c.mu.Lock()
+	delete(c.subs, ch)
+	c.mu.Unlock()
+}
+
+func main() {
+	addr := flag.String("addr", ":8090", "listen address")
+	static := flag.String("static", "web/dist", "directory of built UI assets")
+	nsCSV := flag.String("namespaces", "twentyfour,kube-system", "namespaces to watch (empty = all)")
+	every := flag.Duration("interval", 2*time.Second, "poll interval")
+	flag.Parse()
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	var namespaces []string
+	if s := strings.TrimSpace(*nsCSV); s != "" {
+		namespaces = strings.Split(s, ",")
+	}
+
+	c := &cache{subs: map[chan struct{}]bool{}}
+	poll := func() {
+		g, err := Collect(namespaces)
+		if err != nil {
+			slog.Error("collect failed", "err", err)
+		}
+		c.set(g, err)
+	}
+	poll()
+	go func() {
+		t := time.NewTicker(*every)
+		defer t.Stop()
+		for range t.C {
+			poll()
+		}
+	}()
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
+		g, err := c.get()
+		if err != nil && g == nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(g)
+	})
+
+	// Server-sent events: one message per poll, so the UI is live without polling.
+	mux.HandleFunc("GET /api/stream", func(w http.ResponseWriter, r *http.Request) {
+		fl, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		ch := c.sub()
+		defer c.unsub(ch)
+		send := func() {
+			g, _ := c.get()
+			if g == nil {
+				return
+			}
+			b, err := json.Marshal(g)
+			if err != nil {
+				return
+			}
+			fmt.Fprintf(w, "data: %s\n\n", b)
+			fl.Flush()
+		}
+		send()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ch:
+				send()
+			}
+		}
+	})
+
+	mux.HandleFunc("GET /api/logs/{ns}/{pod}", func(w http.ResponseWriter, r *http.Request) {
+		out, err := kubectlText("logs", "-n", r.PathValue("ns"), r.PathValue("pod"), "--tail=200")
+		if err != nil {
+			out = err.Error()
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(out))
+	})
+
+	// SPA fallback so client-side routes resolve.
+	fs := http.FileServer(http.Dir(*static))
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := os.Stat(*static + r.URL.Path); r.URL.Path != "/" && err == nil {
+			fs.ServeHTTP(w, r)
+			return
+		}
+		http.ServeFile(w, r, *static+"/index.html")
+	})
+
+	slog.Info("dashboard up", "addr", *addr, "namespaces", namespaces, "static", *static)
+	if err := http.ListenAndServe(*addr, mux); err != nil {
+		slog.Error("server failed", "err", err)
+		os.Exit(1)
+	}
+}

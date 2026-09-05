@@ -1,0 +1,433 @@
+/* TwentyFour design tokens.
+ *
+ * Three layers, in this order, and nothing skips a layer:
+ *
+ *   1. Primitives   raw scales. Static. Never referenced by a component.
+ *   2. Semantic     role names (--surface, --text-muted). Swapped by theme.
+ *   3. Utilities    Tailwind classes generated from the semantic layer.
+ *
+ * A component reads layer 3 only. If a component needs a colour that has no
+ * role, the role is missing, not the colour.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+ * 1. Primitives
+ * ------------------------------------------------------------------------- */
+
+@theme {
+  /* Neutral, anchored to the brand black #0b0b0c at 950. */
+  --color-neutral-0: #ffffff;
+  --color-neutral-25: #fcfcfd;
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f4f4f5;
+  --color-neutral-200: #e6e6e8;
+  --color-neutral-300: #d4d4d8;
+  --color-neutral-400: #a1a1aa;
+  --color-neutral-500: #71717a;
+  --color-neutral-600: #52525b;
+  --color-neutral-700: #3f3f46;
+  --color-neutral-800: #27272a;
+  --color-neutral-850: #1c1c1f;
+  --color-neutral-900: #131316;
+  --color-neutral-950: #0b0b0c;
+  --color-neutral-1000: #08080a;
+
+  /* Brand blue, anchored to #2f5bff at 600. 5.2:1 on white, so it carries
+   * text on a light surface without help. On the dark ground it does not,
+   * which is why the dark theme lifts accent text to 300. */
+  --color-brand-50: #eef3ff;
+  --color-brand-100: #dde6ff;
+  --color-brand-200: #c2d1ff;
+  --color-brand-300: #8aa4ff;
+  --color-brand-400: #7189ff;
+  --color-brand-500: #4a67ff;
+  --color-brand-600: #2f5bff;
+  --color-brand-700: #1f42db;
+  --color-brand-800: #1c37ad;
+  --color-brand-900: #1b3389;
+  --color-brand-950: #101b4f;
+
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-200: #a7f3d0;
+  --color-success-300: #6ee7b7;
+  --color-success-400: #34d399;
+  --color-success-500: #00a96e;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+  --color-success-900: #064e3b;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-warning-900: #78350f;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-300: #fca5a5;
+  --color-danger-400: #f87171;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+  --color-danger-900: #7f1d1d;
+
+  /* Type. Archivo is the brand face and carries a real Expanded axis, so
+   * headlines get width instead of only weight. IBM Plex Mono is reserved
+   * for figures and technical labels, never for prose. Both self-hosted:
+   * the page must render identically with no network. */
+  --font-sans: "Archivo Variable", "Archivo", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono",
+    Menlo, Consolas, monospace;
+
+  /* Scale is 11 12 13 14 16 18 20 24 30 38 48 60. The dashboard's base is 14;
+   * marketing prose sits at 16. Nothing below 12 ever carries body text. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.0625rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.1875rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.3125rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.9375rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl: 2.375rem;
+  --text-4xl--line-height: 2.625rem;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.125rem;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 3.8125rem;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 20px;
+
+  /* Breakpoints. 375 is the small-phone floor every screen is tested at. */
+  --breakpoint-xs: 22.5rem;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+
+  /* Motion. Enter uses ease-out; exit runs at roughly 65% of enter so
+   * dismissal feels answered rather than sluggish. */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-out) both;
+  --animate-rise: rise var(--duration-slow) var(--ease-out) both;
+  --animate-scale-in: scale-in var(--duration-base) var(--ease-out) both;
+  --animate-slide-up: slide-up var(--duration-slow) var(--ease-out) both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-up {
+    from { transform: translateY(100%); }
+    to { transform: none; }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Semantic roles
+ *
+ * Dark is a separate palette, not an inversion. Surfaces step up as they come
+ * forward; text steps down in weight. Accent text is lifted to brand-300
+ * because brand-600 reaches only 3.8:1 on the dark ground.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  --bg: var(--color-neutral-50);
+  --bg-inset: var(--color-neutral-100);
+  --surface: var(--color-neutral-0);
+  --surface-raised: var(--color-neutral-0);
+  --surface-sunken: var(--color-neutral-50);
+  --surface-hover: var(--color-neutral-50);
+  --surface-active: var(--color-neutral-100);
+  --surface-inverse: var(--color-neutral-950);
+
+  /* border carries dividers. border-strong carries anything a pointer can
+   * act on (inputs, outline buttons) and clears 3:1 against its surface. */
+  --border: var(--color-neutral-200);
+  --border-strong: var(--color-neutral-300);
+  --border-inverse: var(--color-neutral-800);
+
+  --text: var(--color-neutral-950);
+  --text-muted: var(--color-neutral-600);
+  --text-subtle: var(--color-neutral-500);
+  --text-inverse: var(--color-neutral-0);
+  --text-on-accent: var(--color-neutral-0);
+
+  --accent: var(--color-brand-600);
+  --accent-hover: var(--color-brand-700);
+  --accent-active: var(--color-brand-800);
+  --accent-text: var(--color-brand-700);
+  --accent-subtle: var(--color-brand-50);
+  --accent-subtle-hover: var(--color-brand-100);
+  --accent-border: var(--color-brand-200);
+
+  --success: var(--color-success-600);
+  --success-text: var(--color-success-700);
+  --success-subtle: var(--color-success-50);
+  --success-border: var(--color-success-200);
+
+  --warning: var(--color-warning-600);
+  --warning-text: var(--color-warning-700);
+  --warning-subtle: var(--color-warning-50);
+  --warning-border: var(--color-warning-200);
+
+  --danger: var(--color-danger-600);
+  --danger-hover: var(--color-danger-700);
+  --danger-text: var(--color-danger-700);
+  --danger-subtle: var(--color-danger-50);
+  --danger-border: var(--color-danger-200);
+
+  --focus-ring: var(--color-brand-600);
+  --scrim: rgb(11 11 12 / 0.45);
+
+  /* Categorical series, in fixed order and never cycled. Validated as a set
+   * against this surface: worst adjacent CVD deltaE 9.1, worst normal-vision
+   * 19.6. Slot 1 is the brand blue; the rest are the reference hues stepped
+   * for a light ground.
+   *
+   * Three of them (3, 4, 5) sit below 3:1 against white, so any chart using
+   * them ships direct labels or a table beside it. That is not optional.
+   *
+   * A ninth series is never a generated hue: it folds into Other, or the
+   * chart becomes small multiples. */
+  --viz-1: #2f5bff;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-8: #e34948;
+
+  /* Sequential: one hue, light to dark. Used for magnitude, never for
+   * identity, and never a rainbow. */
+  --viz-seq-1: #eef3ff;
+  --viz-seq-2: #d3e0ff;
+  --viz-seq-3: #a9c1ff;
+  --viz-seq-4: #7b9cff;
+  --viz-seq-5: #4a73f5;
+  --viz-seq-6: #2f5bff;
+  --viz-seq-7: #1f42db;
+
+  /* Reserved for state, never reused as a series colour, and always shipped
+   * with an icon or a label rather than standing alone. */
+  --viz-good: #059669;
+  --viz-warning: #d97706;
+  --viz-critical: #dc2626;
+
+  --viz-grid: var(--color-neutral-200);
+  --viz-axis: var(--color-neutral-300);
+
+  --shadow-xs: 0 1px 2px rgb(11 11 12 / 0.06);
+  --shadow-sm: 0 1px 3px rgb(11 11 12 / 0.08), 0 1px 2px rgb(11 11 12 / 0.04);
+  --shadow-md: 0 4px 12px rgb(11 11 12 / 0.08), 0 1px 3px rgb(11 11 12 / 0.04);
+  --shadow-lg: 0 12px 32px rgb(11 11 12 / 0.12), 0 2px 8px rgb(11 11 12 / 0.05);
+  --shadow-xl: 0 24px 64px rgb(11 11 12 / 0.16), 0 4px 12px rgb(11 11 12 / 0.07);
+
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+  --duration-exit: 120ms;
+
+  --z-sticky: 10;
+  --z-dropdown: 20;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 100;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --bg: var(--color-neutral-950);
+  --bg-inset: var(--color-neutral-1000);
+  --surface: var(--color-neutral-900);
+  --surface-raised: var(--color-neutral-850);
+  --surface-sunken: var(--color-neutral-1000);
+  --surface-hover: var(--color-neutral-850);
+  --surface-active: var(--color-neutral-800);
+  --surface-inverse: var(--color-neutral-0);
+
+  --border: #2a2a2f;
+  --border-strong: var(--color-neutral-700);
+  --border-inverse: var(--color-neutral-300);
+
+  --text: var(--color-neutral-50);
+  --text-muted: var(--color-neutral-400);
+  --text-subtle: var(--color-neutral-500);
+  --text-inverse: var(--color-neutral-950);
+  --text-on-accent: var(--color-neutral-0);
+
+  --accent: var(--color-brand-600);
+  --accent-hover: var(--color-brand-500);
+  --accent-active: var(--color-brand-400);
+  --accent-text: var(--color-brand-300);
+  --accent-subtle: #16204a;
+  --accent-subtle-hover: #1c2a5e;
+  --accent-border: #2b3a72;
+
+  --success: var(--color-success-500);
+  --success-text: var(--color-success-300);
+  --success-subtle: #06251b;
+  --success-border: #0d4232;
+
+  --warning: var(--color-warning-500);
+  --warning-text: var(--color-warning-300);
+  --warning-subtle: #2a1c05;
+  --warning-border: #4a3009;
+
+  --danger: var(--color-danger-500);
+  --danger-hover: var(--color-danger-400);
+  --danger-text: var(--color-danger-300);
+  --danger-subtle: #2c1212;
+  --danger-border: #4d1f1f;
+
+  --focus-ring: var(--color-brand-300);
+  --scrim: rgb(0 0 0 / 0.65);
+
+  /* Selected for the dark ground, not flipped from the light set. The same
+   * eight hues stepped into the dark band: all clear 3:1 on the dark surface,
+   * worst adjacent CVD deltaE 8.4, worst normal-vision 19.3. */
+  --viz-1: #4a67ff;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-7: #9085e9;
+  --viz-8: #e66767;
+
+  --viz-seq-1: #141a33;
+  --viz-seq-2: #1a2450;
+  --viz-seq-3: #22326f;
+  --viz-seq-4: #2b4194;
+  --viz-seq-5: #3552c4;
+  --viz-seq-6: #4a67ff;
+  --viz-seq-7: #7b90ff;
+
+  --viz-good: #34d399;
+  --viz-warning: #fbbf24;
+  --viz-critical: #f87171;
+
+  --viz-grid: #232327;
+  --viz-axis: #303036;
+
+  /* Shadow is nearly invisible on a dark ground, so elevation is carried by
+   * the surface step plus a hairline. Depth stays, guesswork does not. */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 14px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+  --shadow-xl: 0 28px 72px rgb(0 0 0 / 0.7);
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Utilities generated from the semantic layer.
+ *
+ * `inline` matters: it makes the generated class reference the variable rather
+ * than copy its value, which is what lets one class follow the theme.
+ * ------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-inset: var(--bg-inset);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-surface-inverse: var(--surface-inverse);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-inverse: var(--border-inverse);
+
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-inverse: var(--text-inverse);
+  --color-on-accent: var(--text-on-accent);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-subtle-hover: var(--accent-subtle-hover);
+  --color-accent-border: var(--accent-border);
+
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-text: var(--danger-text);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-border: var(--danger-border);
+
+  --color-focus-ring: var(--focus-ring);
+  --color-scrim: var(--scrim);
+
+  --color-viz-1: var(--viz-1);
+  --color-viz-2: var(--viz-2);
+  --color-viz-3: var(--viz-3);
+  --color-viz-4: var(--viz-4);
+  --color-viz-5: var(--viz-5);
+  --color-viz-6: var(--viz-6);
+  --color-viz-7: var(--viz-7);
+  --color-viz-8: var(--viz-8);
+  --color-viz-grid: var(--viz-grid);
+  --color-viz-axis: var(--viz-axis);
+}
