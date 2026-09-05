@@ -1,6 +1,6 @@
 # TwentyFour Merchant Frontend
 
-Three applications, one design system, one origin. What is built, why it is
+Four applications, one design system, one origin. What is built, why it is
 shaped this way, and what comes next.
 
 Reference: [`system-architecture.html`](system-architecture.html) §1, §4, §6, §7, §11, §14.
@@ -12,13 +12,18 @@ Rules this code must respect: [`CLAUDE.md`](CLAUDE.md). Backend sequencing: [`ro
 
 ---
 
-## Three applications, not one dashboard
+## Four applications, not one dashboard
 
 | Application | Path | Device it lives on | Bundle |
 |---|---|---|---|
-| **Merchant dashboard** | `/` | A desk. Analysis, money, configuration, the team. | 128 kB |
-| **Point of sale** | `/pos` | A tablet at a counter, full screen, touched all day. | 33 kB |
-| **Bookings and appointments** | `/bookings` | A screen behind a desk, watched all day. | 17 kB |
+| **Merchant dashboard** | `/` | A desk. Analysis, money, configuration, the team. | 312 kB |
+| **Point of sale** | `/pos` | A tablet at a counter, full screen, touched all day. | 162 kB |
+| **Bookings and appointments** | `/bookings` | A screen behind a desk, watched all day. | 96 kB |
+| **Sign in** | `/auth` | Wherever somebody arrives without a session. | 51 kB |
+
+Four applications, four builds, four images, four Deployments. Taking one down
+scales it to zero and Traefik serves the unavailable page in its place; the
+other three are untouched.
 
 **The catalog belongs to the applications, not the back office.** It is edited on
 the device that sells from it, so the till owns it and the calendar owns the
@@ -43,9 +48,16 @@ parent domain: put the till on another origin and a merchant who opens it from
 the dashboard has to sign in again. This is exactly what the NGINX frontend pod
 in §1 serves.
 
-Shared vendor chunk is 309 kB (98 kB gzipped). The mock server, the fixtures and
-the dev toolbar are behind `import.meta.env.DEV` guards and lazy imports, so
-none of it reaches a merchant.
+Shared vendor chunk is 312 kB (99 kB gzipped). MSW itself is behind an
+`import.meta.env.DEV` guard and a dynamic import in `boot`, so the service
+worker and the handlers never reach a merchant.
+
+**The fixtures still do.** `DevToolbar` imports `@twentyfour/mock` statically,
+and its `lazy()` splits nothing because the component sits in the same module,
+so the stateful store, the seed data and all three tenants are bundled into
+every application behind a component that returns `null` in production. Fixing
+it is moving that import inside the lazy factory. Until then the claim that
+none of the mock reaches a merchant is true only of MSW.
 
 ---
 
@@ -138,11 +150,12 @@ with extra steps. Both are tested.
 
 ```
 platform/services/web/
-├── apps/web/                three entries, three bundles, one origin
-│   ├── index.html           -> src/dashboard   the back office
-│   ├── pos.html             -> src/pos         the till
-│   ├── bookings.html        -> src/bookings    the calendar
-│   └── src/shared/          boot, session gate, dev toolbar
+├── apps/                    four builds, four images, one origin
+│   ├── dashboard/           the back office
+│   ├── pos/                 the till
+│   ├── bookings/            the calendar
+│   ├── auth/                the one sign-in form in the product
+│   └── unavailable/         static page Traefik serves for a scaled-down app
 └── packages/
     ├── tokens/              palette, type, motion, the Tailwind theme
     ├── ui/                  buttons, fields, tables, dialogs, toasts, charts, page shell
@@ -153,8 +166,14 @@ platform/services/web/
     ├── analytics/           RFM, cohorts, Pareto, basket lift, discount return
     ├── api/                 typed Merchant BFF client
     ├── mock/                stateful store + MSW handlers (dev only)
-    └── runtime/             bootstrap providers shared by all three apps
+    ├── runtime/             bootstrap providers shared by every app
+    └── shell/               boot, session gate, dev toolbar, refunds, catalog, team
 ```
+
+Anything two applications both do lives in `shell`, not in one of them with a
+copy in the other. Refunding is the clearest case: the till does it with the
+customer at the counter and the dashboard does it a week later at a desk, and
+they must not be able to disagree about which lines have already gone back.
 
 ---
 
@@ -222,6 +241,53 @@ split. Two trade capabilities the profile switches on and nobody chooses:
 **kitchen display** wherever food is made to order, and **tables** wherever
 customers sit down. A food truck gets the first and not the second.
 
+**Point of sale, F3.** Five things a counter cannot work without.
+
+**Split tender.** A sale takes as many payments as it needs to. Each is applied
+against what is still owed, so a split can never record more money than the
+sale was worth, and only cash may be handed over in excess of the balance,
+because change comes out of a drawer and no card gives any back.
+
+**Parking a sale.** A rung-up sale set aside: a tab on a table, or a basket
+held while somebody goes to the car for their card. It is an order with status
+`open`, which the type already had and nothing had ever produced. It **reserves
+stock rather than selling it**, which is what `StockLevel.reserved` was for and
+had been zero everywhere until now: the goods are spoken for and must not be
+sold twice, but they have not left, and an inventory count that treats a held
+basket as gone is short every time a tab is abandoned. It issues no document,
+appears in no order list, and counts towards no takings, no revenue and no
+margin until somebody pays for it. Settling it keeps the same order: same id,
+same number, same lines at the prices they were rung up at.
+
+**Partial refunds.** A line goes back once, and the second attempt is refused
+rather than paying it out twice. The credit note is for what actually went
+back, not for the sale. The day's refunded figure is the sum of what was
+returned rather than the total of every order whose status happens to read
+*refunded*, and a refund is put back on the payment that took it, split across
+the tenders in proportion to what each of them paid.
+
+**Counting the drawer.** Expected cash is `opening float + cash taken − cash
+refunded`, built from what was actually tendered rather than from the day's
+total, because a card sale never went near the drawer. The variance is stated
+as short or over, and a recount replaces rather than appends. There is
+deliberately **no note and coin breakdown**: which denominations exist is the
+one part of counting a drawer that differs per market, and a note table in
+shared code is country logic wearing a hat.
+
+**A tab on a table.** A table holds at most one open sale. A second one is
+refused, and a table cannot be cleared while a tab is still on it, because
+clearing it strands a sale nothing on the floor points at any more. Settling
+takes the tab off and leaves the table exactly as it was: people sit on after
+they have paid, and clearing it for them is the till guessing.
+
+**Refunding is one implementation, used twice.** `packages/shell/refund` owns
+which lines can still go back, what they come to, the confirmation copy and the
+mutation. The till composes it into a list read at arm's length; the dashboard
+composes it into its own table with a checkbox column, gated on `pos.refund`
+and `pos.void`, so an owner can give back one line of a sale from their desk a
+week later. Two implementations of "which lines have already gone back" is two
+answers to it, and only one of them is right.
+
 **Bookings.** Day calendar as staff columns, agenda list on a phone; new booking
 with double-booking refusal; detail with arrived, completed, no-show and cancel;
 the bookable slice of the catalog, with duration; the team, read-only; opening
@@ -262,16 +328,21 @@ Worth recording, because each was invisible until the screen existed.
 | "Tap a item to start" | An article hardcoded in front of a word that varies by trade. Every trade saying Item, Order or Appointment hit it. The article is part of the vocabulary now and resolved with it. |
 | Time inputs read "08:00 AM" on a Hungarian till | A native time input formats from the browser's locale, not the page's. `lang` is the one lever that moves it. |
 | Sidebar collapse control sat under the dev toolbar | A floating dev chip was covering a real control. The toggle moved to the header, which is the better placement anyway. |
+| Cash suggestion buttons wrote minor units into a decimal field | The button showed €10.00 and filled the field with `1000`, which parses as €1000. Invisible on the three HUF fixtures, where minor units and major units are the same number, and a hundredfold overcharge in any currency with an exponent. |
+| A leftover `EDIT TEST:` string sat in the till's empty cart | Shipped in the empty state a cashier sees at the start of every sale. |
+| A partial refund issued a credit note for the whole sale | The correction document was worth more than what went back, on every partial refund. |
+| Nothing stopped a line being refunded twice | Two credit notes, two returns to stock and two payouts against a sale that happened once. |
+| The day's refunded figure counted whole orders by status | A sale with one line of four returned counted as nothing. Now it is the sum of what was actually given back. |
+| `frontend-plan.md` described a layout that no longer existed | It documented `apps/web/` with three entries in one build; the code has four applications with their own images and Deployments. |
 
 ---
 
 ## What is next
 
-F2 is finished. What remains, in the order it earns its place:
+F3 is finished. What remains, in the order it earns its place:
 
 | Phase | Work |
 |---|---|
-| **F3** | POS split tender, park a sale, partial refunds, drawer count, attach a table to a sale |
 | **F4** | Week view, buffers, deposits taken at booking, rota grid |
 | **F5** | The document viewer against the stored artifact rather than the recorded fields |
 | **F6** | Marketing, Website builder, notification centre |
@@ -287,8 +358,10 @@ F2 is finished. What remains, in the order it earns its place:
    and searchable; the form is not built.
 3. **Offline till.** §7 says a third party being down must never block a sale.
    That is a backend guarantee, but a till that cannot queue a tender locally
-   breaks it from the front. The tender flow is shaped so queueing can be added
-   without redesign.
+   breaks it from the front. The tender flow is still shaped so queueing can be
+   added without redesign: a payment is accepted against a balance and only the
+   completed set is sent, so a queued one changes where the tenders go, not how
+   they are taken.
 4. **Document rendering.** The viewer must display a stored artifact, never a
    recomputation. Until Invoicing exists the mock must serve a fixed file, or
    the immutability rule gets designed away.
@@ -296,16 +369,26 @@ F2 is finished. What remains, in the order it earns its place:
    apps read them from one place.
 6. **Tables are a grid by area, not a drawn floor plan.** A real plan needs an
    editor and a canvas. A grid grouped by area answers the two questions a
-   server actually has, which table is free and who has been waiting longest,
-   and a table is not yet attached to an open sale because the till has no
-   parked-sale concept until F3.
+   server actually has, which table is free and who has been waiting longest.
+   A table now carries its open tab; what it still does not do is let a tab be
+   moved between tables, or split between two parties.
 7. **Exporting is still missing.** Every figure can be read and acted on, but
    nothing can be taken out: no CSV, no scheduled report, no print layout
    beyond what the browser gives. That is the next honest gap.
 8. **Cost price is per item, not per batch.** Real margin moves with what you
    last paid a supplier. A single cost is right enough to make the analysis
    useful and wrong enough that a merchant reconciling to the penny will notice.
-9. **Roles are built in, not custom.** Four cover the shapes an SMB actually
-   has. Custom permission sets are a real feature of the RBAC service and would
-   need a builder screen, an audit trail per grant, and a rule preventing a role
-   from granting more than its author holds. Not built until someone asks.
+9. **The fixtures ship in the production bundle.** `DevToolbar` imports
+   `@twentyfour/mock` statically, so the store, the seeds and all three tenants
+   are in every application behind a component that renders nothing. MSW itself
+   is correctly excluded. The fix is a dynamic import inside the lazy factory.
+10. **A parked sale keeps one timestamp.** While it is parked, `placedAt` is
+    when it was parked, and settling moves it to when it became a sale, so the
+    receipt and the day's takings agree about which day it belongs to. Nothing
+    then records how long the tab was open, which is a figure a restaurant
+    would eventually want for table turn time.
+11. **Roles are built in, not custom.** Four cover the shapes an SMB actually
+    has. Custom permission sets are a real feature of the RBAC service and
+    would need a builder screen, an audit trail per grant, and a rule
+    preventing a role from granting more than its author holds. Not built until
+    someone asks.

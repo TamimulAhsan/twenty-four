@@ -10,6 +10,7 @@
 import { parseMoney, type Money } from '@twentyfour/money'
 import type {
   Booking,
+  DayClose,
   Discount,
   LoyaltyProgramme,
   Bootstrap,
@@ -81,6 +82,7 @@ export function parseOrder(value: unknown): Order {
     net: parseMoney(raw['net']),
     tax: parseMoney(raw['tax']),
     discount: optionalMoney(raw['discount']),
+    refunded: parseMoney(raw['refunded']),
   }
 }
 
@@ -129,6 +131,19 @@ export function parseDocument(value: unknown): FiscalDocument {
     gross: parseMoney(raw['gross']),
     net: parseMoney(raw['net']),
     tax: parseMoney(raw['tax']),
+  }
+}
+
+export function parseDayClose(value: unknown): DayClose {
+  const raw = asRecord(value, 'day close')
+  return {
+    ...(raw as unknown as DayClose),
+    openingFloat: parseMoney(raw['openingFloat']),
+    cashTaken: parseMoney(raw['cashTaken']),
+    cashRefunded: parseMoney(raw['cashRefunded']),
+    expectedCash: parseMoney(raw['expectedCash']),
+    countedCash: optionalMoney(raw['countedCash']),
+    variance: optionalMoney(raw['variance']),
   }
 }
 

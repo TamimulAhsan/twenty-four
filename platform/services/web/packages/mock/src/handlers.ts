@@ -6,6 +6,7 @@
  * exists; connecting the real backend is deleting the worker registration.
  */
 import { http, HttpResponse, type HttpHandler } from 'msw'
+import { money } from '@twentyfour/money'
 import { MockError, availableTenants, resetStore, storeFor } from './store'
 import { currentTenantId, isSignedIn, setCurrentTenantId, setSignedIn } from './session'
 import { wire } from './wire'
@@ -225,6 +226,94 @@ export const handlers: HttpHandler[] = [
     }),
   ),
 
+  /* Registered before /api/orders/:id on purpose: MSW matches in order, and
+     the parameterised route would otherwise swallow every one of these and
+     hand the store the literal string "parked" as an id. */
+
+  http.get('/api/orders/parked', async () =>
+    handle(() => {
+      requireModule('pos_orders')
+      return store().listParkedOrders()
+    }),
+  ),
+
+  http.post('/api/orders/parked', async ({ request }) => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      return ok(store().parkOrder((await request.json()) as never), 201)
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
+  http.patch('/api/orders/parked/:id', async ({ request, params }) => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      return ok(
+        store().updateParkedOrder(String(params['id']), (await request.json()) as never),
+      )
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
+  http.delete('/api/orders/parked/:id', async ({ params }) => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      store().discardParkedOrder(String(params['id']))
+      return new HttpResponse(null, { status: 204 })
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
+  http.post('/api/orders/parked/:id/settle', async ({ request, params }) => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      const body = (await request.json()) as { tenders?: never[] }
+      return ok(store().settleParkedOrder(String(params['id']), body.tenders ?? []))
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
+  http.get('/api/orders/day-close', async ({ request }) =>
+    handle(() => {
+      requireModule('pos_orders')
+      const url = new URL(request.url)
+      return store().dayClose(
+        url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10),
+      )
+    }),
+  ),
+
+  http.post('/api/orders/day-close', async ({ request }) => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      const body = (await request.json()) as {
+        date: string
+        openingFloat: { minor: string; currency: string }
+        countedCash: { minor: string; currency: string }
+        note?: string
+      }
+      return ok(
+        store().closeDay({
+          date: body.date,
+          openingFloat: money(Number(body.openingFloat.minor), body.openingFloat.currency),
+          countedCash: money(Number(body.countedCash.minor), body.countedCash.currency),
+          ...(body.note !== undefined ? { note: body.note } : {}),
+        }),
+      )
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
   http.get('/api/orders', async ({ request }) =>
     handle(() => {
       requireModule('pos_orders')
@@ -240,9 +329,7 @@ export const handlers: HttpHandler[] = [
   http.get('/api/orders/:id', async ({ params }) =>
     handle(() => {
       requireModule('pos_orders')
-      const found = store().listOrders().find((order) => order.id === String(params['id']))
-      if (!found) throw new MockError(404, 'not_found', 'No such order.')
-      return found
+      return store().getOrder(String(params['id']))
     }),
   ),
 

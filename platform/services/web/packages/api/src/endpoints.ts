@@ -10,6 +10,7 @@ import {
   parseBooking,
   parseBootstrap,
   parseCatalogItem,
+  parseDayClose,
   parseDocument,
   parseList,
   parseOrder,
@@ -21,6 +22,7 @@ import type {
   Booking,
   BusinessProfile,
   Customer,
+  DayClose,
   NotificationPreferences,
   ProfileInput,
   DiningTable,
@@ -167,6 +169,22 @@ export interface PlaceOrderInput {
   discountCode?: string
 }
 
+/**
+ * A sale set aside rather than paid for.
+ *
+ * The same lines as a sale and no tenders, because there is no money yet. The
+ * split is deliberate: a request that can carry tenders is a request that can
+ * take payment, and parking must never be one keystroke away from charging.
+ */
+export interface ParkOrderInput {
+  lines: OrderLineInput[]
+  note?: string
+  staffId?: string
+  customerId?: string
+  /** The table the tab belongs to, where the venue has a floor. */
+  tableId?: string | null
+}
+
 export const orders = {
   list: (filters: { from?: string; to?: string; status?: string } = {}) =>
     request<unknown>('/orders', { query: filters }).then((data) =>
@@ -192,6 +210,8 @@ export const orders = {
       idempotencyKey: idempotencyKey(),
     }).then(parseOrder) as Promise<Order>,
 
+  /** Omitting lineIds refunds the whole sale. Naming them refunds only those,
+   *  and a line already refunded is refused rather than paid out twice. */
   refund: (id: string, input: { lineIds?: string[]; reason: string }) =>
     request<unknown>(`/orders/${encodeURIComponent(id)}/refund`, {
       method: 'POST',
@@ -203,6 +223,60 @@ export const orders = {
     request<unknown>('/orders/takings', { query: { date } }).then(
       parseTakings,
     ) as Promise<Takings>,
+
+  /* --------------------------------------------------------- parked sales */
+
+  parked: () =>
+    request<unknown>('/orders/parked').then((data) =>
+      parseList(data, parseOrder, 'parked orders'),
+    ) as Promise<Order[]>,
+
+  park: (input: ParkOrderInput) =>
+    request<unknown>('/orders/parked', {
+      method: 'POST',
+      body: input,
+      idempotencyKey: idempotencyKey(),
+    }).then(parseOrder) as Promise<Order>,
+
+  /** Replaces what is on a parked sale. The lines are sent whole rather than
+   *  as a patch: a tab that is edited on two tills at once must land on one
+   *  answer, not on an accumulation of both. */
+  updateParked: (id: string, input: ParkOrderInput) =>
+    request<unknown>(`/orders/parked/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: input,
+    }).then(parseOrder) as Promise<Order>,
+
+  discardParked: (id: string) =>
+    request<void>(`/orders/parked/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Takes the money on a parked sale. It becomes the same sale it always was:
+   *  same id, same number, stock moving from reserved to gone. */
+  settleParked: (id: string, tenders: TenderInput[]) =>
+    request<unknown>(`/orders/parked/${encodeURIComponent(id)}/settle`, {
+      method: 'POST',
+      body: { tenders },
+      idempotencyKey: idempotencyKey(),
+    }).then(parseOrder) as Promise<Order>,
+
+  /* ----------------------------------------------------------- day close */
+
+  dayClose: (date: string) =>
+    request<unknown>('/orders/day-close', { query: { date } }).then(
+      parseDayClose,
+    ) as Promise<DayClose>,
+
+  closeDay: (input: {
+    date: string
+    openingFloat: { minor: string; currency: string }
+    countedCash: { minor: string; currency: string }
+    note?: string
+  }) =>
+    request<unknown>('/orders/day-close', {
+      method: 'POST',
+      body: input,
+      idempotencyKey: idempotencyKey(),
+    }).then(parseDayClose) as Promise<DayClose>,
 }
 
 /* --------------------------------------------------------------- bookings */

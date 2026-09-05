@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import {
   catalog, documents, orders, queryKeys, staff, type Order,
 } from '@twentyfour/api'
@@ -7,8 +7,11 @@ import { money } from '@twentyfour/money'
 import { useTerms } from '@twentyfour/terms'
 import { usePermission } from '@twentyfour/rbac'
 import {
-  Avatar, Badge, Button, Card, Dialog, Icon, MoneyText, Skeleton, Table, TableScroll,
-  Td, Th, Tr, cn, useDateFormat, useFormat, useToast, type BadgeTone,
+  RefundActions, RefundCheckbox, RefundConfirmation, RefundHint, useOrderRefund,
+} from '@twentyfour/shell'
+import {
+  Avatar, Badge, Button, Dialog, Icon, MoneyText, Skeleton, Table, TableScroll,
+  Td, Th, Tr, cn, useDateFormat, useFormat, type BadgeTone,
 } from '@twentyfour/ui'
 
 const STATUS: Record<Order['status'], { label: string; tone: BadgeTone }> = {
@@ -35,13 +38,10 @@ export function OrderDetailDialog({
   onClose: () => void
 }) {
   const terms = useTerms()
-  const toast = useToast()
   const dates = useDateFormat()
   const { currency } = useFormat()
-  const queryClient = useQueryClient()
   const mayRefund = usePermission('pos.refund')
   const mayVoid = usePermission('pos.void')
-  const [confirming, setConfirming] = useState<'void' | 'refund' | null>(null)
 
   const [orderQuery, itemsQuery, staffQuery, documentsQuery] = useQueries({
     queries: [
@@ -74,31 +74,25 @@ export function OrderDetailDialog({
     return { cost, margin: cost === null ? null : order.net.minor - cost }
   }, [order, items])
 
-  const act = useMutation({
-    mutationFn: (kind: 'void' | 'refund') =>
-      kind === 'void'
-        ? orders.void(order!.id, 'Voided from the dashboard')
-        : orders.refund(order!.id, { reason: 'Refunded from the dashboard' }),
-    onSuccess: (_updated, kind) => {
-      void queryClient.invalidateQueries()
-      setConfirming(null)
-      toast.show({
-        tone: 'success',
-        title: kind === 'void' ? 'Sale voided' : 'Sale refunded',
-        description:
-          kind === 'void'
-            ? 'Stock has gone back and the sale is out of the day’s takings.'
-            : 'A credit note has been issued against the original. The original is unchanged.',
-      })
-      onClose()
-    },
-    onError: (error) =>
-      toast.show({ tone: 'danger', title: 'That was refused', description: error.message }),
+  /**
+   * The same refund the till performs, from a desk.
+   *
+   * An owner reconciling at the end of the week is the person most likely to
+   * need one line back rather than the whole sale, so the dashboard offers
+   * exactly what the counter does. The rules come from one place; only the
+   * permission gate is the dashboard's own, because the till is operated by
+   * whoever is standing at it and this is not.
+   */
+  const refund = useOrderRefund({
+    order,
+    source: 'the dashboard',
+    onDone: onClose,
+    allowVoid: mayVoid,
+    allowRefund: mayRefund,
   })
 
   const linked = (documentsQuery?.data ?? []).filter((document) => document.orderId === order?.id)
   const server = (staffQuery?.data ?? []).find((member) => member.id === order?.staffId)
-  const canChange = order?.status === 'paid'
 
   return (
     <Dialog
@@ -113,12 +107,7 @@ export function OrderDetailDialog({
           <Button variant="outline" iconStart="Printer" onClick={() => window.print()}>
             Print
           </Button>
-          {canChange && mayVoid && (
-            <Button variant="outline" onClick={() => setConfirming('void')}>Void</Button>
-          )}
-          {canChange && mayRefund && (
-            <Button variant="danger" onClick={() => setConfirming('refund')}>Refund</Button>
-          )}
+          {order && <RefundActions refund={refund} />}
         </>
       }
     >
@@ -130,29 +119,7 @@ export function OrderDetailDialog({
         <p className="text-base text-text-muted">That sale could not be loaded.</p>
       ) : (
         <div className="flex flex-col gap-5">
-          {confirming && (
-            <Card className="border-danger-border bg-danger-subtle">
-              <p className="text-base font-medium text-text">
-                {confirming === 'void' ? 'Void this sale?' : 'Refund it in full?'}
-              </p>
-              <p className="mt-1 text-base text-text-muted">
-                {confirming === 'void'
-                  ? 'It comes out of the day’s takings and the stock goes back.'
-                  : 'A credit note is issued referencing the original. The original document stays exactly as it was issued.'}
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>Keep it</Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  loading={act.isPending}
-                  onClick={() => act.mutate(confirming)}
-                >
-                  Yes, {confirming}
-                </Button>
-              </div>
-            </Card>
-          )}
+          <RefundConfirmation order={order} refund={refund} />
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge dot tone={STATUS[order.status].tone}>{STATUS[order.status].label}</Badge>
@@ -173,10 +140,15 @@ export function OrderDetailDialog({
             )}
           </div>
 
+          <RefundHint refund={refund} />
+
           <TableScroll>
             <Table>
               <thead>
                 <tr>
+                  {/* Only while something can still go back. A column of
+                      disabled boxes on a settled sale is furniture. */}
+                  {refund.canRefund && <Th className="w-8"><span className="sr-only">Refund</span></Th>}
                   <Th>{terms.t('order_line')}</Th>
                   <Th numeric>Qty</Th>
                   <Th numeric className="hidden sm:table-cell">Unit</Th>
@@ -188,8 +160,19 @@ export function OrderDetailDialog({
               </thead>
               <tbody>
                 {order.lines.map((line) => (
-                  <Tr key={line.id}>
-                    <Td className="font-medium">{line.name}</Td>
+                  <Tr key={line.id} className={cn(refund.refunded.has(line.id) && 'opacity-60')}>
+                    {refund.canRefund && (
+                      <Td><RefundCheckbox line={line} refund={refund} /></Td>
+                    )}
+                    <Td className="font-medium">
+                      {line.name}
+                      {/* Shown rather than hidden: a part-refunded sale with
+                          its returned lines removed reads as a smaller sale
+                          that was never refunded at all. */}
+                      {refund.refunded.has(line.id) && (
+                        <Badge tone="neutral" className="ml-2">Refunded</Badge>
+                      )}
+                    </Td>
                     <Td numeric>{line.quantity}</Td>
                     <Td numeric className="hidden text-text-muted sm:table-cell">
                       <MoneyText value={line.unitPrice} display="none" />
@@ -225,6 +208,16 @@ export function OrderDetailDialog({
             <Line label="Net" value={<MoneyText value={order.net} display="none" />} muted />
             <Line label="Tax" value={<MoneyText value={order.tax} display="none" />} muted />
             <Line label="Total" value={<MoneyText value={order.gross} />} strong />
+            {order.refunded.minor > 0 && (
+              <Line
+                label="Given back"
+                value={
+                  <span className="text-danger-text">
+                    <MoneyText value={order.refunded} display="none" />
+                  </span>
+                }
+              />
+            )}
             {/* Stated as a fact about the sale, not as a row in the sum. The
                 discount is already inside every line's net and gross, so a
                 deduction line here reads as money to subtract again and the

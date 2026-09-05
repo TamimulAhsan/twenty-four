@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { orders, queryKeys, type Order } from '@twentyfour/api'
 import { useTerms } from '@twentyfour/terms'
 import {
-  PageBody, Badge, Button, Card, Dialog, EmptyState, ErrorState, MoneyText, Skeleton, cn, useDateFormat, useToast,
+  RefundActions, RefundCheckbox, RefundConfirmation, RefundHint, useOrderRefund,
+} from '@twentyfour/shell'
+import {
+  PageBody, Badge, Button, Dialog, EmptyState, ErrorState, MoneyText, Skeleton, cn, useDateFormat,
 } from '@twentyfour/ui'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -79,32 +82,10 @@ export function OrdersView() {
 }
 
 function OrderDialog({ order, onClose }: { order: Order | null; onClose: () => void }) {
-  const toast = useToast()
   const dates = useDateFormat()
-  const queryClient = useQueryClient()
-  const [confirming, setConfirming] = useState<'void' | 'refund' | null>(null)
-
-  const act = useMutation({
-    mutationFn: (kind: 'void' | 'refund') =>
-      kind === 'void'
-        ? orders.void(order!.id, 'Voided at the till')
-        : orders.refund(order!.id, { reason: 'Refunded at the till' }),
-    onSuccess: (_updated, kind) => {
-      void queryClient.invalidateQueries()
-      setConfirming(null)
-      onClose()
-      toast.show({
-        tone: 'success',
-        title: kind === 'void' ? 'Sale voided' : 'Sale refunded',
-        description:
-          kind === 'void'
-            ? 'Stock has gone back and the sale is out of the day’s takings.'
-            : 'A credit note has been issued against the original. The original is unchanged.',
-      })
-    },
-  })
-
-  const canChange = order?.status === 'paid'
+  // Every rule about what can go back, and what it comes to, lives in the
+  // shared hook. The till and the dashboard cannot drift apart on it.
+  const refund = useOrderRefund({ order, source: 'the till', onDone: onClose })
 
   return (
     <Dialog
@@ -113,57 +94,44 @@ function OrderDialog({ order, onClose }: { order: Order | null; onClose: () => v
       title={order ? order.number : ''}
       description={order ? dates.dateTime(order.placedAt) : undefined}
       footer={
-        order && canChange ? (
-          <>
-            <Button variant="ghost" onClick={onClose}>Close</Button>
-            <Button variant="outline" onClick={() => setConfirming('void')}>Void</Button>
-            <Button variant="danger" onClick={() => setConfirming('refund')}>Refund</Button>
-          </>
-        ) : (
-          <Button onClick={onClose}>Close</Button>
-        )
+        <>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          {order && <RefundActions refund={refund} />}
+        </>
       }
     >
       {order && (
         <div className="flex flex-col gap-4">
-          {confirming && (
-            <Card className={cn('border-danger-border bg-danger-subtle')}>
-              <p className="text-base font-medium text-text">
-                {confirming === 'void' ? 'Void this sale?' : 'Refund this sale in full?'}
-              </p>
-              <p className="mt-1 text-base text-text-muted">
-                {confirming === 'void'
-                  ? 'It comes out of the day’s takings and the stock goes back.'
-                  : 'A credit note is issued referencing the original. The original document stays exactly as it was issued.'}
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
-                  Keep it
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  loading={act.isPending}
-                  onClick={() => act.mutate(confirming)}
-                >
-                  Yes, {confirming}
-                </Button>
-              </div>
-            </Card>
-          )}
+          <RefundConfirmation order={order} refund={refund} />
+          <RefundHint refund={refund} />
 
           <ul className="flex flex-col divide-y divide-border">
-            {order.lines.map((line) => (
-              <li key={line.id} className="flex justify-between gap-3 py-2.5">
-                <span className="min-w-0">
-                  <span className="tnum text-text-muted">{line.quantity}x </span>
-                  {line.name}
-                </span>
-                <span className="tnum shrink-0 font-medium">
-                  <MoneyText value={line.gross} display="none" />
-                </span>
-              </li>
-            ))}
+            {order.lines.map((line) => {
+              const done = refund.refunded.has(line.id)
+              return (
+                <li key={line.id}>
+                  {/* A line that has already gone back is shown and not
+                      offered: hiding it makes a part-refunded sale look like a
+                      smaller sale that was never refunded at all. */}
+                  <label
+                    className={cn(
+                      'flex items-center gap-3 py-2.5',
+                      done ? 'opacity-60' : refund.canRefund && 'cursor-pointer',
+                    )}
+                  >
+                    {refund.canRefund && <RefundCheckbox line={line} refund={refund} />}
+                    <span className="min-w-0 flex-1">
+                      <span className="tnum text-text-muted">{line.quantity}x </span>
+                      {line.name}
+                      {done && <Badge tone="neutral" className="ml-2">Refunded</Badge>}
+                    </span>
+                    <span className="tnum shrink-0 font-medium">
+                      <MoneyText value={line.gross} display="none" />
+                    </span>
+                  </label>
+                </li>
+              )
+            })}
           </ul>
 
           <dl className="flex flex-col gap-1 border-t border-border pt-3 text-base">
@@ -179,6 +147,12 @@ function OrderDialog({ order, onClose }: { order: Order | null; onClose: () => v
               <dt>Total</dt>
               <dd className="tnum"><MoneyText value={order.gross} /></dd>
             </div>
+            {order.refunded.minor > 0 && (
+              <div className="flex justify-between text-danger-text">
+                <dt>Given back</dt>
+                <dd className="tnum"><MoneyText value={order.refunded} display="none" /></dd>
+              </div>
+            )}
           </dl>
         </div>
       )}

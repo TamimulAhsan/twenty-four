@@ -9,7 +9,7 @@ import {
   type Line,
   type Money,
 } from '@twentyfour/money'
-import type { CatalogItem } from '@twentyfour/api'
+import type { CatalogItem, Order } from '@twentyfour/api'
 
 export interface CartLine {
   readonly key: string
@@ -58,6 +58,12 @@ export function useCart(currency: string) {
     setNote('')
   }, [])
 
+  /** Replaces the whole cart, for resuming a parked sale. */
+  const load = useCallback((next: CartLine[], nextNote: string) => {
+    setLines(next)
+    setNote(nextNote)
+  }, [])
+
   const priced = useMemo(() => {
     const pricingLines: Line[] = lines.map((line) => ({
       quantity: line.quantity,
@@ -83,7 +89,42 @@ export function useCart(currency: string) {
     }
   }, [lines, currency])
 
-  return { lines, note, setNote, add, setQuantity, remove, clear, ...priced }
+  return { lines, note, setNote, add, setQuantity, remove, clear, load, ...priced }
+}
+
+/**
+ * Rebuilds cart lines from a parked sale.
+ *
+ * The catalog item is looked up rather than reconstructed from the order line,
+ * because the cart prices from the catalog. A line carrying its own copy of a
+ * price would keep charging yesterday's figure after somebody corrected it.
+ *
+ * An item archived since the sale was parked cannot be rebuilt, so it is
+ * reported rather than dropped: a tab that quietly comes back one item shorter
+ * is worse than one that says what it lost.
+ */
+export function cartLinesFromOrder(
+  order: Order,
+  items: readonly CatalogItem[],
+): { lines: CartLine[]; missing: string[] } {
+  const lines: CartLine[] = []
+  const missing: string[] = []
+
+  for (const [index, line] of order.lines.entries()) {
+    const item = items.find((candidate) => candidate.id === line.itemId)
+    if (!item) {
+      missing.push(line.name)
+      continue
+    }
+    lines.push({
+      key: `${item.id}-${index}`,
+      item,
+      quantity: line.quantity,
+      discount: line.discount,
+    })
+  }
+
+  return { lines, missing }
 }
 
 /** Sensible cash buttons above the amount due: the exact figure, then the next

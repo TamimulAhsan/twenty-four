@@ -53,7 +53,15 @@ function minutesSince(iso: string | null): number | null {
  * actually has, which table is free and who has been waiting longest, without
  * one.
  */
-export function TablesView() {
+export function TablesView({
+  onOpenSale,
+  onStartTab,
+}: {
+  /** Opens the tab already running on a table, in the till. */
+  onOpenSale: (orderId: string) => void
+  /** Starts a new tab against a table, in the till. */
+  onStartTab: (tableId: string) => void
+}) {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<DiningTable | null>(null)
@@ -142,9 +150,20 @@ export function TablesView() {
                             is glanced at across a room, which is exactly where
                             colour alone stops carrying meaning. */}
                         <span className="block text-sm font-medium text-text">{state.label}</span>
-                        {sitting !== null && (
-                          <span className="tnum block text-sm text-text-muted">{sitting} min</span>
-                        )}
+                        <span className="flex items-center gap-1.5">
+                          {sitting !== null && (
+                            <span className="tnum text-sm text-text-muted">{sitting} min</span>
+                          )}
+                          {/* Money on the table. Worth its own mark: clearing
+                              a table with an unpaid tab on it is the mistake
+                              this screen exists to prevent. */}
+                          {table.orderId !== null && (
+                            <span className="flex items-center gap-1 text-sm font-medium text-text">
+                              <Icon name="Receipt" size="sm" />
+                              Tab
+                            </span>
+                          )}
+                        </span>
                       </span>
                     </button>
                   )
@@ -157,6 +176,8 @@ export function TablesView() {
 
       <TableDialog
         table={selected}
+        onOpenSale={onOpenSale}
+        onStartTab={onStartTab}
         onClose={() => setSelected(null)}
         onDone={(message) => {
           void queryClient.invalidateQueries({ queryKey: ['tables'] })
@@ -172,10 +193,14 @@ function TableDialog({
   table,
   onClose,
   onDone,
+  onOpenSale,
+  onStartTab,
 }: {
   table: DiningTable | null
   onClose: () => void
   onDone: (message: string) => void
+  onOpenSale: (orderId: string) => void
+  onStartTab: (tableId: string) => void
 }) {
   const [partySize, setPartySize] = useState('')
   const [staffId, setStaffId] = useState('')
@@ -280,6 +305,32 @@ function TableDialog({
                 )}
               </dl>
 
+              {/* The tab comes first. It is the reason a server opened this
+                  dialog on a table that is already occupied, and everything
+                  else here is housekeeping around it. */}
+              <div className="flex flex-wrap gap-2">
+                {table.orderId !== null ? (
+                  <Button
+                    size="lg"
+                    iconStart="Receipt"
+                    className="flex-1"
+                    onClick={() => onOpenSale(table.orderId as string)}
+                  >
+                    Open the tab
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    iconStart="Plus"
+                    className="flex-1"
+                    onClick={() => onStartTab(table.id)}
+                  >
+                    Start a tab
+                  </Button>
+                )}
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 {table.status !== 'ordered' && (
                   <Button
@@ -301,11 +352,19 @@ function TableDialog({
                 )}
                 <Button
                   loading={update.isPending}
+                  disabled={table.orderId !== null}
                   onClick={() => update.mutate({ status: 'free' })}
                 >
                   Clear the table
                 </Button>
               </div>
+
+              {table.orderId !== null && (
+                <p className="text-sm text-text-muted">
+                  This table cannot be cleared while a tab is open on it. Settle it or throw it
+                  away first, or the sale is left with nothing pointing at it.
+                </p>
+              )}
             </div>
           )}
         </div>

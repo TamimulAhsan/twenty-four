@@ -33,11 +33,14 @@ import type {
   CatalogItemInput,
   EntitlementPayload,
   FiscalDocument,
+  DayClose,
   Order,
   OrderLine,
   OnboardingState,
+  ParkOrderInput,
   Payment,
   PlaceOrderInput,
+  TenderInput,
   Session,
   StaffMember,
   StockLevel,
@@ -129,6 +132,17 @@ export class TenantStore {
 
   private stock = new Map<string, StockRow>()
   private counters = { order: 0, document: 0, booking: 0, payment: 0, item: 0, staff: 0 }
+  /** Drawer counts, by date. Minor units, because a counted drawer is money. */
+  private dayCloses = new Map<
+    string,
+    {
+      openingFloat: number
+      countedCash: number
+      countedBy: string
+      countedAt: string
+      note: string
+    }
+  >()
 
   constructor(seed: TenantSeed) {
     this.id = seed.id
@@ -259,13 +273,23 @@ export class TenantStore {
 
   /* ------------------------------------------------------------- ordering */
 
-  placeOrder(input: PlaceOrderInput): Order {
-    if (input.lines.length === 0) {
+  /* ------------------------------------------------------------- ordering */
+
+  /**
+   * Prices a set of lines.
+   *
+   * Shared by a sale and a parked sale, so a tab settled an hour after it was
+   * opened comes out at the figure the customer was shown when it was opened
+   * rather than at whatever the catalog says by then.
+   */
+  private priceOrderLines(
+    lines: PlaceOrderInput['lines'],
+  ): Array<{ line: OrderLine; amounts: Amounts }> {
+    if (lines.length === 0) {
       throw new MockError(422, 'empty_order', 'An order needs at least one line.')
     }
 
-    const priced: Array<{ line: OrderLine; amounts: Amounts }> = []
-    for (const [index, lineInput] of input.lines.entries()) {
+    return lines.map((lineInput, index) => {
       const item = this.getItem(lineInput.itemId)
       const discount = lineInput.discount
         ? money(Number(lineInput.discount.minor), lineInput.discount.currency)
@@ -279,7 +303,7 @@ export class TenantStore {
         ...(discount ? { discount } : {}),
       })
 
-      priced.push({
+      return {
         amounts,
         line: {
           id: `line-${index + 1}`,
@@ -294,17 +318,52 @@ export class TenantStore {
           net: amounts.net,
           tax: amounts.tax,
         },
-      })
-    }
+      }
+    })
+  }
 
-    const total = totalOf(priced.map((entry) => entry.amounts))
+  /**
+   * Refuses a payment that does not cover what is owed.
+   *
+   * The tenders are summed first, so a sale settled half in cash and half on a
+   * card is one payment that covers it rather than two that each fall short.
+   */
+  private requireCoveringTender(tenders: readonly TenderInput[], due: Money): void {
     const tendered = sumMoney(
-      input.tenders.map((tender) => money(Number(tender.amount.minor), tender.amount.currency)),
+      tenders.map((tender) => money(Number(tender.amount.minor), tender.amount.currency)),
       this.currency,
     )
-    if (tendered.minor < total.gross.minor) {
+    if (tendered.minor < due.minor) {
       throw new MockError(422, 'insufficient_tender', 'The tender does not cover the total.')
     }
+  }
+
+  /** Stock leaving or coming back. sign is -1 for a sale, 1 for a return. */
+  private moveStock(lines: readonly OrderLine[], sign: 1 | -1): void {
+    for (const line of lines) {
+      const row = this.stock.get(line.itemId)
+      if (row) row.onHand += sign * line.quantity
+    }
+  }
+
+  /**
+   * Stock spoken for but not gone.
+   *
+   * A parked sale holds its lines here so a second till cannot sell the same
+   * last one, and an inventory count is not short every time a tab is
+   * abandoned. Reserving is not selling.
+   */
+  private reserveStock(lines: readonly OrderLine[], sign: 1 | -1): void {
+    for (const line of lines) {
+      const row = this.stock.get(line.itemId)
+      if (row) row.reserved = Math.max(0, row.reserved + sign * line.quantity)
+    }
+  }
+
+  placeOrder(input: PlaceOrderInput): Order {
+    const priced = this.priceOrderLines(input.lines)
+    const total = totalOf(priced.map((entry) => entry.amounts))
+    this.requireCoveringTender(input.tenders, total.gross)
 
     this.counters.order += 1
     const placedAt = new Date().toISOString()
@@ -324,18 +383,18 @@ export class TenantStore {
       gross: total.gross,
       net: total.net,
       tax: total.tax,
-      tenders: this.buildTenders(input, total.gross),
+      tenders: this.buildTenders(input.tenders, total.gross),
       staffId: input.staffId ?? this.staff[0]?.id ?? null,
       note: input.note ?? '',
+      tableId: null,
+      refunded: zero(this.currency),
+      refundedLineIds: [],
     }
 
     // Stock moves here, on the order, not on a settled card. A cash sale, a
     // comp and an unpaid booking all move stock too, and an earlier draft that
     // decremented on payment.succeeded broke every one of them silently.
-    for (const entry of priced) {
-      const row = this.stock.get(entry.line.itemId)
-      if (row) row.onHand -= entry.line.quantity
-    }
+    this.moveStock(order.lines, -1)
 
     this.orders = [order, ...this.orders]
     this.recordPayments(order)
@@ -343,11 +402,202 @@ export class TenantStore {
     return order
   }
 
-  private buildTenders(input: PlaceOrderInput, due: Money): Tender[] {
+  /* --------------------------------------------------------- parked sales */
+
+  /**
+   * Parks a sale.
+   *
+   * Rung up and set aside: a tab on a table, or a basket held while somebody
+   * goes out to the car for their card. No money has changed hands, so nothing
+   * is charged, no document is issued, and it is a sale in no figure anywhere.
+   *
+   * Parking and paying are separate calls on purpose. A request that can carry
+   * tenders is a request that can take money, and the button a cashier presses
+   * a hundred times a day must not be one field away from charging a card.
+   */
+  parkOrder(input: ParkOrderInput): Order {
+    const priced = this.priceOrderLines(input.lines)
+    const total = totalOf(priced.map((entry) => entry.amounts))
+
+    this.counters.order += 1
+    const customer = input.customerId
+      ? this.customers.find((entry) => entry.id === input.customerId)
+      : undefined
+    const order: Order = {
+      id: `${this.id}-order-${this.counters.order}`,
+      number: this.orderNumber(),
+      // While it is parked this is when it was parked, which is what the till
+      // shows and what "waiting 40 minutes" is measured against. Settling
+      // moves it to the moment it became a sale, so the receipt and the day's
+      // takings agree about which day it belongs to.
+      placedAt: new Date().toISOString(),
+      status: 'open',
+      customerId: input.customerId ?? null,
+      customerName: customer?.name ?? null,
+      discountCode: null,
+      discount: null,
+      lines: priced.map((entry) => entry.line),
+      gross: total.gross,
+      net: total.net,
+      tax: total.tax,
+      tenders: [],
+      staffId: input.staffId ?? this.staff[0]?.id ?? null,
+      note: input.note ?? '',
+      tableId: null,
+      refunded: zero(this.currency),
+      refundedLineIds: [],
+    }
+
+    this.reserveStock(order.lines, 1)
+    this.orders = [order, ...this.orders]
+    return this.attachTable(order, input.tableId ?? null)
+  }
+
+  /** Oldest first. The tab that has been waiting longest is the one somebody
+   *  needs to do something about. */
+  listParkedOrders(): Order[] {
+    return this.orders
+      .filter((order) => order.status === 'open')
+      .sort((a, b) => a.placedAt.localeCompare(b.placedAt))
+  }
+
+  private requireParked(id: string): Order {
+    const order = this.orders.find((candidate) => candidate.id === id)
+    if (!order) throw new MockError(404, 'not_found', 'No such order.')
+    if (order.status !== 'open') {
+      throw new MockError(409, 'not_parked', 'That sale has already been settled.')
+    }
+    return order
+  }
+
+  /**
+   * Puts a parked sale on a table, or takes it off one.
+   *
+   * A table holds at most one open tab. Letting a second one attach is how a
+   * round of drinks ends up on a bill belonging to the party who left.
+   */
+  private attachTable(order: Order, tableId: string | null): Order {
+    if (order.tableId === tableId) return order
+
+    if (tableId !== null) {
+      const table = this.tables.find((entry) => entry.id === tableId)
+      if (!table) throw new MockError(404, 'not_found', 'No such table.')
+      if (table.orderId !== null && table.orderId !== order.id) {
+        throw new MockError(
+          409,
+          'table_occupied',
+          `Table ${table.label} already has an open sale on it.`,
+        )
+      }
+    }
+
+    this.tables = this.tables.map((table) => {
+      if (table.id === order.tableId) return { ...table, orderId: null }
+      if (table.id === tableId) {
+        // A tab exists, so they have ordered. Saying so here saves a server
+        // pressing a second button to tell the floor screen what it can see.
+        return {
+          ...table,
+          orderId: order.id,
+          status: table.status === 'free' ? 'ordered' : table.status,
+        }
+      }
+      return table
+    })
+
+    const updated: Order = { ...order, tableId }
+    this.orders = this.orders.map((entry) => (entry.id === order.id ? updated : entry))
+    return updated
+  }
+
+  /**
+   * Replaces what is on a parked sale.
+   *
+   * The lines arrive whole rather than as a patch. Two tills editing one tab
+   * have to land on one answer, and a patch stream lands on the sum of both.
+   */
+  updateParkedOrder(id: string, input: ParkOrderInput): Order {
+    const existing = this.requireParked(id)
+    const priced = this.priceOrderLines(input.lines)
+    const total = totalOf(priced.map((entry) => entry.amounts))
+
+    // Released and retaken rather than reconciled line by line: the request
+    // carries the whole tab, so what it holds is recomputed from scratch.
+    this.reserveStock(existing.lines, -1)
+
+    const customer = input.customerId
+      ? this.customers.find((entry) => entry.id === input.customerId)
+      : undefined
+    const updated: Order = {
+      ...existing,
+      lines: priced.map((entry) => entry.line),
+      gross: total.gross,
+      net: total.net,
+      tax: total.tax,
+      note: input.note ?? existing.note,
+      ...(input.customerId !== undefined
+        ? { customerId: input.customerId, customerName: customer?.name ?? null }
+        : {}),
+    }
+
+    this.reserveStock(updated.lines, 1)
+    this.orders = this.orders.map((entry) => (entry.id === id ? updated : entry))
+    return this.attachTable(updated, input.tableId !== undefined ? input.tableId : existing.tableId)
+  }
+
+  /** Abandons a parked sale. What it was holding goes back on the shelf. */
+  discardParkedOrder(id: string): void {
+    const order = this.requireParked(id)
+    this.reserveStock(order.lines, -1)
+    this.attachTable(order, null)
+    this.orders = this.orders.filter((entry) => entry.id !== id)
+  }
+
+  /**
+   * Takes the money on a parked sale.
+   *
+   * It stays the same sale it always was: same id, same number, same lines at
+   * the same prices. Only now it is paid for.
+   */
+  settleParkedOrder(id: string, tenders: readonly TenderInput[]): Order {
+    const existing = this.requireParked(id)
+    this.requireCoveringTender(tenders, existing.gross)
+
+    // Both halves together. A reservation released without the stock moving is
+    // a shop that believes it still has what it has just sold.
+    this.reserveStock(existing.lines, -1)
+    this.moveStock(existing.lines, -1)
+
+    const settled: Order = {
+      ...existing,
+      status: 'paid',
+      placedAt: new Date().toISOString(),
+      tenders: this.buildTenders(tenders, existing.gross),
+      tableId: null,
+    }
+    this.orders = this.orders.map((entry) => (entry.id === id ? settled : entry))
+    // The tab is closed. The table is left exactly as it was: people sit on
+    // after they have paid, and clearing it for them is the till guessing.
+    this.tables = this.tables.map((table) =>
+      table.orderId === id ? { ...table, orderId: null } : table,
+    )
+    this.recordPayments(settled)
+    this.issueDocument(settled, 'receipt')
+    return settled
+  }
+
+  /**
+   * Turns tender inputs into tenders.
+   *
+   * Each one is applied against what is still owed, so a split that overshoots
+   * cannot record more money than the sale was worth. Only cash can overshoot
+   * at all: change comes out of a drawer, and no card gives any back.
+   */
+  private buildTenders(tenders: readonly TenderInput[], due: Money): Tender[] {
     // A running counter, not an amount: it is compared and decremented, and
     // every value that leaves this function is rebuilt through money().
     let remaining: number = due.minor
-    return input.tenders.map((tender) => {
+    return tenders.map((tender) => {
       const amount = money(Number(tender.amount.minor), tender.amount.currency)
       const applied = Math.min(amount.minor, Math.max(remaining, 0))
       remaining -= applied
@@ -390,13 +640,64 @@ export class TenantStore {
   }
 
   /**
+   * Puts a refund back the way it came.
+   *
+   * Split across the tenders in proportion to what each of them paid, which is
+   * what actually happens: a sale settled half in cash and half on a card
+   * refunds half to each. Only the card half leaves a payment record, and only
+   * that half is ever a provider's problem.
+   */
+  private refundPayments(order: Order, amount: Money): void {
+    const shares = TenantStore.allocate(
+      order.tenders.map((tender) => tender.amount.minor),
+      amount.minor,
+    )
+    order.tenders.forEach((tender, index) => {
+      const share = shares[index] ?? 0
+      if (share <= 0) return
+      const paymentId = `${this.id}-payment-${tender.id}`
+      this.payments = this.payments.map((payment) => {
+        if (payment.id !== paymentId) return payment
+        const refunded = money(payment.refunded.minor + share, this.currency)
+        return {
+          ...payment,
+          refunded,
+          status: refunded.minor >= payment.amount.minor ? 'refunded' : payment.status,
+        }
+      })
+    })
+  }
+
+  /** The cash share of what has been refunded on a sale. Money goes back the
+   *  way it came, so a card sale takes nothing out of the drawer. */
+  private cashRefundedOn(order: Order): number {
+    if (order.refunded.minor <= 0) return 0
+    const shares = TenantStore.allocate(
+      order.tenders.map((tender) => tender.amount.minor),
+      order.refunded.minor,
+    )
+    return order.tenders.reduce(
+      (sum, tender, index) => (tender.method === 'cash' ? sum + (shares[index] ?? 0) : sum),
+      0,
+    )
+  }
+
+  /**
    * Issues a document and stores it.
    *
    * The artifact is stored, never recomputed. A receipt from last year must
    * re-render exactly as issued even after a price or a tax rate has changed,
    * which is why the URL points at a stored file and not at a render endpoint.
+   *
+   * The amounts are passed rather than read off the order: a credit note is
+   * for what actually went back, which on a partial refund is one line out of
+   * four and not the sale.
    */
-  private issueDocument(order: Order, kind: FiscalDocument['kind']): FiscalDocument {
+  private issueDocument(
+    order: Order,
+    kind: FiscalDocument['kind'],
+    amounts: Amounts = { gross: order.gross, net: order.net, tax: order.tax },
+  ): FiscalDocument {
     this.counters.document += 1
     const year = new Date().getFullYear()
     const document: FiscalDocument = {
@@ -405,9 +706,9 @@ export class TenantStore {
       kind,
       issuedAt: order.placedAt,
       orderId: order.id,
-      gross: order.gross,
-      net: order.net,
-      tax: order.tax,
+      gross: amounts.gross,
+      net: amounts.net,
+      tax: amounts.tax,
       customerName: null,
       reportingStatus: kind === 'receipt' ? 'not_required' : 'queued',
       artifactUrl: `/api/documents/${this.id}-doc-${this.counters.document}/artifact`,
@@ -425,37 +726,170 @@ export class TenantStore {
   voidOrder(id: string, _reason: string): Order {
     const order = this.orders.find((candidate) => candidate.id === id)
     if (!order) throw new MockError(404, 'not_found', 'No such order.')
+    if (order.status === 'open') {
+      throw new MockError(
+        409,
+        'not_a_sale',
+        'That sale is parked and has never been paid for. Discard it instead.',
+      )
+    }
     if (order.status === 'voided') return order
     // Stock comes back: a void is not a sale that happened.
-    for (const line of order.lines) {
-      const row = this.stock.get(line.itemId)
-      if (row) row.onHand += line.quantity
-    }
+    this.moveStock(order.lines, 1)
     const voided: Order = { ...order, status: 'voided' }
     this.orders = this.orders.map((candidate) => (candidate.id === id ? voided : candidate))
     return voided
   }
 
+  /**
+   * Refunds a whole sale, or named lines of it.
+   *
+   * A line goes back once. Without that rule, refunding the same coffee twice
+   * pays it out twice, returns two of them to stock, and issues two credit
+   * notes against a sale that only ever happened once.
+   */
   refundOrder(id: string, lineIds?: string[]): Order {
     const order = this.orders.find((candidate) => candidate.id === id)
     if (!order) throw new MockError(404, 'not_found', 'No such order.')
-    const refundingAll = !lineIds || lineIds.length === order.lines.length
-    for (const line of order.lines) {
-      if (lineIds && !lineIds.includes(line.id)) continue
-      const row = this.stock.get(line.itemId)
-      if (row) row.onHand += line.quantity
+    if (order.status === 'open') {
+      throw new MockError(
+        409,
+        'not_a_sale',
+        'That sale is parked and has never been paid for. Discard it instead.',
+      )
     }
-    const refunded: Order = { ...order, status: refundingAll ? 'refunded' : 'partly_refunded' }
+    if (order.status === 'voided') {
+      throw new MockError(409, 'voided', 'A voided sale has nothing to refund.')
+    }
+
+    const already = new Set(order.refundedLineIds)
+
+    if (lineIds) {
+      const unknown = lineIds.filter((lineId) => !order.lines.some((line) => line.id === lineId))
+      if (unknown.length > 0) {
+        throw new MockError(422, 'unknown_line', 'That line is not on this sale.')
+      }
+      const repeated = lineIds.filter((lineId) => already.has(lineId))
+      if (repeated.length > 0) {
+        throw new MockError(409, 'already_refunded', 'That line has already been refunded.')
+      }
+    }
+
+    const returning = lineIds
+      ? order.lines.filter((line) => lineIds.includes(line.id))
+      : order.lines.filter((line) => !already.has(line.id))
+
+    if (returning.length === 0) {
+      throw new MockError(409, 'already_refunded', 'This sale has already been refunded in full.')
+    }
+
+    // Stock comes back for what was actually handed over, not for the sale.
+    this.moveStock(returning, 1)
+
+    const amounts = totalOf(
+      returning.map((line) => ({ gross: line.gross, net: line.net, tax: line.tax })),
+    )
+    const refundedLineIds = [...order.refundedLineIds, ...returning.map((line) => line.id)]
+
+    const refunded: Order = {
+      ...order,
+      status: refundedLineIds.length === order.lines.length ? 'refunded' : 'partly_refunded',
+      refunded: money(order.refunded.minor + amounts.gross.minor, this.currency),
+      refundedLineIds,
+    }
     this.orders = this.orders.map((candidate) => (candidate.id === id ? refunded : candidate))
+    this.refundPayments(refunded, amounts.gross)
     // A correction is a new document referencing the original. The original is
     // never edited and never deleted.
-    this.issueDocument(refunded, 'credit_note')
+    this.issueDocument(refunded, 'credit_note', amounts)
     return refunded
+  }
+
+  /* ------------------------------------------------------------ day close */
+
+  /**
+   * What the drawer should hold, and what it was found to hold.
+   *
+   * Expected cash is built from what was actually tendered in cash, never from
+   * the day's total: a card sale never touched the drawer. Refunds come back
+   * out of it in the proportion they were paid in.
+   */
+  dayClose(date: string): DayClose {
+    const record = this.dayCloses.get(date)
+    let cashTaken = 0
+    let cashRefunded = 0
+    for (const order of this.orders) {
+      if (order.placedAt.slice(0, 10) !== date) continue
+      if (order.status === 'open' || order.status === 'voided') continue
+      for (const tender of order.tenders) {
+        if (tender.method === 'cash') cashTaken += tender.amount.minor
+      }
+      cashRefunded += this.cashRefundedOn(order)
+    }
+
+    // Suggested from the last count when this day has not been closed yet: the
+    // float carried over is the figure a cashier is about to type anyway.
+    const openingFloat = record?.openingFloat ?? this.lastOpeningFloat()
+    const expected = openingFloat + cashTaken - cashRefunded
+    const counted = record?.countedCash ?? null
+
+    return {
+      date,
+      openingFloat: money(openingFloat, this.currency),
+      cashTaken: money(cashTaken, this.currency),
+      cashRefunded: money(cashRefunded, this.currency),
+      expectedCash: money(expected, this.currency),
+      countedCash: counted === null ? null : money(counted, this.currency),
+      variance: counted === null ? null : money(counted - expected, this.currency),
+      countedBy: record?.countedBy ?? null,
+      countedAt: record?.countedAt ?? null,
+      note: record?.note ?? '',
+      closed: record !== undefined,
+    }
+  }
+
+  private lastOpeningFloat(): number {
+    const dates = [...this.dayCloses.keys()].sort()
+    const latest = dates[dates.length - 1]
+    return latest === undefined ? 0 : (this.dayCloses.get(latest)?.openingFloat ?? 0)
+  }
+
+  /** Records a count. Counting again replaces it: a recount is a correction,
+   *  and the figure that stands is the one somebody arrived at last. */
+  closeDay(input: {
+    date: string
+    openingFloat: Money
+    countedCash: Money
+    note?: string
+  }): DayClose {
+    if (input.openingFloat.minor < 0 || input.countedCash.minor < 0) {
+      throw new MockError(422, 'negative_count', 'A drawer cannot hold less than nothing.')
+    }
+    this.dayCloses.set(input.date, {
+      openingFloat: input.openingFloat.minor,
+      countedCash: input.countedCash.minor,
+      countedBy: this.session.name,
+      countedAt: new Date().toISOString(),
+      note: input.note ?? '',
+    })
+    return this.dayClose(input.date)
+  }
+
+  /** One order by id, parked or settled. Fetching a tab by its id has to work
+   *  even though the list it is missing from deliberately hides it. */
+  getOrder(id: string): Order {
+    const order = this.orders.find((candidate) => candidate.id === id)
+    if (!order) throw new MockError(404, 'not_found', 'No such order.')
+    return order
   }
 
   listOrders(filters: { from?: string; to?: string; status?: string } = {}): Order[] {
     return this.orders
       .filter((order) => {
+        // A parked sale is not a sale. It stays out of the order list, out of
+        // the day's takings and out of every revenue figure until somebody
+        // actually pays for it, and is served from its own endpoint until then.
+        if (order.status === 'open' && filters.status !== 'open') return false
         const day = order.placedAt.slice(0, 10)
         if (filters.from && day < filters.from) return false
         if (filters.to && day > filters.to) return false
@@ -470,7 +904,11 @@ export class TenantStore {
 
   takings(date: string): Takings {
     const forDay = this.orders.filter(
-      (order) => order.placedAt.slice(0, 10) === date && order.status !== 'voided',
+      (order) =>
+        order.placedAt.slice(0, 10) === date &&
+        order.status !== 'voided' &&
+        // Parked. Nobody has paid for it, so it is in nobody's takings.
+        order.status !== 'open',
     )
 
     const byMethod = new Map<TenderMethod, { amount: number; count: number }>()
@@ -494,9 +932,10 @@ export class TenantStore {
       }
     }
 
-    const refunded = forDay
-      .filter((order) => order.status === 'refunded')
-      .reduce((sum, order) => sum + order.gross.minor, 0)
+    // What actually went back, not what the status implies. A sale with one
+    // line out of four returned is worth exactly that one line, and counting
+    // it as nothing or as everything are both wrong.
+    const refunded = forDay.reduce((sum, order) => sum + order.refunded.minor, 0)
 
     return {
       date,
@@ -615,10 +1054,25 @@ export class TenantStore {
 
   updateTable(
     id: string,
-    input: { status?: DiningTable['status']; partySize?: number | null; staffId?: string | null },
+    input: {
+      status?: DiningTable['status']
+      partySize?: number | null
+      staffId?: string | null
+    },
   ): DiningTable {
     const existing = this.tables.find((table) => table.id === id)
     if (!existing) throw new MockError(404, 'not_found', 'No such table.')
+
+    // Clearing a table with a tab still on it strands the sale: nothing on the
+    // floor screen points at it any more, and the only way back to it is the
+    // parked list. Settle it or discard it first.
+    if (input.status === 'free' && existing.orderId !== null) {
+      throw new MockError(
+        409,
+        'sale_open',
+        `Table ${existing.label} still has an unpaid sale on it.`,
+      )
+    }
 
     if (input.partySize !== undefined && input.partySize !== null) {
       if (!Number.isInteger(input.partySize) || input.partySize < 1) {
@@ -958,23 +1412,25 @@ export class TenantStore {
   }
 
   /**
-   * Spreads an order-level discount across its lines.
+   * Splits an amount across parts, in proportion to their size.
    *
-   * In proportion to each line's value, with the rounding remainder given to
-   * the largest line. Applying it to the total instead would leave net plus
-   * tax no longer equal to gross, and a receipt that does not add up is a
-   * receipt that fails an audit.
+   * The rounding remainder goes to the largest part, so the shares always add
+   * back up to exactly what was split. Two callers depend on that: an
+   * order-level discount spread over its lines, where anything else leaves net
+   * plus tax no longer equal to gross and a receipt that fails an audit, and a
+   * refund spread over the tenders that paid for it, where anything else hands
+   * back a forint more or less than was taken.
    */
-  private static spreadDiscount(lineGross: readonly number[], discountMinor: number): number[] {
-    const total = lineGross.reduce((sum, value) => sum + value, 0)
-    if (total <= 0 || discountMinor <= 0) return lineGross.map(() => 0)
-    const capped = Math.min(discountMinor, total)
-    const shares = lineGross.map((value) => Math.floor((capped * value) / total))
+  private static allocate(weights: readonly number[], amountMinor: number): number[] {
+    const total = weights.reduce((sum, value) => sum + value, 0)
+    if (total <= 0 || amountMinor <= 0) return weights.map(() => 0)
+    const capped = Math.min(amountMinor, total)
+    const shares = weights.map((value) => Math.floor((capped * value) / total))
     let remainder = capped - shares.reduce((sum, value) => sum + value, 0)
     if (remainder > 0) {
       let largest = 0
-      for (let index = 1; index < lineGross.length; index++) {
-        if ((lineGross[index] as number) > (lineGross[largest] as number)) largest = index
+      for (let index = 1; index < weights.length; index++) {
+        if ((weights[index] as number) > (weights[largest] as number)) largest = index
       }
       shares[largest] = (shares[largest] as number) + remainder
       remainder = 0
@@ -1010,7 +1466,7 @@ export class TenantStore {
     const preDiscount = resolved.map((entry) => entry.item.unitPrice.minor * entry.quantity)
     const basketGross = preDiscount.reduce((sum, value) => sum + value, 0)
     const discountTotal = this.discountAmount(intent.discountCode, basketGross)
-    const spread = TenantStore.spreadDiscount(preDiscount, discountTotal)
+    const spread = TenantStore.allocate(preDiscount, discountTotal)
 
     const priced = resolved.map((entry, index) => ({
       ...entry,
@@ -1066,12 +1522,12 @@ export class TenantStore {
       ],
       staffId: intent.staffId,
       note: '',
+      tableId: null,
+      refunded: zero(this.currency),
+      refundedLineIds: [],
     }
 
-    for (const entry of priced) {
-      const row = this.stock.get(entry.item.id)
-      if (row) row.onHand -= entry.quantity
-    }
+    this.moveStock(order.lines, -1)
 
     this.orders = [order, ...this.orders]
     this.recordPayments(order)

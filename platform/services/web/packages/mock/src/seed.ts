@@ -68,6 +68,9 @@ function tablesFor(tenantId: string): DiningTable[] {
           ? new Date(Date.now() - (20 + index * 7) * 60_000).toISOString()
           : null,
       staffId: waiting || occupied ? `${tenantId}-staff-${(index % 3) + 1}` : null,
+      // Seeded tables carry no tab. A tab is a parked sale, and a sale that
+      // nothing on the till can open is worse than an empty floor.
+      orderId: null,
     }
   })
 }

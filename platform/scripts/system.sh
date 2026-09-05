@@ -177,10 +177,18 @@ cmd_up() {
   kubectl apply -f deploy/web/ >"$LOG" 2>&1
   for a in $FRONTEND; do step "$a" deploy_frontend "$a"; done
 
+  # A failed build leaves the previous pod running, so "status" would report
+  # the service as up while the change that was being deployed is nowhere. Say
+  # so explicitly rather than letting a green status imply a green deploy.
+  if [ $failed -ne 0 ]; then
+    printf '\n  %sSomething did not build.%s Anything that failed above is still\n' "$RED" "$RESET"
+    printf '  running its previous image, so "system-status" will show it as up.\n'
+  fi
+
   if [ $failed -eq 0 ]; then
     printf '\n  %s%s ready%s  http://%s\n\n' "$GREEN" "✓" "$RESET" "$HOST"
   else
-    printf '\n  %s%s some steps failed%s  run "make system-status" to see what is up\n\n' "$RED" "✗" "$RESET"
+    printf '\n  %s%s some steps failed%s  the rest of the system is running\n\n' "$RED" "✗" "$RESET"
     return 1
   fi
 }
@@ -212,6 +220,37 @@ cmd_down() {
 cmd_status() {
   printf '\n  %sTwentyFour%s  system status\n' "$BOLD" "$RESET"
 
+  # image_row compares the digest a pod is running against the digest the tag
+  # currently points at. Tags are mutable, so the digest is the only honest
+  # answer to "is this pod running the build I just made". They differ when a
+  # build failed, or when an image was pushed but never rolled out, and neither
+  # case is visible from replica counts.
+  registry_digest() {
+    # Podman pushes OCI manifests, so that media type has to be requested by
+    # name; the older Docker types 404 here.
+    curl -sf -o /dev/null -D - \
+      -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+      "http://localhost:5000/v2/twentyfour/$1/manifests/dev" 2>/dev/null \
+      | tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}'
+  }
+
+  image_row() {
+    local label=$1 app=$2 repo=$3 running want mark state
+    running=$(kubectl -n $NS get pods -l "app=$app" \
+      -o jsonpath='{.items[0].status.containerStatuses[0].imageID}' 2>/dev/null)
+    want=$(registry_digest "$repo")
+    if [ -z "$want" ]; then
+      state="not in the registry"; mark="$DIM·$RESET"
+    elif [ -z "$running" ]; then
+      state="not running"; mark="$DIM·$RESET"
+    elif [ "${running##*@}" = "$want" ]; then
+      state="current"; mark="$TICK"
+    else
+      state="older than the registry; needs a rollout"; mark="$RED!$RESET"
+    fi
+    printf '    %s  %-14s %s%s%s\n' "$mark" "$label" "$DIM" "$state" "$RESET"
+  }
+
   show() { # show <label> <kind/name>
     local label=$1 res=$2 want have state mark
     want=$(kubectl -n $NS get "$res" -o jsonpath='{.spec.replicas}' 2>/dev/null)
@@ -234,6 +273,12 @@ cmd_status() {
 
   group "frontend"
   for a in $FRONTEND; do show "$a" "deployment/web-$a"; done
+
+  group "images"
+  # Which image each pod is actually running. Tags are mutable, so the digest is
+  # the only honest answer to "is this the build I just made".
+  for name in $BACKEND; do image_row "$name" "$name" "$name"; done
+  for a in $FRONTEND; do image_row "$a" "web-$a" "web-$a"; done
 
   group "reachable"
   for path in / /auth/ /pos/ /bookings/; do

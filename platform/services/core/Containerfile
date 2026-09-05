@@ -1,16 +1,21 @@
-# Multi-stage; final image is distroless-equivalent scratch with a static binary.
+# Phase 0 service. Built from the workspace root, like every other service, so
+# one build context works for all of them.
 FROM docker.io/library/golang:1.26-alpine AS build
 WORKDIR /src
-COPY go.mod ./
-RUN go mod download
-COPY . .
+
+COPY services/core/ ./services/core/
+
+# core has no dependency on the generated protobuf module, so its own module is
+# the whole workspace.
+RUN go work init ./services/core
+
 ARG GIT_COMMIT=dev
 RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags="-s -w -X main.commit=${GIT_COMMIT}" \
-      -o /out/core ./cmd/core
+      -o /out/core ./services/core/cmd/core
 
-FROM scratch
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/core /core
 EXPOSE 8080
-USER 65532:65532
+USER nonroot:nonroot
 ENTRYPOINT ["/core"]

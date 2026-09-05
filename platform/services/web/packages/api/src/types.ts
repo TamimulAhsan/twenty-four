@@ -152,7 +152,19 @@ export interface OrderLine {
 }
 
 export type TenderMethod = 'cash' | 'card' | 'wallet' | 'transfer' | 'voucher'
-export type OrderStatus = 'open' | 'paid' | 'refunded' | 'partly_refunded' | 'voided'
+export type OrderStatus =
+  /**
+   * Parked. Rung up, set aside, not paid for and not yet a sale.
+   *
+   * A tab on a table, a basket held while a customer fetches their card. It
+   * holds stock as reserved rather than sold, issues no document, and counts
+   * towards nothing: not the day's takings, not revenue, not margin.
+   */
+  | 'open'
+  | 'paid'
+  | 'refunded'
+  | 'partly_refunded'
+  | 'voided'
 
 export interface Tender {
   readonly id: string
@@ -183,6 +195,24 @@ export interface Order {
   readonly tenders: readonly Tender[]
   readonly staffId: string | null
   readonly note: string
+  /**
+   * The table this sale is running on, for a venue where people sit down.
+   *
+   * Set on a parked sale and cleared when it settles. Null everywhere else,
+   * including in every trade that has no floor.
+   */
+  readonly tableId: string | null
+  /**
+   * What has actually been given back, in total.
+   *
+   * Carried rather than derived: a partial refund cannot be recovered from the
+   * status, and a day's takings that guesses at it is a day's takings that is
+   * wrong on every day someone returned one thing out of four.
+   */
+  readonly refunded: Money
+  /** Lines already refunded. A line goes back once, and the second attempt is
+   *  refused rather than quietly paying it out twice. */
+  readonly refundedLineIds: readonly string[]
 }
 
 export interface TakingsBand {
@@ -318,6 +348,45 @@ export interface DiningTable {
   readonly partySize: number | null
   readonly seatedAt: string | null
   readonly staffId: string | null
+  /**
+   * The parked sale running on this table, if there is one.
+   *
+   * One table holds at most one open tab. The table cannot be cleared while
+   * this is set: clearing it would strand a sale nobody can find again.
+   */
+  readonly orderId: string | null
+}
+
+/* -------------------------------------------------------------- day close */
+
+/**
+ * Counting the drawer.
+ *
+ * Expected cash is derived from what was actually tendered, never from the
+ * day's total: a card sale never touched the drawer. Refunds come back out of
+ * it, in proportion to how the sale was paid, because money goes back the way
+ * it came.
+ *
+ * There is no denomination breakdown here on purpose. Which notes and coins
+ * exist is the one thing about counting a drawer that differs per market, and
+ * a note table in shared code is country logic wearing a hat.
+ */
+export interface DayClose {
+  readonly date: string
+  /** What was in the drawer before trading. Declared by whoever counted it. */
+  readonly openingFloat: Money
+  readonly cashTaken: Money
+  readonly cashRefunded: Money
+  /** openingFloat + cashTaken - cashRefunded. */
+  readonly expectedCash: Money
+  /** What was actually counted. Null until the day has been closed. */
+  readonly countedCash: Money | null
+  /** counted - expected. Negative is short. Null until counted. */
+  readonly variance: Money | null
+  readonly countedBy: string | null
+  readonly countedAt: string | null
+  readonly note: string
+  readonly closed: boolean
 }
 
 /* --------------------------------------------------------------- customers */

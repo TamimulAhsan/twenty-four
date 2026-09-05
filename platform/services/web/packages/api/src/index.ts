@@ -27,6 +27,7 @@ export {
   type OrderLineInput,
   type TenderInput,
   type PlaceOrderInput,
+  type ParkOrderInput,
   type BookingInput,
   type DiscountInput,
   type RoleInput,

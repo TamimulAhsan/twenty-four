@@ -1,17 +1,38 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { catalog, orders, queryKeys, type CatalogItem, type Order } from '@twentyfour/api'
+import {
+  catalog, orders, queryKeys, tables as tablesApi,
+  type CatalogItem, type Order, type ParkOrderInput, type TenderInput,
+} from '@twentyfour/api'
 import { useTerms } from '@twentyfour/terms'
 import { serialiseMoney } from '@twentyfour/money'
 import {
   Badge, Button, DENSE_GUTTER, EmptyState, ErrorState, Icon, IconButton, MoneyText, Skeleton,
   cn, useFormat, useToast,
 } from '@twentyfour/ui'
-import { useCart } from './cart'
+import { cartLinesFromOrder, useCart } from './cart'
 import { TenderDialog } from './TenderDialog'
 import { ReceiptDialog } from './ReceiptDialog'
 
-export function Till() {
+/**
+ * The till.
+ *
+ * A sale here is one of three things: a new one, a tab being resumed, or a new
+ * tab about to be opened on a table. All three ring up identically, and only
+ * what happens at the end differs.
+ */
+export function Till({
+  resumeOrderId,
+  startTableId,
+  onOpened,
+}: {
+  /** A parked sale to reopen, from the parked list or from the floor. */
+  resumeOrderId: string | null
+  /** A table to start a new tab on. */
+  startTableId: string | null
+  /** Tells the shell the handoff has been taken, so it does not repeat it. */
+  onOpened: () => void
+}) {
   const terms = useTerms()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -23,9 +44,100 @@ export function Till() {
   const [tendering, setTendering] = useState(false)
   const [receipt, setReceipt] = useState<Order | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
+  /** The parked sale this cart is, once it is one. */
+  const [parkedId, setParkedId] = useState<string | null>(null)
+  /** The table this sale belongs to. Set before it is parked as well as after,
+   *  so a tab started from the floor keeps its table if it is parked later. */
+  const [tableId, setTableId] = useState<string | null>(null)
+
+  const { load: loadCart, clear: clearCart } = cart
 
   const categories = useQuery({ queryKey: queryKeys.catalog.categories(), queryFn: catalog.categories })
   const items = useQuery({ queryKey: queryKeys.catalog.items({}), queryFn: () => catalog.items() })
+
+  const resuming = useQuery({
+    queryKey: queryKeys.orders.detail(resumeOrderId ?? ''),
+    queryFn: () => orders.detail(resumeOrderId as string),
+    enabled: resumeOrderId !== null,
+  })
+
+  // Only fetched to put a name on the tab. A till with no floor never asks.
+  const floor = useQuery({
+    queryKey: queryKeys.tables.list(),
+    queryFn: tablesApi.list,
+    enabled: tableId !== null,
+  })
+  const tableLabel = floor.data?.find((table) => table.id === tableId)?.label ?? null
+
+  // Reopening a tab. It waits for the catalog because a cart line holds the
+  // item, not a copy of what the item cost when the tab was opened.
+  useEffect(() => {
+    if (resumeOrderId === null) return
+    const order = resuming.data
+    if (!order || !items.data) return
+
+    const { lines, missing } = cartLinesFromOrder(order, items.data)
+    loadCart(lines, order.note)
+    setParkedId(order.id)
+    setTableId(order.tableId)
+    onOpened()
+
+    if (missing.length > 0) {
+      toast.show({
+        tone: 'warning',
+        title: 'Some lines could not be reopened',
+        description: `${missing.join(', ')} is no longer in the ${terms.t('catalog', { case: 'lower' })}. Ring it up again or take it off.`,
+      })
+    }
+  }, [resumeOrderId, resuming.data, items.data, loadCart, onOpened, toast, terms])
+
+  // Starting a fresh tab on a table from the floor screen.
+  useEffect(() => {
+    if (startTableId === null) return
+    clearCart()
+    setParkedId(null)
+    setTableId(startTableId)
+    onOpened()
+  }, [startTableId, clearCart, onOpened])
+
+  const lineInput = () =>
+    cart.lines.map((line) => ({
+      itemId: line.item.id,
+      quantity: line.quantity,
+      ...(line.discount ? { discount: serialiseMoney(line.discount) } : {}),
+    }))
+
+  const parkInput = (): ParkOrderInput => ({
+    lines: lineInput(),
+    ...(cart.note ? { note: cart.note } : {}),
+    tableId,
+  })
+
+  /** Leaves the tab where it is and starts a fresh sale. The parked sale is
+   *  untouched: it is still in the parked list and still on its table. */
+  const leaveTab = () => {
+    clearCart()
+    setParkedId(null)
+    setTableId(null)
+  }
+
+  const park = useMutation({
+    mutationFn: () =>
+      parkedId ? orders.updateParked(parkedId, parkInput()) : orders.park(parkInput()),
+    onSuccess: (order) => {
+      leaveTab()
+      setCartOpen(false)
+      void queryClient.invalidateQueries()
+      toast.show({
+        tone: 'success',
+        title: tableLabel ? `Tab saved to table ${tableLabel}` : `Sale ${order.number} parked`,
+        description: 'It is waiting under Parked, with its stock held back.',
+      })
+    },
+    onError: (error) => {
+      toast.show({ tone: 'danger', title: 'That sale was not parked', description: error.message })
+    },
+  })
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -37,18 +149,25 @@ export function Till() {
   }, [items.data, categoryId, search])
 
   const place = useMutation({
-    mutationFn: (tenders: Parameters<typeof orders.place>[0]['tenders']) =>
-      orders.place({
-        lines: cart.lines.map((line) => ({
-          itemId: line.item.id,
-          quantity: line.quantity,
-          ...(line.discount ? { discount: serialiseMoney(line.discount) } : {}),
-        })),
-        tenders,
-        ...(cart.note ? { note: cart.note } : {}),
-      }),
+    // A tab settles as the sale it already is: same id, same number. Placing it
+    // afresh would leave the parked one behind and hold its stock forever.
+    //
+    // What is on screen is saved first. A tab is resumed precisely so more can
+    // go on it, and settling the lines the server still remembers would charge
+    // for the first round and quietly throw the second away.
+    mutationFn: async (tenders: TenderInput[]) => {
+      if (!parkedId) {
+        return orders.place({
+          lines: lineInput(),
+          tenders,
+          ...(cart.note ? { note: cart.note } : {}),
+        })
+      }
+      await orders.updateParked(parkedId, parkInput())
+      return orders.settleParked(parkedId, tenders)
+    },
     onSuccess: (order) => {
-      cart.clear()
+      leaveTab()
       setTendering(false)
       setCartOpen(false)
       setReceipt(order)
@@ -128,7 +247,15 @@ export function Till() {
           cashier needs to see the running total while they are still adding to
           it. Below that it becomes a sheet raised by a bar showing the total. */}
       <aside className="hidden w-80 shrink-0 border-l border-border bg-surface lg:flex xl:w-96">
-        <CartPanel cart={cart} onTender={() => setTendering(true)} />
+        <CartPanel
+          cart={cart}
+          onTender={() => setTendering(true)}
+          onPark={() => park.mutate()}
+          parking={park.isPending}
+          isTab={parkedId !== null}
+          tableLabel={tableLabel}
+          onLeaveTab={leaveTab}
+        />
       </aside>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface p-4 lg:hidden">
@@ -157,7 +284,15 @@ export function Till() {
               <p className="text-md font-semibold">This sale</p>
               <IconButton icon="X" label="Close" size="sm" onClick={() => setCartOpen(false)} />
             </div>
-            <CartPanel cart={cart} onTender={() => setTendering(true)} />
+            <CartPanel
+              cart={cart}
+              onTender={() => setTendering(true)}
+              onPark={() => park.mutate()}
+              parking={park.isPending}
+              isTab={parkedId !== null}
+              tableLabel={tableLabel}
+              onLeaveTab={leaveTab}
+            />
           </div>
         </div>
       )}
@@ -168,6 +303,8 @@ export function Till() {
         onClose={() => setTendering(false)}
         onConfirm={(tenders) => place.mutate(tenders)}
         pending={place.isPending}
+        title={parkedId ? 'Settle this tab' : 'Take payment'}
+        confirmLabel={parkedId ? 'Settle the tab' : 'Complete sale'}
       />
 
       <ReceiptDialog order={receipt} onClose={() => setReceipt(null)} />
@@ -230,18 +367,43 @@ function ItemKey({ item, onPress }: { item: CatalogItem; onPress: () => void }) 
 }
 
 function CartPanel({
-  cart, onTender,
-}: { cart: ReturnType<typeof useCart>; onTender: () => void }) {
+  cart, onTender, onPark, parking, isTab, tableLabel, onLeaveTab,
+}: {
+  cart: ReturnType<typeof useCart>
+  onTender: () => void
+  onPark: () => void
+  parking: boolean
+  /** Already parked, so parking again saves rather than creates. */
+  isTab: boolean
+  tableLabel: string | null
+  onLeaveTab: () => void
+}) {
   const terms = useTerms()
 
   return (
     <div className="flex min-h-0 w-full flex-col">
+      {(isTab || tableLabel) && (
+        /* What this sale belongs to, where a cashier looks before they ring
+           anything up. A tab charged to the wrong table is found at the end of
+           the night by the party who did not order it. */
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-accent-subtle px-4 py-2.5">
+          <Icon name="Receipt" size="md" className="text-accent-text" />
+          <span className="min-w-0 flex-1 truncate text-base font-medium text-accent-text">
+            {tableLabel ? `Table ${tableLabel}` : 'Parked sale'}
+            {isTab ? '' : ' · not saved yet'}
+          </span>
+          <Button variant="ghost" size="sm" onClick={onLeaveTab}>
+            Leave
+          </Button>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {cart.lines.length === 0 ? (
           <div className="p-5">
             <EmptyState
               icon="Receipt"
-              title="EDIT TEST: nothing on this sale yet"
+              title="Nothing on this sale yet"
               description={`Tap ${terms.a('catalog_item', { case: 'lower' })} to start.`}
               className="border-0"
             />
@@ -302,11 +464,34 @@ function CartPanel({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="lg" disabled={cart.count === 0} onClick={cart.clear}>
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={cart.count === 0 || parking}
+            onClick={onLeaveTab}
+          >
             Clear
           </Button>
-          <Button size="lg" className="flex-1" disabled={cart.count === 0} onClick={onTender}>
-            Take payment
+          {/* Park sits beside pay, not behind a menu. Setting a sale aside is
+              what a counter does when the queue moves and the customer does
+              not, and a till that hides it loses the sale instead. */}
+          <Button
+            variant="outline"
+            size="lg"
+            iconStart="Clock"
+            loading={parking}
+            disabled={cart.count === 0}
+            onClick={onPark}
+          >
+            {isTab ? 'Save tab' : 'Park'}
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1"
+            disabled={cart.count === 0 || parking}
+            onClick={onTender}
+          >
+            {isTab ? 'Settle' : 'Take payment'}
           </Button>
         </div>
 

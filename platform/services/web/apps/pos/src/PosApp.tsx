@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { orders, queryKeys } from '@twentyfour/api'
 import { useEntitlement } from '@twentyfour/entitlement'
 import { useTerms } from '@twentyfour/terms'
 import { RequireModule, Wordmark, useBootstrap } from '@twentyfour/runtime'
@@ -6,6 +8,7 @@ import { Avatar, Icon, IconButton, ThemeToggle, cn, type IconName } from '@twent
 import { SessionGate } from '@twentyfour/shell'
 import { DevToolbar } from '@twentyfour/shell'
 import { Till } from './Till'
+import { ParkedView } from './ParkedView'
 import { OrdersView } from './OrdersView'
 import { KitchenView } from './KitchenView'
 import { TablesView } from './TablesView'
@@ -23,7 +26,7 @@ export function PosApp() {
   )
 }
 
-type View = 'till' | 'orders' | 'kitchen' | 'tables' | 'catalog' | 'team' | 'close'
+type View = 'till' | 'parked' | 'orders' | 'kitchen' | 'tables' | 'catalog' | 'team' | 'close'
 
 /**
  * The till's own chrome.
@@ -39,8 +42,48 @@ function PosShell() {
   const entitlement = useEntitlement()
   const [view, setView] = useState<View>('till')
 
-  const tabs: Array<{ id: View; label: string; icon: IconName }> = [
+  /**
+   * The two ways into the till from somewhere else.
+   *
+   * Held here rather than in the till because the till is not mounted when the
+   * floor screen or the parked list asks for it. Each is taken exactly once
+   * and then cleared, so switching back to the till later does not reopen a
+   * tab that has since been settled.
+   */
+  const [resumeOrderId, setResumeOrderId] = useState<string | null>(null)
+  const [startTableId, setStartTableId] = useState<string | null>(null)
+
+  const openTill = useCallback(() => {
+    setResumeOrderId(null)
+    setStartTableId(null)
+  }, [])
+
+  const resumeSale = (orderId: string) => {
+    setStartTableId(null)
+    setResumeOrderId(orderId)
+    setView('till')
+  }
+
+  const startTab = (tableId: string) => {
+    setResumeOrderId(null)
+    setStartTableId(tableId)
+    setView('till')
+  }
+
+  // Only for the count on the tab. A cashier needs to see that something is
+  // waiting without going to look.
+  const parked = useQuery({
+    queryKey: queryKeys.orders.parked(),
+    queryFn: orders.parked,
+    refetchInterval: 60_000,
+  })
+  const parkedCount = parked.data?.length ?? 0
+
+  const tabs: Array<{ id: View; label: string; icon: IconName; badge?: number }> = [
     { id: 'till', label: 'Till', icon: 'ScanLine' },
+    // Always present, whatever the count. A control that appears and vanishes
+    // is one nobody builds a habit around.
+    { id: 'parked', label: 'Parked', icon: 'Clock', ...(parkedCount > 0 ? { badge: parkedCount } : {}) },
     { id: 'orders', label: terms.t('order', { plural: true }), icon: 'ReceiptText' },
     // Trade capabilities, switched on by the industry profile. Nobody chose
     // them: a candy shop buying POS gets a till, a restaurant buying the same
@@ -85,6 +128,19 @@ function PosShell() {
             >
               <Icon name={tab.icon} size="lg" />
               <span className="hidden lg:inline">{tab.label}</span>
+              {tab.badge !== undefined && (
+                <span
+                  className={cn(
+                    'tnum flex h-5 min-w-5 items-center justify-center rounded-full px-1.5',
+                    'text-2xs font-semibold',
+                    view === tab.id
+                      ? 'bg-accent text-on-accent'
+                      : 'bg-surface-active text-text-muted',
+                  )}
+                >
+                  {tab.badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -105,10 +161,17 @@ function PosShell() {
       </header>
 
       <div className="min-h-0 flex-1">
-        {view === 'till' && <Till />}
+        {view === 'till' && (
+          <Till
+            resumeOrderId={resumeOrderId}
+            startTableId={startTableId}
+            onOpened={openTill}
+          />
+        )}
+        {view === 'parked' && <ParkedView onResume={resumeSale} />}
         {view === 'orders' && <OrdersView />}
         {view === 'kitchen' && <KitchenView />}
-        {view === 'tables' && <TablesView />}
+        {view === 'tables' && <TablesView onOpenSale={resumeSale} onStartTab={startTab} />}
         {view === 'catalog' && <CatalogView />}
         {view === 'team' && <TeamView />}
         {view === 'close' && <DayClose />}

@@ -145,6 +145,23 @@ sudo systemctl restart k3s
 k3s rebuilds its iptables NAT rules on start. This has been needed after podman
 rewrites nftables during an image build on the same host.
 
+### After changing frontend code
+
+```bash
+make pos-up          # rebuilds only the till and rolls it out
+make dashboard-up    # and so on
+```
+
+About 50 seconds: an image build, a push, and a rolling restart. Nothing else
+restarts. For a tight edit loop use `npm run dev:pos` in `services/web`
+instead, which is instant but runs against the mock gateway rather than the
+real services.
+
+`make system-status` includes an `images` section comparing the digest each pod
+is running against the digest the registry tag points at. They diverge when a
+build failed or an image was pushed without a rollout, and neither case is
+visible from replica counts alone.
+
 ## Layout
 
 ```
