@@ -1,0 +1,62 @@
+# The outbox relay: the only process that publishes to Kafka.
+#
+# It reads every service's outbox and drains it onto the bus. Services never
+# talk to Kafka themselves, which is what makes a broker outage a backlog in
+# Postgres rather than a failed sale.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay
+  namespace: twentyfour
+  labels: { app: relay, tier: backend }
+spec:
+  # Deliberately one. SKIP LOCKED means more replicas would be correct, but a
+  # second relay buys throughput this deployment does not need and makes the
+  # ordering story harder to reason about.
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: relay } }
+  template:
+    metadata: { labels: { app: relay, tier: backend } }
+    spec:
+      containers:
+        - name: relayd
+          image: localhost:5000/twentyfour/relay:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9110"
+            - "-dsn-dir=/etc/twentyfour/dsn"
+            - "-brokers=kafka.twentyfour.svc.cluster.local:9092"
+            # Retention is unsettled, so it is off. Published rows are the
+            # audit trail of everything the platform has announced; deleting
+            # them is a decision to take deliberately, not by default.
+            - "-retain=0"
+          ports: [{ containerPort: 9110, name: http }]
+          volumeMounts:
+            # The whole Secret, mounted as a directory. Every key is one
+            # service's DSN; the relay drains the ones that have an outbox and
+            # passes over the ones that do not. Adding the tenth service is a
+            # Secret change, not a relay change.
+            - { name: dsn, mountPath: /etc/twentyfour/dsn, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 9110 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            # Liveness is not tied to Kafka. Restarting the relay because the
+            # broker is down would achieve nothing and lose every pool.
+            httpGet: { path: /healthz, port: 9110 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+      volumes:
+        - name: dsn
+          secret: { secretName: service-dsn }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: relay, namespace: twentyfour }
+spec:
+  selector: { app: relay }
+  ports: [{ port: 9110, targetPort: 9110, name: http }]

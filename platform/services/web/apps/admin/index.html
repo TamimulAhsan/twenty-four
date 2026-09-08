@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Admin console · TwentyFour</title>
+    <script>
+      // Applied before first paint. Reading the theme after React mounts shows
+      // the wrong palette for a frame on every single load.
+      (function () {
+        try {
+          var p = localStorage.getItem("tf.theme") || "system"
+          var d = p === "dark" || (p === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+          document.documentElement.classList.toggle("dark", d)
+          document.documentElement.style.colorScheme = d ? "dark" : "light"
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

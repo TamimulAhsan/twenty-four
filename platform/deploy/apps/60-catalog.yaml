@@ -1,0 +1,44 @@
+# Catalog: what a tenant sells and what it costs.
+#
+# Every other commerce service reads prices from here and none of them keeps a
+# copy, which is the whole reason it exists. It has no outbox: the architecture
+# lists no catalog topics, and ClickHouse gets this table through CDC rather
+# than through events.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  namespace: twentyfour
+  labels: { app: catalog, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: catalog } }
+  template:
+    metadata: { labels: { app: catalog, tier: backend } }
+    spec:
+      containers:
+        - name: catalogd
+          image: localhost:5000/twentyfour/catalog:dev
+          imagePullPolicy: Always
+          args: ["-addr=:9103"]
+          ports: [{ containerPort: 9103, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: catalog } }
+          readinessProbe:
+            grpc: { port: 9103 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9103 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: catalog, namespace: twentyfour }
+spec:
+  selector: { app: catalog }
+  ports: [{ port: 9103, targetPort: 9103, name: grpc }]

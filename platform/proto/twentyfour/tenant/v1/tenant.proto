@@ -1,0 +1,267 @@
+syntax = "proto3";
+
+package twentyfour.tenant.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// TenantService is what a business IS and what it HOLDS.
+//
+// Business identity, trade, hours, tax, currency and locale; the module set and
+// the seat quota; and the registry those are resolved from. State, in other
+// words. It does not run the provisioning saga: Provisioning does, and calls
+// in here to write what it has decided.
+//
+// Keeping those apart matters. A saga is a thing with steps, retries and
+// compensation, and it fails halfway; a tenant record is a thing that is simply
+// true. Putting the second inside the first would mean every read of a business
+// profile went through a service whose job is orchestration.
+//
+// It folds two services the architecture lists separately, Tenant & Business
+// Profile and Entitlement, because a tenant's module set is not meaningfully
+// separable from the tenant: they are written in one transaction at
+// provisioning and read in one call at login. The Module Registry is a table in
+// here rather than a service, because its whole job is definitions, and a
+// deployment whose job is to hold constants earns nothing.
+//
+// Provisioning is data, not deployment. No pods per merchant: every service
+// runs once and is shared.
+service TenantService {
+  // Writes the profile and resolves the entitlement, in one transaction. Called
+  // by Provisioning, which decided what to write. Idempotent per tenant.
+  rpc ApplyTier(ApplyTierRequest) returns (ApplyTierResponse);
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  // What the gateway enforces and the dashboard renders its navigation from.
+  rpc GetEntitlement(GetEntitlementRequest) returns (GetEntitlementResponse);
+  // Records that a module finished provisioning and is usable, or that it is
+  // still queued to a specialist. Provisioning calls this as steps land.
+  rpc SetModulePending(SetModulePendingRequest) returns (SetModulePendingResponse);
+  // The registry, so Provisioning and the admin console read one catalog rather
+  // than each carrying a copy.
+  rpc ResolveTier(ResolveTierRequest) returns (ResolveTierResponse);
+
+  // Every tenant in this environment.
+  //
+  // Admin plane only, and the only RPC here that is. Every other call takes its
+  // tenant from the request context and cannot see past it; this one has no
+  // tenant to take, which is exactly why it is a separate RPC with its own gate
+  // rather than a mode of GetProfile. A tenant argument that means "all of
+  // them" is a cross-tenant read with an explanation attached.
+  //
+  // One environment, so this is the whole list rather than a window onto a
+  // larger one. It still pages, because thirteen tenants becoming two thousand
+  // should not become a different design.
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+
+  // Suspends or reinstates a tenant. Admin plane only.
+  rpc SetStatus(SetStatusRequest) returns (SetStatusResponse);
+}
+
+// Where a tenant is in its life.
+//
+// Distinct from health, which the admin console derives and which answers a
+// different question: this is what the tenant is, health is whether anyone
+// needs to do something about it.
+enum TenantStatus {
+  TENANT_STATUS_UNSPECIFIED = 0;
+  // Provisioning has not finished. The saga owns this one.
+  TENANT_STATUS_PROVISIONING = 1;
+  TENANT_STATUS_LIVE = 2;
+  // Access refused at the gateway. Nothing is deleted; this is reversible.
+  TENANT_STATUS_SUSPENDED = 3;
+  TENANT_STATUS_TRIAL = 4;
+}
+
+message TaxRate {
+  string id = 1;
+  string label = 2;
+  int32 basis_points = 3;
+  bool is_default = 4;
+}
+
+message OpeningHours {
+  // 0 is Sunday, matching what the dashboard renders.
+  int32 day = 1;
+  string open = 2;
+  string close = 3;
+  bool closed = 4;
+}
+
+message Profile {
+  string tenant_id = 1;
+  string name = 2;
+  // Business type. One input decides everything trade-specific: capabilities,
+  // vocabulary, catalog template, document categories.
+  string industry = 3;
+  // BCP 47. From the profile, never the browser.
+  string locale = 4;
+  // ISO 4217. One per environment, because one environment is one market.
+  string currency = 5;
+  string timezone = 6;
+  repeated TaxRate tax_rates = 7;
+  repeated OpeningHours opening_hours = 8;
+  bool prices_include_tax = 9;
+  // The merchant code, printed on every document this business issues. Read
+  // through Auth, which still holds it.
+  string merchant_code = 10;
+
+  // Where the business is, and what the tax authority knows it as.
+  //
+  // Both are empty until somebody records them, and both are needed before a
+  // document can be issued: an invoice without an address and a tax number is
+  // not an invoice. They live here rather than in Invoicing because they
+  // describe the business rather than any one document.
+  string address = 11;
+  string city = 12;
+  string tax_id = 13;
+
+  TenantStatus status = 14;
+  google.protobuf.Timestamp created_at = 15;
+  // Why the status was last changed. Empty for a tenant that has always been
+  // live. Kept alongside the status rather than only emitted as an event,
+  // because the console renders it on the tenant's own page and reading a
+  // sentence back out of an event stream to draw one line would be odd.
+  string status_reason = 16;
+}
+
+// One module a tenant holds, and why.
+//
+// The source is the question a specialist is actually asking. Not "do they
+// hold the CRM" but "why do they hold it": because the tier grants it, because
+// their trade switches it on, or because somebody decided. The gateway does not
+// read this; a person does.
+message ModuleGrant {
+  string module_id = 1;
+  // tier, profile or override.
+  string source = 2;
+  bool pending = 3;
+}
+
+message Entitlement {
+  string tier = 1;
+  // The resolved set: the tier's modules, plus what their dependencies pull
+  // in, plus the industry profile's capabilities, plus manual overrides. The
+  // gateway checks this and neither knows nor cares which source put an entry
+  // in it.
+  repeated string modules = 2;
+  // Trade capabilities. Nobody chooses these: the industry profile switches
+  // them on, and they never appear in a picker.
+  repeated string capabilities = 3;
+  // Zero means unlimited, which is what Enterprise negotiates.
+  int32 seat_limit = 4;
+  // Granted but not yet usable, because provisioning needs a person: KYC
+  // approval, OAuth consent, hardware pairing.
+  repeated string pending = 5;
+  // The same set as modules, with the reason each one is held. The plain list
+  // above stays because the gateway and the dashboard only need the ids, and
+  // making every caller walk a message to read a string would be a cost paid
+  // by the hot path for the benefit of one screen.
+  repeated ModuleGrant grants = 6;
+}
+
+message ApplyTierRequest {
+  string tenant_id = 1;
+  string business_name = 2;
+  // From the business type selector at signup, or from a specialist's intake.
+  string industry = 3;
+  string tier = 4;
+}
+
+message ApplyTierResponse {
+  Profile profile = 1;
+  Entitlement entitlement = 2;
+}
+
+message SetModulePendingRequest {
+  string tenant_id = 1;
+  string module_id = 2;
+  bool pending = 3;
+}
+
+message SetModulePendingResponse {
+  Entitlement entitlement = 1;
+}
+
+// ResolveTier answers "what would this tier and this trade come to", without
+// writing anything. Provisioning asks before it starts, so the checklist it
+// builds names the modules the tenant is actually getting.
+message ResolveTierRequest {
+  string tier = 1;
+  string industry = 2;
+}
+
+message ResolveTierResponse {
+  repeated string modules = 1;
+  repeated string capabilities = 2;
+  // Modules whose provisioning cannot complete unattended.
+  repeated string needs_specialist = 3;
+  int32 seat_limit = 4;
+  string term_family = 5;
+  string catalog_template = 6;
+}
+
+// One row of the directory.
+//
+// Deliberately not Profile. The directory is read across every tenant at once,
+// so it carries what a list needs and stops there: opening hours and tax bands
+// belong to one tenant's page, not to a page of two hundred.
+message TenantRow {
+  string tenant_id = 1;
+  string name = 2;
+  string industry = 3;
+  string tier = 4;
+  TenantStatus status = 5;
+  string city = 6;
+  int32 seat_limit = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListTenantsRequest {
+  // Empty means every status.
+  repeated TenantStatus status = 1;
+  // Empty means every tier.
+  repeated string tier = 2;
+  int32 limit = 3;
+  string cursor = 4;
+}
+message ListTenantsResponse {
+  repeated TenantRow tenants = 1;
+  // Empty when there is no further page.
+  string next_cursor = 2;
+  // Every tenant in the environment, whatever the filter matched. The console
+  // says "8 of 13", and the 13 is this.
+  int32 total = 3;
+}
+
+message SetStatusRequest {
+  string tenant_id = 1;
+  TenantStatus status = 2;
+  // Why. The only part of the audit record a reader could not reconstruct from
+  // the change itself, which is why it is required rather than optional.
+  string reason = 3;
+  string actor_id = 4;
+}
+message SetStatusResponse {
+  Profile profile = 1;
+}
+
+message GetProfileRequest {}
+
+message GetProfileResponse {
+  Profile profile = 1;
+}
+
+message UpdateProfileRequest {
+  Profile profile = 1;
+  repeated string update_mask = 2;
+}
+
+message UpdateProfileResponse {
+  Profile profile = 1;
+}
+
+message GetEntitlementRequest {}
+
+message GetEntitlementResponse {
+  Entitlement entitlement = 1;
+}

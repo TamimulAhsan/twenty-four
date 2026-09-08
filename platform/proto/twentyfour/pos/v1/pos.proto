@@ -1,0 +1,390 @@
+syntax = "proto3";
+
+package twentyfour.pos.v1;
+
+import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
+
+// PosService registers a sale. That is all it means, in every trade.
+//
+// A candy shop, a boutique and a salon all need a till and none of them has a
+// kitchen. Nothing here is named for one trade: there is no dish, no cover, no
+// treatment. The kitchen display is a view over these same orders, switched on
+// by the industry profile, and the floor plan below is the same: a venue with
+// tables gets them, a shop never sees them.
+//
+// No request carries a tenant; the gateway resolved it onto the request context.
+service PosService {
+  // Rings up a sale and takes the money for it, in that order. Idempotent on
+  // the caller's key: a retried checkout must never charge twice.
+  rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse);
+  // Gives up on a checkout whose payment was never completed, releasing
+  // anything already taken for it. The customer walked away from the terminal;
+  // the money they did hand over is theirs again.
+  rpc AbandonCheckout(AbandonCheckoutRequest) returns (AbandonCheckoutResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  // Cancels a sale outright and puts its stock back. Refuses a parked sale,
+  // which is discarded rather than voided: nothing was ever sold.
+  rpc VoidOrder(VoidOrderRequest) returns (VoidOrderResponse);
+  // Names lines to refund only those; omit them to refund the whole sale. A
+  // line goes back once, and a second attempt is refused rather than paid out.
+  rpc RefundOrder(RefundOrderRequest) returns (RefundOrderResponse);
+
+  // A sale set aside rather than paid for: a tab on a table, a basket held
+  // while a customer fetches their card. It holds stock as reserved rather
+  // than sold, and counts towards nothing until it settles.
+  rpc ParkOrder(ParkOrderRequest) returns (ParkOrderResponse);
+  rpc ListParked(ListParkedRequest) returns (ListParkedResponse);
+  // Replaces what is on a parked sale. Lines are sent whole rather than as a
+  // patch, because a tab edited on two tills at once must land on one answer
+  // rather than on an accumulation of both.
+  rpc UpdateParked(UpdateParkedRequest) returns (UpdateParkedResponse);
+  rpc DiscardParked(DiscardParkedRequest) returns (DiscardParkedResponse);
+  // Takes the money on a parked sale. It becomes the sale it always was: same
+  // id, same number, stock moving from reserved to gone.
+  rpc SettleParked(SettleParkedRequest) returns (SettleParkedResponse);
+
+  rpc GetTakings(GetTakingsRequest) returns (GetTakingsResponse);
+  rpc GetDayClose(GetDayCloseRequest) returns (GetDayCloseResponse);
+  rpc CloseDay(CloseDayRequest) returns (CloseDayResponse);
+
+  // The floor. A trade capability, not a sold module: a venue where people sit
+  // down gets it from its industry profile and a shop never sees it.
+  rpc ListTables(ListTablesRequest) returns (ListTablesResponse);
+  rpc CreateTable(CreateTableRequest) returns (CreateTableResponse);
+  rpc UpdateTable(UpdateTableRequest) returns (UpdateTableResponse);
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  // Parked. Rung up, set aside, not paid for and not yet a sale. Holds stock
+  // as reserved, issues no document, and is in nobody's takings.
+  ORDER_STATUS_OPEN = 1;
+  ORDER_STATUS_PAID = 2;
+  ORDER_STATUS_REFUNDED = 3;
+  ORDER_STATUS_PARTLY_REFUNDED = 4;
+  ORDER_STATUS_VOIDED = 5;
+}
+
+message OrderLine {
+  string id = 1;
+  string item_id = 2;
+  // Copied from Catalog when the line is rung up, and never re-read. A sale
+  // must not change because somebody edited a price afterwards.
+  string name = 3;
+  int32 quantity = 4;
+  twentyfour.common.v1.Money unit_price = 5;
+  twentyfour.common.v1.TaxRate tax_rate = 6;
+  bool tax_included = 7;
+  twentyfour.common.v1.Money discount = 8;
+  twentyfour.common.v1.Money gross = 9;
+  twentyfour.common.v1.Money net = 10;
+  twentyfour.common.v1.Money tax = 11;
+  bool refunded = 12;
+}
+
+message Tender {
+  string id = 1;
+  // What the customer paid with, as the till offered it. POS asks Payments for
+  // a payment and gets a result; it never learns which rail answered.
+  string method = 2;
+  twentyfour.common.v1.Money amount = 3;
+  // Cash only: what was handed over, and what went back. Change exists in a
+  // drawer, not in a payment provider.
+  twentyfour.common.v1.Money tendered = 4;
+  twentyfour.common.v1.Money change = 5;
+  // The Payments record behind this tender, for reconciliation.
+  string payment_id = 6;
+  string reference = 7;
+}
+
+message Order {
+  string id = 1;
+  string number = 2;
+  google.protobuf.Timestamp placed_at = 3;
+  OrderStatus status = 4;
+  // Empty for a walk-in. Most sales in most trades are walk-ins, and
+  // pretending otherwise makes every customer figure wrong.
+  string customer_id = 5;
+  string customer_name = 6;
+  string discount_code = 7;
+  twentyfour.common.v1.Money discount = 8;
+  repeated OrderLine lines = 9;
+  twentyfour.common.v1.Money gross = 10;
+  twentyfour.common.v1.Money net = 11;
+  twentyfour.common.v1.Money tax = 12;
+  repeated Tender tenders = 13;
+  string staff_id = 14;
+  string note = 15;
+  // The table this sale is running on. Set on a parked sale, cleared when it
+  // settles, empty in every trade with no floor.
+  string table_id = 16;
+  // What has actually been given back, in total. Carried rather than derived:
+  // a partial refund cannot be recovered from the status.
+  twentyfour.common.v1.Money refunded = 17;
+}
+
+message LineInput {
+  string item_id = 1;
+  int32 quantity = 2;
+  int64 discount_minor = 3;
+}
+
+message TenderInput {
+  string method = 1;
+  twentyfour.common.v1.Money amount = 2;
+  // Cash only. Change is derived from it.
+  twentyfour.common.v1.Money tendered = 3;
+}
+
+message PlaceOrderRequest {
+  repeated LineInput lines = 1;
+  repeated TenderInput tenders = 2;
+  string note = 3;
+  string staff_id = 4;
+  string customer_id = 5;
+  string discount_code = 6;
+  // Required. A retried checkout without one is a double charge.
+  string idempotency_key = 7;
+}
+
+// Every one of these carries the whole order back, because the till redraws
+// from it: a response that returned only what changed would leave the screen
+// assembling state from two sources.
+// A payment that cannot complete inside the software: a terminal to tap, a
+// page for the customer to approve.
+//
+// The till sends them to url and asks for the sale again under the same
+// idempotency key once the payment settles. Asking again is safe: the payment
+// is found rather than created a second time.
+message PaymentAction {
+  // The sale this is being taken for. Derived from the idempotency key, so it
+  // is the same id on every attempt at the same checkout, which is what makes
+  // abandoning one possible.
+  string checkout_id = 1;
+  string payment_id = 2;
+  string method_key = 3;
+  string url = 4;
+  twentyfour.common.v1.Money amount = 5;
+}
+
+// Exactly one of these is set. An order means the sale is done; an action means
+// somebody has to do something before it can be.
+message PlaceOrderResponse {
+  Order order = 1;
+  PaymentAction awaiting = 2;
+}
+
+message AbandonCheckoutRequest {
+  // From the PaymentAction the till was given.
+  string checkout_id = 1;
+  string reason = 2;
+}
+message AbandonCheckoutResponse {
+  // How many payments were given back or called off. Zero is a normal answer:
+  // a checkout abandoned before anything was taken owes nothing.
+  int32 released = 1;
+}
+message GetOrderResponse {
+  Order order = 1;
+}
+message VoidOrderResponse {
+  Order order = 1;
+}
+message RefundOrderResponse {
+  Order order = 1;
+}
+message ParkOrderResponse {
+  Order order = 1;
+}
+message UpdateParkedResponse {
+  Order order = 1;
+}
+message SettleParkedResponse {
+  Order order = 1;
+  PaymentAction awaiting = 2;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message ListOrdersRequest {
+  // Inclusive date range, in the tenant's own day boundaries.
+  string from = 1;
+  string to = 2;
+  OrderStatus status = 3;
+  int32 page_size = 4;
+}
+message ListOrdersResponse {
+  repeated Order orders = 1;
+}
+
+message VoidOrderRequest {
+  string id = 1;
+  string reason = 2;
+  string idempotency_key = 3;
+}
+
+message RefundOrderRequest {
+  string id = 1;
+  // Empty refunds the whole sale.
+  repeated string line_ids = 2;
+  string reason = 3;
+  string idempotency_key = 4;
+}
+
+message ParkOrderRequest {
+  repeated LineInput lines = 1;
+  string note = 2;
+  string staff_id = 3;
+  string customer_id = 4;
+  string table_id = 5;
+  string idempotency_key = 6;
+}
+
+message ListParkedRequest {}
+message ListParkedResponse {
+  repeated Order orders = 1;
+}
+
+message UpdateParkedRequest {
+  string id = 1;
+  repeated LineInput lines = 2;
+  string note = 3;
+  string staff_id = 4;
+  string customer_id = 5;
+  string table_id = 6;
+  bool clear_table = 7;
+}
+
+message DiscardParkedRequest {
+  string id = 1;
+}
+message DiscardParkedResponse {
+  bool discarded = 1;
+}
+
+message SettleParkedRequest {
+  string id = 1;
+  repeated TenderInput tenders = 2;
+  string idempotency_key = 3;
+}
+
+message GetTakingsRequest {
+  string date = 1;
+}
+
+message MethodTotal {
+  string method = 1;
+  twentyfour.common.v1.Money amount = 2;
+  int32 count = 3;
+}
+
+// Tax broken out by band, because that is the shape a return is filed in.
+message TaxBand {
+  int32 basis_points = 1;
+  twentyfour.common.v1.Money net = 2;
+  twentyfour.common.v1.Money tax = 3;
+  twentyfour.common.v1.Money gross = 4;
+}
+
+message GetTakingsResponse {
+  string date = 1;
+  int32 order_count = 2;
+  twentyfour.common.v1.Money gross = 3;
+  twentyfour.common.v1.Money net = 4;
+  twentyfour.common.v1.Money tax = 5;
+  twentyfour.common.v1.Money refunded = 6;
+  repeated MethodTotal by_method = 7;
+  repeated TaxBand by_tax_band = 8;
+}
+
+message DayClose {
+  string date = 1;
+  // Declared by whoever counted the drawer before trading.
+  twentyfour.common.v1.Money opening_float = 2;
+  // Derived from what was actually tendered in cash, never from the day's
+  // total: a card sale never touched the drawer.
+  twentyfour.common.v1.Money cash_taken = 3;
+  twentyfour.common.v1.Money cash_refunded = 4;
+  twentyfour.common.v1.Money expected_cash = 5;
+  // Unset until the day has been closed.
+  twentyfour.common.v1.Money counted_cash = 6;
+  // counted minus expected. Negative is short.
+  twentyfour.common.v1.Money variance = 7;
+  string counted_by = 8;
+  google.protobuf.Timestamp counted_at = 9;
+  string note = 10;
+  bool closed = 11;
+}
+
+message GetDayCloseRequest {
+  string date = 1;
+}
+message GetDayCloseResponse {
+  DayClose day_close = 1;
+}
+message CloseDayResponse {
+  DayClose day_close = 1;
+}
+
+message CloseDayRequest {
+  string date = 1;
+  twentyfour.common.v1.Money opening_float = 2;
+  twentyfour.common.v1.Money counted_cash = 3;
+  string note = 4;
+  string idempotency_key = 5;
+}
+
+enum TableStatus {
+  TABLE_STATUS_UNSPECIFIED = 0;
+  TABLE_STATUS_FREE = 1;
+  // A party is seated and has not ordered.
+  TABLE_STATUS_SEATED = 2;
+  TABLE_STATUS_ORDERED = 3;
+  TABLE_STATUS_BILL_REQUESTED = 4;
+}
+
+message Table {
+  string id = 1;
+  string label = 2;
+  int32 seats = 3;
+  // Which part of the venue: inside, terrace, bar.
+  string area = 4;
+  TableStatus status = 5;
+  int32 party_size = 6;
+  google.protobuf.Timestamp seated_at = 7;
+  string staff_id = 8;
+  // The parked sale running on this table. One table holds at most one open
+  // tab, and the table cannot be cleared while this is set: clearing it would
+  // strand a sale nobody can find again.
+  string order_id = 9;
+}
+
+message ListTablesRequest {}
+message ListTablesResponse {
+  repeated Table tables = 1;
+}
+
+message CreateTableRequest {
+  string label = 1;
+  int32 seats = 2;
+  string area = 3;
+}
+message CreateTableResponse {
+  Table table = 1;
+}
+message UpdateTableResponse {
+  Table table = 1;
+}
+
+message UpdateTableRequest {
+  string id = 1;
+  TableStatus status = 2;
+  int32 party_size = 3;
+  bool clear_party_size = 4;
+  string staff_id = 5;
+  bool clear_staff = 6;
+}

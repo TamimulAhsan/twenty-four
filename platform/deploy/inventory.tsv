@@ -1,0 +1,56 @@
+# Every backend service that has, or will have, its own pod.
+#
+# Status displays read this rather than the directory listing, so a service that
+# has not been written yet shows as "not built yet" instead of quietly not
+# appearing. During a build, what is missing is the more useful half of the
+# answer.
+#
+# Columns are tab separated: name, domain, phase, purpose.
+#   phase  built      running now, as its own deployment
+#          2 .. 8     the build order in backend-plan.md
+#          later      in the architecture, not in this pass
+#          external   not written here; deployed and merged from upstream
+#
+# One row is one deployment. That is deliberately NOT the same list as
+# system-architecture.html §3, which names capabilities rather than pods: the
+# entitlement record and the module registry are tables inside Tenant, and the
+# onboarding checklist is literally the provisioning saga's own rows. None of
+# the three has a lifecycle of its own, so none of them is a pod, and a row here
+# for something that can never be started or stopped would be a line of noise in
+# a display whose whole job is what is up and what is down. Where each one lives
+# is written into its host's purpose below.
+#
+# So: do not re-add a row because §3 lists it. Add a row when something earns a
+# deployment. Build order and reasoning: backend-plan.md. Order is the order
+# status displays them.
+#
+# name	domain	phase	purpose
+gateway	edge	built	Terminates /api, verifies tokens, resolves the tenant, checks permissions
+admin	edge	built	Terminates /admin/api on its own host: staff session, MFA, IP allowlist. Never shares an auth path with /api
+auth	core	built	Identity: credentials, sessions, PASETO tokens, merchant codes
+rbac	core	built	Authorisation: roles, permission sets, plane isolation
+relay	platform	built	Drains every service's outbox onto Kafka. The only Kafka producer
+core	platform	built	Phase 0 canary. Proves ingress, registry and rollout still work
+catalog	commerce	built	Items, services, prices, tax rules, modifiers. One source of truth
+staff	commerce	built	Staff records, roles, rotas, availability, and the tier's seat quota
+inventory	commerce	built	Stock levels, reservations, adjustments, low-stock thresholds
+payments	finance	built	Authorise, capture, refund. Swapped per market
+pos	commerce	built	Registering a sale: cart, tender, tabs, voids, refunds, takings, the floor
+invoicing	finance	later	Customer documents AND the tenant's own subscription billing. Swapped per market
+bookings	commerce	later	Calendar, slots, deposits, no-shows, buffers, double-booking prevention
+analytics	platform	6	Dashboard queries over ClickHouse. Never queries operational stores
+tenant	control	built	Business identity, trade, hours, tax, locale. Also the entitlement record and the module registry: one record, written and read in one transaction
+provisioning	control	built	Runs the provisioning saga: per-step state, retries, compensation. Its rows are the merchant's 24-hour checklist
+notification	platform	later	Templates, branding, channel preference, quiet hours, delivery log
+media	platform	later	Only writer to object storage; signed URL issue
+audit	platform	later	Plain-language record of every automated decision
+scheduler	platform	later	Cron, reminders, the six-hour budget cycle, nightly reconciliation
+support	platform	later	Impersonation with consent, and the trail it leaves
+ledger	finance	later	Double-entry journal for this environment's single legal entity
+website	commerce	later	Site templates, pages, publishing, custom domain requests
+kitchen	commerce	later	Order lines to prep stations. A trade capability, not a sold module
+crmsync	growth	later	Bidirectional pipeline to Twenty, and the ID mapping
+marketing	growth	later	Budget allocation against booked revenue, every six hours
+ads	growth	later	Campaign, spend and conversion sync with the ad platforms
+creative	growth	later	Ad copy and imagery generation, creative variant testing
+twenty	growth	external	The forked Twenty CRM. Its own deployment and its own PostgreSQL

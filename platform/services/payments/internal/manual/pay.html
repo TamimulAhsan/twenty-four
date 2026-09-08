@@ -1,0 +1,61 @@
+{{define "pay.html"}}
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{if .Payment.Pending}}Approve payment{{else}}Payment {{.Payment.Status}}{{end}} · TwentyFour</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --ink:#111827; --muted:#6b7280;
+          --line:#e5e7eb; --ok:#15803d; --no:#b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b0d11; --card:#151922; --ink:#e5e7eb; --muted:#9ca3af; --line:#252b36; }
+  }
+  * { box-sizing: border-box }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--ink);
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; padding:24px }
+  .card { width:min(420px,100%); background:var(--card); border:1px solid var(--line);
+          border-radius:14px; padding:28px; box-shadow:0 1px 2px rgba(0,0,0,.04) }
+  .badge { display:inline-block; font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+           color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:3px 10px }
+  h1 { font-size:15px; font-weight:600; margin:16px 0 4px }
+  .amount { font-size:38px; font-weight:650; letter-spacing:-.02em; margin:10px 0 2px; font-variant-numeric:tabular-nums }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; margin:22px 0 0;
+       padding-top:18px; border-top:1px solid var(--line); font-size:13px }
+  dt { color:var(--muted) } dd { margin:0; text-align:right; font-variant-numeric:tabular-nums }
+  form { display:flex; gap:10px; margin-top:24px }
+  button { flex:1; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+           font:inherit; font-weight:600; cursor:pointer; background:var(--card); color:var(--ink) }
+  button.approve { background:var(--ok); border-color:var(--ok); color:#fff }
+  button.decline { color:var(--no) }
+  .outcome { font-size:22px; font-weight:650; margin:12px 0 0 }
+  .outcome.ok { color:var(--ok) } .outcome.no { color:var(--no) }
+  p.note { color:var(--muted); font-size:13px; margin:14px 0 0 }
+</style>
+<div class="card">
+  <span class="badge">Development provider</span>
+  {{if .Payment.Pending}}
+    <h1>{{.Payment.MethodLabel}}</h1>
+    <div class="amount">{{amount .Payment.AmountMinor .Payment.Currency}}</div>
+    <dl>
+      <dt>For</dt><dd>{{if .Payment.ReferenceID}}{{.Payment.ReferenceType}} {{.Payment.ReferenceID}}{{else}}not referenced{{end}}</dd>
+      <dt>Reference</dt><dd>{{.Payment.ProviderReference}}</dd>
+      <dt>Requested</dt><dd>{{.Payment.Age}} ago</dd>
+    </dl>
+    <form method="post" action="{{.Base}}/{{.Payment.ID}}/decide">
+      <button class="decline" name="decision" value="decline">Decline</button>
+      <button class="approve" name="decision" value="approve">Approve</button>
+    </form>
+    <p class="note">Standing in for a card terminal. Nothing here talks to a real
+      processor, and the answer you give is the answer the till receives.</p>
+  {{else}}
+    <h1>{{.Payment.MethodLabel}}</h1>
+    <div class="amount">{{amount .Payment.AmountMinor .Payment.Currency}}</div>
+    <div class="outcome {{if .Payment.Good}}ok{{else}}no{{end}}">{{.Payment.StatusLabel}}</div>
+    <dl>
+      <dt>For</dt><dd>{{if .Payment.ReferenceID}}{{.Payment.ReferenceType}} {{.Payment.ReferenceID}}{{else}}not referenced{{end}}</dd>
+      <dt>Reference</dt><dd>{{.Payment.ProviderReference}}</dd>
+      {{if .Payment.RefundedMinor}}<dt>Refunded</dt><dd>{{amount .Payment.RefundedMinor .Payment.Currency}}</dd>{{end}}
+    </dl>
+    <p class="note">This one is settled. You can close the tab.</p>
+  {{end}}
+</div>
+{{end}}

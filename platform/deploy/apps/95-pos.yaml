@@ -1,0 +1,51 @@
+# POS: registering a sale.
+#
+# The first service that composes several others: prices from Catalog, money
+# through Payments, stock through Inventory. It holds none of their data, with
+# one exception that matters: the priced lines are copied onto the order and
+# never re-read, because a sale must not change because somebody edited a price.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pos
+  namespace: twentyfour
+  labels: { app: pos, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: pos } }
+  template:
+    metadata: { labels: { app: pos, tier: backend } }
+    spec:
+      containers:
+        - name: posd
+          image: localhost:5000/twentyfour/pos:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9108"
+            - "-catalog=catalog.twentyfour.svc.cluster.local:9103"
+            - "-inventory=inventory.twentyfour.svc.cluster.local:9104"
+            - "-payments=payments.twentyfour.svc.cluster.local:9106"
+            # One environment is one market, so one currency. Read from Tenant
+            # & Business Profile once that service exists.
+            - "-currency=HUF"
+          ports: [{ containerPort: 9108, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: pos } }
+          readinessProbe:
+            grpc: { port: 9108 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9108 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: pos, namespace: twentyfour }
+spec:
+  selector: { app: pos }
+  ports: [{ port: 9108, targetPort: 9108, name: grpc }]

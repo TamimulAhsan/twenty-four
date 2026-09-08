@@ -1,0 +1,51 @@
+# Staff: the people who work for a tenant, and the seat quota.
+#
+# It owns the employment view of a person; the login is Auth's and the role is
+# RBAC's. A member's ID is their Auth user ID, so one person has one identifier
+# everywhere, which is what makes "one seat is one person" a fact about a
+# number rather than a join.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staff
+  namespace: twentyfour
+  labels: { app: staff, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: staff } }
+  template:
+    metadata: { labels: { app: staff, tier: backend } }
+    spec:
+      containers:
+        - name: staffd
+          image: localhost:5000/twentyfour/staff:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9105"
+            - "-auth=auth.twentyfour.svc.cluster.local:9102"
+            - "-rbac=rbac.twentyfour.svc.cluster.local:9101"
+            # The Starter tier. This becomes a read from Entitlement when that
+            # service exists; the number is already checked in one place, so
+            # nothing else changes when it moves.
+            - "-seat-limit=3"
+          ports: [{ containerPort: 9105, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: staff } }
+          readinessProbe:
+            grpc: { port: 9105 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9105 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: staff, namespace: twentyfour }
+spec:
+  selector: { app: staff }
+  ports: [{ port: 9105, targetPort: 9105, name: grpc }]

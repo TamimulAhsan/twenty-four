@@ -1,0 +1,51 @@
+# Provisioning: the saga that turns a signup into a working business, and the
+# checklist the merchant watches it happen on.
+#
+# Provisioning is data, not deployment. Nothing here starts a pod: it writes an
+# entitlement record, seeds tenant data from an industry template, and connects
+# external accounts. Every service runs once and is shared.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provisioning
+  namespace: twentyfour
+  labels: { app: provisioning, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: provisioning } }
+  template:
+    metadata: { labels: { app: provisioning, tier: backend } }
+    spec:
+      containers:
+        - name: provisioningd
+          image: localhost:5000/twentyfour/provisioning:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9110"
+            - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
+            - "-catalog=catalog.twentyfour.svc.cluster.local:9103"
+            - "-pos=pos.twentyfour.svc.cluster.local:9108"
+            # The promise, as a deadline on a row rather than a slogan: live
+            # within this, or the first month is free.
+            - "-sla=24h"
+          ports: [{ containerPort: 9110, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: provisioning } }
+          readinessProbe:
+            grpc: { port: 9110 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9110 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: provisioning, namespace: twentyfour }
+spec:
+  selector: { app: provisioning }
+  ports: [{ port: 9110, targetPort: 9110, name: grpc }]

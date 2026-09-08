@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package twentyfour.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// InventoryService tracks what is physically there.
+//
+// Every change is a move with a reason, and the level is derived from the moves
+// rather than edited directly. That is what makes "why is this number 3" a
+// question with an answer.
+//
+// Stock moves on cash sales, comps, manual corrections and unpaid bookings, not
+// only on a settled card. An earlier draft of the architecture had inventory
+// decrementing on payment.succeeded alone, which silently broke every one of
+// those. The callout is kept in the architecture on purpose and this service is
+// the reason it matters.
+service InventoryService {
+  rpc ListLevels(ListLevelsRequest) returns (ListLevelsResponse);
+  rpc GetLevel(GetLevelRequest) returns (GetLevelResponse);
+  // A manual correction: a delivery, a breakage, a stock count. The reason is
+  // required because the ledger needs one and because a number that changed
+  // for no recorded reason is a number nobody trusts afterwards.
+  rpc Adjust(AdjustRequest) returns (AdjustResponse);
+  rpc SetThreshold(SetThresholdRequest) returns (SetThresholdResponse);
+
+  // Holds stock against something not yet sold: an open order, a booking with
+  // a deposit. Reserved stock is still on hand and is not available to promise.
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+  // Gives a reservation back, for a cancelled order or an expired hold.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+  // Turns a reservation into a sale: reserved falls and on hand falls with it.
+  rpc Consume(ConsumeRequest) returns (ConsumeResponse);
+}
+
+message Level {
+  string item_id = 1;
+  // Carried for display, read from Catalog. Inventory does not own names, and
+  // never stores one: a renamed item would otherwise be renamed in one place.
+  string item_name = 2;
+  int32 on_hand = 3;
+  // Held against open orders and bookings. Still on hand, not available.
+  int32 reserved = 4;
+  // Unset means no threshold, which is not a threshold of zero: an item with
+  // no threshold never warns, and one set to zero warns when it runs out.
+  optional int32 low_stock_threshold = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message ListLevelsRequest {
+  // Only items at or below their threshold.
+  bool low_only = 1;
+}
+message ListLevelsResponse {
+  repeated Level levels = 1;
+}
+
+message GetLevelRequest {
+  string item_id = 1;
+}
+message GetLevelResponse {
+  Level level = 1;
+}
+
+message AdjustRequest {
+  string item_id = 1;
+  // Signed. Negative is a loss, positive is a delivery.
+  int32 delta = 2;
+  // Required. Free text, shown in the movement history.
+  string reason = 3;
+  // Optional but strongly advised: a retried request with the same key applies
+  // once. Without it a till that loses its network mid-adjustment double-counts.
+  string idempotency_key = 4;
+}
+message AdjustResponse {
+  Level level = 1;
+}
+
+message SetThresholdRequest {
+  string item_id = 1;
+  // Omit to clear the threshold entirely.
+  optional int32 low_stock_threshold = 2;
+}
+message SetThresholdResponse {
+  Level level = 1;
+}
+
+message ReserveRequest {
+  string item_id = 1;
+  int32 quantity = 2;
+  // What the stock is held for, so an abandoned hold can be traced back.
+  string reference_type = 3;
+  string reference_id = 4;
+  string idempotency_key = 5;
+}
+message ReserveResponse {
+  Level level = 1;
+}
+
+message ReleaseRequest {
+  string item_id = 1;
+  int32 quantity = 2;
+  string reference_type = 3;
+  string reference_id = 4;
+  string idempotency_key = 5;
+}
+message ReleaseResponse {
+  Level level = 1;
+}
+
+message ConsumeRequest {
+  string item_id = 1;
+  int32 quantity = 2;
+  string reference_type = 3;
+  string reference_id = 4;
+  string idempotency_key = 5;
+  // True when the stock was never reserved: a walk-in sale rung straight
+  // through the till, which is the common case.
+  bool unreserved = 6;
+}
+message ConsumeResponse {
+  Level level = 1;
+}

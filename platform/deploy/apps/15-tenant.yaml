@@ -1,0 +1,53 @@
+# Tenant: what a business is and what it holds.
+#
+# Business identity, trade, hours, tax, currency and locale; the module set and
+# the seat quota; and the registry those are resolved from. State, not
+# orchestration: Provisioning runs the saga and calls in here to write what it
+# has decided.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant
+  namespace: twentyfour
+  labels: { app: tenant, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tenant } }
+  template:
+    metadata: { labels: { app: tenant, tier: backend } }
+    spec:
+      containers:
+        - name: tenantd
+          image: localhost:5000/twentyfour/tenant:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9109"
+            - "-auth=auth.twentyfour.svc.cluster.local:9102"
+            # One environment is one market, so one currency, one locale, one
+            # timezone. These are deployment values, not per-tenant fields
+            # resolved at runtime: a per-tenant country setting is country
+            # logic, and the architecture does not have any.
+            - "-currency=HUF"
+            - "-locale=hu-HU"
+            - "-timezone=Europe/Budapest"
+          ports: [{ containerPort: 9109, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: tenant } }
+          readinessProbe:
+            grpc: { port: 9109 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9109 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: tenant, namespace: twentyfour }
+spec:
+  selector: { app: tenant }
+  ports: [{ port: 9109, targetPort: 9109, name: grpc }]

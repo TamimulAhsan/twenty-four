@@ -1,0 +1,45 @@
+# Inventory: what is physically there.
+#
+# Every change is a move with a reason and the level is derived from the moves,
+# so "why is this number 3" has an answer. It emits stock.adjusted on every
+# movement and stock.low on the crossing, through its own outbox.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: twentyfour
+  labels: { app: inventory, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: inventory } }
+  template:
+    metadata: { labels: { app: inventory, tier: backend } }
+    spec:
+      containers:
+        - name: inventoryd
+          image: localhost:5000/twentyfour/inventory:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9104"
+            - "-catalog=catalog.twentyfour.svc.cluster.local:9103"
+          ports: [{ containerPort: 9104, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: inventory } }
+          readinessProbe:
+            grpc: { port: 9104 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9104 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: inventory, namespace: twentyfour }
+spec:
+  selector: { app: inventory }
+  ports: [{ port: 9104, targetPort: 9104, name: grpc }]

@@ -1,0 +1,86 @@
+# The Admin API Gateway: the only thing the admin console talks to.
+#
+# A different door from the Tenant Gateway. Its own host, its own cookie, its
+# own auth realm, and it refuses a token minted for the merchant plane. The two
+# never share an auth path, which is the constraint everything else about the
+# admin plane rests on.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin
+  namespace: twentyfour
+  labels: { app: admin, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: admin } }
+  template:
+    metadata: { labels: { app: admin, tier: backend } }
+    spec:
+      containers:
+        - name: admind
+          image: localhost:5000/twentyfour/admin:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:8082"
+            - "-auth=auth.twentyfour.svc.cluster.local:9102"
+            - "-rbac=rbac.twentyfour.svc.cluster.local:9101"
+            - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
+            - "-staff=staff.twentyfour.svc.cluster.local:9105"
+            # What this deployment is. One market per deployment, so these are
+            # constants of the install: the console displays them and never
+            # branches on them.
+            - "-market=Hungary"
+            - "-environment=local"
+            - "-currency=HUF"
+            - "-locale=hu-HU"
+            - "-timezone=Europe/Budapest"
+            - "-release=dev"
+            - "-fiscal-authority=National tax authority"
+            # Local development is plain HTTP, so the cookie is not Secure. This
+            # must change before the console is exposed anywhere real: on this
+            # plane a stolen session sees every merchant.
+            - "-secure-cookie=false"
+            # Empty in local development, where there is no meaningful network
+            # boundary to enforce. A real environment sets the office ranges and
+            # the VPN here, and the service logs a warning while it is empty.
+            - "-ip-allowlist="
+          ports: [{ containerPort: 8082, name: http }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8082 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8082 }
+            initialDelaySeconds: 8
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: admin, namespace: twentyfour }
+spec:
+  selector: { app: admin }
+  ports: [{ port: 80, targetPort: 8082 }]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: admin-gateway
+  namespace: twentyfour
+spec:
+  entryPoints: [web]
+  routes:
+    # Higher priority than the console's static bundle, so /admin/api reaches
+    # the gateway rather than falling through to a file server that would answer
+    # it with the index document and a 200.
+    - match: Host(`admin.twentyfour.localhost`) && PathPrefix(`/admin/api`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: admin
+          port: 80
+      # No errors middleware here, deliberately. It exists to serve the
+      # "temporarily unavailable" page when a frontend is scaled to zero. On an
+      # API it would replace a genuine 5xx with HTML, and a client expecting
+      # JSON cannot read the error it was given.

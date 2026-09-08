@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package twentyfour.provisioning.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ProvisioningService runs the saga that turns a signup into a working
+// business, and owns the checklist the merchant watches it happen on.
+//
+// It is its own service because a saga is its own kind of thing: steps that run
+// in order, fail halfway, retry, and sometimes need a person. That state has to
+// live somewhere it can be resumed after a crash, inspected by a specialist,
+// and shown to a merchant, and none of those are true of a tenant record, which
+// is simply a set of facts.
+//
+// The checklist and the saga are the same rows on purpose. A merchant-facing
+// list of what is happening, kept separately from the machine's list of what it
+// is doing, disagrees the first time one of them is wrong, and the one the
+// merchant is reading is the one nobody notices is stale.
+//
+// The 24-hour promise is measured here: live within a day, or the first month
+// is free. That makes the SLA timer this service's, not a report someone runs.
+service ProvisioningService {
+  // Begins the saga, or resumes one already begun. Idempotent per tenant: a
+  // retried signup finds the run it already started rather than starting a
+  // second, because half of it may already have happened.
+  rpc Start(StartRequest) returns (StartResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  // Runs one failed step again. Platform-owned steps only: nothing here can
+  // finish a specialist's KYC call or a merchant's price review for them.
+  rpc RetryStep(RetryStepRequest) returns (RetryStepResponse);
+  // A specialist marking their own step done, from the admin console. Not
+  // built yet; the RPC exists so the checklist has somewhere to be completed
+  // from that is not a database edit.
+  rpc CompleteStep(CompleteStepRequest) returns (CompleteStepResponse);
+}
+
+enum StepStatus {
+  STEP_STATUS_UNSPECIFIED = 0;
+  STEP_STATUS_PENDING = 1;
+  STEP_STATUS_IN_PROGRESS = 2;
+  STEP_STATUS_DONE = 3;
+  STEP_STATUS_FAILED = 4;
+  // Cannot complete unattended: KYC, OAuth consent, hardware pairing.
+  STEP_STATUS_AWAITING_SPECIALIST = 5;
+}
+
+// Who the step is waiting on. Orthogonal to status: a merchant-owned step is
+// still pending or done like any other, and the difference is that nobody else
+// is going to finish it. Without this, a checklist of a dozen steps cannot
+// answer the only question the merchant actually has, which is which are theirs.
+enum StepOwner {
+  STEP_OWNER_UNSPECIFIED = 0;
+  STEP_OWNER_PLATFORM = 1;
+  STEP_OWNER_SPECIALIST = 2;
+  STEP_OWNER_MERCHANT = 3;
+}
+
+message Step {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  // Which of the 0 / 4 / 12 / 24 hour stages this belongs to.
+  int32 hour = 4;
+  StepStatus status = 5;
+  StepOwner owner = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  // Shown to a specialist, never to a merchant: it is the reason a machine
+  // gave, not a sentence anyone wants to read on their first morning.
+  string last_error = 8;
+}
+
+message Run {
+  string tenant_id = 1;
+  google.protobuf.Timestamp started_at = 2;
+  // The SLA the guarantee is measured against.
+  google.protobuf.Timestamp due_at = 3;
+  google.protobuf.Timestamp completed_at = 4;
+  repeated Step steps = 5;
+}
+
+message StartRequest {
+  string tenant_id = 1;
+  string owner_user_id = 2;
+  string business_name = 3;
+  string industry = 4;
+  string tier = 5;
+}
+message StartResponse {
+  Run run = 1;
+}
+
+message GetRequest {}
+message GetResponse {
+  // Unset for a tenant that was never provisioned through this service.
+  Run run = 1;
+}
+
+message RetryStepRequest {
+  string step_id = 1;
+}
+message RetryStepResponse {
+  Run run = 1;
+}
+
+message CompleteStepRequest {
+  string step_id = 1;
+  string note = 2;
+}
+message CompleteStepResponse {
+  Run run = 1;
+}

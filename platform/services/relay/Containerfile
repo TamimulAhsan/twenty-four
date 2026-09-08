@@ -1,0 +1,19 @@
+# The outbox relay. Built from the workspace root because it depends on the
+# shared packages module, which lives outside its own directory.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+
+COPY packages/ ./packages/
+COPY services/relay/ ./services/relay/
+
+# A workspace containing only what this image needs. Reusing the repository's
+# go.work would pull in every other service and fail on the ones not copied.
+RUN go work init ./packages ./services/relay
+
+RUN go build -trimpath -ldflags="-s -w" -o /out/relayd ./services/relay/cmd/relayd
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/relayd /relayd
+EXPOSE 9110
+USER nonroot:nonroot
+ENTRYPOINT ["/relayd"]

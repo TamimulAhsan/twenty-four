@@ -1,0 +1,74 @@
+# Payments: SWAPPED PER MARKET.
+#
+# This deployment runs the development provider, where a person approves each
+# payment on a page. A Hungarian or Bangladeshi deployment swaps this pod for
+# one that talks to a real processor and changes nothing else: the contract in
+# front of it is identical, and no caller knows the difference.
+#
+# Two ports on purpose. 9106 is the market-neutral gRPC contract. 9107 is this
+# provider's own approval desk, which is where a hosted payment page would sit
+# and is not part of the contract.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments
+  namespace: twentyfour
+  labels: { app: payments, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: payments } }
+  template:
+    metadata: { labels: { app: payments, tier: backend } }
+    spec:
+      containers:
+        - name: paymentsd
+          image: localhost:5000/twentyfour/payments:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9106"
+            - "-desk-addr=:9107"
+            # Goes into external_action_url, so it has to be a URL a browser on
+            # this machine can actually open, not a cluster-internal name.
+            - "-public-base=http://app.twentyfour.localhost/pay"
+          ports:
+            - { containerPort: 9106, name: grpc }
+            - { containerPort: 9107, name: desk }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: payments } }
+          readinessProbe:
+            grpc: { port: 9106 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9106 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: payments, namespace: twentyfour }
+spec:
+  selector: { app: payments }
+  ports:
+    - { port: 9106, targetPort: 9106, name: grpc }
+    - { port: 9107, targetPort: 9107, name: desk }
+---
+# The approval desk, reachable from a browser. Higher priority than the
+# frontends so /pay never falls through to a static file server.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: payments-desk
+  namespace: twentyfour
+spec:
+  entryPoints: [web]
+  routes:
+    - match: Host(`app.twentyfour.localhost`) && PathPrefix(`/pay`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: payments
+          port: 9107

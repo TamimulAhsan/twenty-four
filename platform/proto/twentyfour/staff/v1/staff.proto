@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package twentyfour.staff.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// StaffService owns the people who work for a tenant.
+//
+// It does not own their logins: Auth does, and a member's ID here IS their Auth
+// user ID. One person, one identifier, everywhere. What Staff adds is the
+// employment view of that person, the seat quota, and eventually rotas and
+// availability.
+//
+// The seat limit is enforced here and nowhere else in this service's reach.
+// One seat is one person across both surfaces, so when CRM Sync exists it must
+// refuse the matching Twenty workspace member from the same number. Enforcing
+// it only in the dashboard lets the CRM drift past the tier silently.
+service StaffService {
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  // Refused at the seat limit. Creates the login, binds the role and holds the
+  // seat, in that order, so a failure never leaves a seat consumed by nobody.
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+  rpc UpdateMember(UpdateMemberRequest) returns (UpdateMemberResponse);
+  // Sends the invitation again. Consumes no second seat.
+  rpc ReissueInvitation(ReissueInvitationRequest) returns (ReissueInvitationResponse);
+  // Only ever an invitation that was never accepted. Anyone who has traded is
+  // deactivated instead: their name is on orders that must stay resolvable.
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  // What the dashboard renders its seat counter from, and what a specialist
+  // checks before promising someone a tier.
+  rpc GetSeats(GetSeatsRequest) returns (GetSeatsResponse);
+}
+
+// Status is deliberately the same three words the dashboard uses.
+//
+// invited holds a seat: they will accept, and a seat that frees up when someone
+// is slow to read their email is a seat that gets sold twice. deactivated
+// releases one and keeps the person's history intact.
+enum MemberStatus {
+  MEMBER_STATUS_UNSPECIFIED = 0;
+  MEMBER_STATUS_ACTIVE = 1;
+  MEMBER_STATUS_INVITED = 2;
+  MEMBER_STATUS_DEACTIVATED = 3;
+}
+
+message Member {
+  // The Auth user ID. One person, one identifier, everywhere.
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  // From RBAC, not stored here. Staff has no opinion about what a role grants.
+  string role_key = 4;
+  MemberStatus status = 5;
+  // Their colour on the till and the rota. Assigned at invitation so two
+  // people on the same shift are never the same colour by default.
+  string colour = 6;
+  google.protobuf.Timestamp invited_at = 7;
+  google.protobuf.Timestamp last_active_at = 8;
+}
+
+message Seats {
+  // Zero means unlimited, which is what Enterprise negotiates.
+  int32 limit = 1;
+  // Active plus invited. Deactivated people do not count.
+  int32 used = 2;
+}
+
+message ListMembersRequest {
+  bool include_deactivated = 1;
+}
+message ListMembersResponse {
+  repeated Member members = 1;
+  Seats seats = 2;
+}
+
+message InviteMemberRequest {
+  string email = 1;
+  string name = 2;
+  string role_key = 3;
+}
+message InviteMemberResponse {
+  Member member = 1;
+  // Returned so Notification can send it. Logged in development, because
+  // there is no mail service yet and an invitation nobody can accept is not
+  // worth building.
+  string invite_token = 2;
+  Seats seats = 3;
+}
+
+message UpdateMemberRequest {
+  string id = 1;
+  // Empty leaves the role alone.
+  string role_key = 2;
+  // Unspecified leaves the status alone. Only active and deactivated are
+  // settable: invited is a state the invitation flow owns.
+  MemberStatus status = 3;
+}
+message UpdateMemberResponse {
+  Member member = 1;
+  Seats seats = 2;
+}
+
+message ReissueInvitationRequest {
+  string id = 1;
+}
+message ReissueInvitationResponse {
+  Member member = 1;
+  string invite_token = 2;
+}
+
+message RemoveMemberRequest {
+  string id = 1;
+}
+message RemoveMemberResponse {
+  Seats seats = 1;
+}
+
+message GetSeatsRequest {}
+message GetSeatsResponse {
+  Seats seats = 1;
+}

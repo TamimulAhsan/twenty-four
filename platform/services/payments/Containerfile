@@ -1,0 +1,20 @@
+# Payments, market-swapped. This image is the development provider: a person
+# approves each payment on a page instead of a processor deciding. Built from
+# the workspace root because it imports the generated protobuf module and the
+# shared packages, both of which live outside its own directory.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+
+COPY gen/ ./gen/
+COPY packages/ ./packages/
+COPY services/payments/ ./services/payments/
+
+RUN go work init ./gen ./packages ./services/payments
+
+RUN go build -trimpath -ldflags="-s -w" -o /out/paymentsd ./services/payments/cmd/paymentsd
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/paymentsd /paymentsd
+EXPOSE 9106 9107
+USER nonroot:nonroot
+ENTRYPOINT ["/paymentsd"]
