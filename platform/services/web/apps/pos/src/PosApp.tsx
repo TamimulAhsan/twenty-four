@@ -5,7 +5,7 @@ import { useEntitlement } from '@twentyfour/entitlement'
 import { useTerms } from '@twentyfour/terms'
 import { RequireModule, Wordmark, useBootstrap } from '@twentyfour/runtime'
 import { Avatar, Icon, IconButton, ThemeToggle, cn, type IconName } from '@twentyfour/ui'
-import { SessionGate } from '@twentyfour/shell'
+import { SessionGate, SignOutButton } from '@twentyfour/shell'
 import { DevToolbar } from '@twentyfour/shell'
 import { Till } from './Till'
 import { ParkedView } from './ParkedView'
@@ -157,6 +157,10 @@ function PosShell() {
             size="sm"
             onClick={() => window.open('/', '_blank', 'noopener')}
           />
+          {/* A counter device is shared. Ending a shift has to be one press
+              from wherever the person is standing, not somewhere in the back
+              office they would have to open a second tab to reach. */}
+          <SignOutButton />
         </div>
       </header>
 

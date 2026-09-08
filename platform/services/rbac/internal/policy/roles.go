@@ -96,7 +96,17 @@ var KnownPermissions = []Permission{
 	"marketing:campaign:read", "marketing:campaign:manage", "marketing:budget:manage",
 	"analytics:report:read",
 	"tenant:profile:read", "tenant:profile:update", "tenant:billing:manage",
+	// Reading the whole directory, rather than one tenant. Only the admin
+	// plane holds anything that matches it: a merchant role scoped to one
+	// business has nothing to list.
+	"tenant:directory:read",
 	"provisioning:tenant:create", "provisioning:step:retry",
 	"entitlement:module:read", "entitlement:module:manage",
+	// Editing what a tier grants. Deliberately its own domain rather than part
+	// of entitlement: an entitlement change touches one tenant, and this
+	// rewrites every tenant on the tier. Specialist holds entitlement:*:* and
+	// still cannot do this, which is what "can provision, not change pricing"
+	// means in practice.
+	"registry:tier:manage",
 	"support:impersonation:create", "audit:log:read",
 }

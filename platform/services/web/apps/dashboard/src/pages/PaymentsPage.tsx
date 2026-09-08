@@ -12,6 +12,8 @@ import { money } from '@twentyfour/money'
 const TONE = {
   captured: 'success', authorised: 'accent', pending: 'warning',
   refunded: 'neutral', failed: 'danger',
+  // Never completed rather than declined: no money moved.
+  cancelled: 'neutral',
 } as const
 
 export function PaymentsPage() {

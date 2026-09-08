@@ -25,6 +25,7 @@ import { money } from '@twentyfour/money'
 import { OrderDetailDialog } from '../components/OrderDetailDialog'
 import { useTradeData } from '../analytics/useTradeData'
 import { Delta } from '../analytics/Delta'
+import { OnboardingBanner } from '../onboarding/OnboardingBanner'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -77,6 +78,8 @@ export function Overview() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Overview" description={dates.dateLong(new Date())} />
+
+      <OnboardingBanner />
 
       <AppLaunchers />
 

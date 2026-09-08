@@ -1,18 +1,19 @@
 const NODES = [
-  ['var(--ingress)', 'Ingress', 'Traefik entry point. Maps a hostname and path to a Service.'],
+  ['var(--ingress)', 'Route', 'A Traefik entry point: one hostname and path, pointing at one Service. Two hosts appear here, and they are two planes: app.twentyfour is the merchant applications, admin.twentyfour is the admin console. They never share a session.'],
   ['var(--svc)', 'Service', 'Stable cluster IP and DNS name in front of a set of pods.'],
-  ['var(--app)', 'App pod', 'A service we wrote. Runs the Go binaries.'],
+  ['var(--app)', 'Service pod', 'A Go binary we wrote. Gateways, domain services, the outbox relay.'],
+  ['var(--fe)', 'Frontend pod', 'nginx serving one built bundle. Five of them, one per application, each its own image and deployment.'],
   ['var(--data)', 'Datastore pod', 'Postgres, Redis, Kafka. StatefulSets with attached volumes.'],
   ['var(--sys)', 'System pod', 'kube-system: CoreDNS, Traefik, metrics-server, local-path.'],
 ] as const
 
 const EDGES = [
-  ['routes', 'var(--ingress)', 'solid', 'Ingress → Service',
-   'Read from the Ingress rules. The label is the matched path.'],
+  ['routes', 'var(--ingress)', 'solid', 'Route → Service',
+   'Read from Traefik’s IngressRoute objects, which is what every route here is written as. The label is the matched path.'],
   ['selects', '#4a5570', 'dashed', 'Service → Pod',
    'Read from EndpointSlices — the pods actually behind that Service right now.'],
   ['depends', 'var(--app)', 'solid', 'Pod → Service',
-   'Parsed from the container’s own env vars: any value shaped like host:port that resolves to a Service becomes an arrow.'],
+   'Read from the flags a container was started with, and from its environment: any value shaped like host:port that resolves to a Service becomes an arrow. Every service here is told where its neighbours are with -auth=host:port, so this is the real wiring rather than a diagram of it.'],
 ] as const
 
 export function Legend({ open, onToggle }: { open: boolean; onToggle: () => void }) {

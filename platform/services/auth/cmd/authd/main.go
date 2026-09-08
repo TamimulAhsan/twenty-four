@@ -1,5 +1,5 @@
 // Command authd serves the Auth service: who someone is, and whether they are
-// still signed in. It never decides what anyone may do — that is RBAC's job,
+// still signed in. It never decides what anyone may do: that is RBAC's job,
 // and Auth calls it in exactly one place: binding the owner role at signup.
 package main
 
@@ -30,6 +30,7 @@ import (
 	pb "github.com/twentyfour/platform/gen/go/twentyfour/auth/v1"
 	rbacpb "github.com/twentyfour/platform/gen/go/twentyfour/rbac/v1"
 	"github.com/twentyfour/platform/services/auth/internal/credential"
+	"github.com/twentyfour/platform/services/auth/internal/merchantcode"
 	"github.com/twentyfour/platform/services/auth/internal/store"
 	"github.com/twentyfour/platform/services/auth/internal/token"
 )
@@ -38,6 +39,14 @@ const (
 	maxFailedAttempts = 5
 	lockoutWindow     = 15 * time.Minute
 	oneTimeTokenTTL   = 24 * time.Hour
+	// A week, because an invitation is sent to a person who may be on holiday,
+	// and an expired link that needs a colleague to re-send it is friction on
+	// the day someone is trying to start work.
+	inviteTTL = 7 * 24 * time.Hour
+	// The handoff code crosses from one gateway to the other inside a redirect
+	// the browser follows immediately. Thirty seconds is generous for that and
+	// far too short to be worth intercepting.
+	handoffTTL = 30 * time.Second
 )
 
 type server struct {
@@ -51,7 +60,7 @@ func planeStr(p pb.Plane) string {
 	if p == pb.Plane_PLANE_ADMIN {
 		return "admin"
 	}
-	return "tenant" // default; unspecified is treated as the merchant plane
+	return "tenant"
 }
 
 func planePB(s string) pb.Plane {
@@ -96,6 +105,64 @@ func randomToken() string {
 
 // Signup creates the first user of a new tenant and makes them its owner.
 //
+// CreateStaff makes a specialist: an account on the admin plane, belonging to
+// the platform rather than to a business.
+//
+// It differs from Signup in every way that matters. No tenant is minted, so the
+// tenant id stays nil and tenantctx refuses any tenant-scoped call made with
+// this account's token. No merchant code, because a specialist issues no
+// documents. The address is treated as verified, because there is nowhere to
+// send a verification mail and a specialist is created by somebody who already
+// knows who they are.
+func (s *server) CreateStaff(ctx context.Context, req *pb.CreateStaffRequest) (*pb.CreateStaffResponse, error) {
+	email := strings.TrimSpace(strings.ToLower(req.GetEmail()))
+	if email == "" || !strings.Contains(email, "@") {
+		return nil, status.Error(codes.InvalidArgument, "a valid email is required")
+	}
+	if err := credential.Validate(req.GetPassword()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	role := strings.TrimSpace(req.GetRoleKey())
+	if role == "" {
+		return nil, status.Error(codes.InvalidArgument, "a role is required")
+	}
+	hash, err := credential.Hash(req.GetPassword())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not process password")
+	}
+
+	u, err := s.st.CreateUser(ctx, store.User{
+		ID: uuid.New(), TenantID: uuid.Nil, Email: email,
+		DisplayName: req.GetDisplayName(), PasswordHash: hash,
+		Status: "active", Plane: "admin", EmailVerified: true,
+	})
+	// One address, one account, across both planes. An address already held by
+	// a merchant cannot become a specialist, and the message says so rather
+	// than leaving somebody to guess which half of the platform is objecting.
+	if errors.Is(err, store.ErrEmailTaken) {
+		return nil, status.Error(codes.AlreadyExists, "that email already has an account")
+	}
+	if err != nil {
+		slog.Error("create staff: create user", "err", err)
+		return nil, status.Error(codes.Internal, "could not create account")
+	}
+
+	// Synchronously, like signup: an account with no role can do nothing, and a
+	// half-created specialist is worse than a loud failure.
+	if _, err := s.rbac.AssignRole(ctx, &rbacpb.AssignRoleRequest{
+		// The role key carries the plane: RBAC's system role keys are unique,
+		// and platform_admin, specialist and support exist only on the admin
+		// plane. A tenant role key here would simply not resolve.
+		TenantId: uuid.Nil.String(), SubjectId: u.ID.String(), RoleKey: role,
+	}); err != nil {
+		slog.Error("create staff: assign role", "err", err, "user", u.ID, "role", role)
+		return nil, status.Error(codes.Internal, "account created but role assignment failed")
+	}
+
+	slog.Info("staff created", "user", u.ID, "role", role)
+	return &pb.CreateStaffResponse{User: toPBUser(u)}, nil
+}
+
 // The tenant ID is minted here because Auth needs one before the Tenant service
 // exists; Tenant & Business Profile will own the business record under this
 // same ID. Auth stores no business data of its own.
@@ -127,7 +194,7 @@ func (s *server) Signup(ctx context.Context, req *pb.SignupRequest) (*pb.SignupR
 	}
 
 	// Bind the owner role synchronously. A user with no role cannot do
-	// anything, so signup genuinely is not complete until this lands — better
+	// anything, so signup genuinely is not complete until this lands. Better
 	// to fail loudly here than to leave a half-created account behind.
 	if _, err := s.rbac.AssignRole(ctx, &rbacpb.AssignRoleRequest{
 		TenantId: tenantID.String(), SubjectId: u.ID.String(), RoleKey: "owner",
@@ -136,22 +203,227 @@ func (s *server) Signup(ctx context.Context, req *pb.SignupRequest) (*pb.SignupR
 		return nil, status.Error(codes.Internal, "account created but role assignment failed")
 	}
 
+	// The merchant code is assigned here because this is the moment a tenant
+	// first exists. It goes on every document the business will ever issue, so
+	// a tenant that reaches its first sale without one cannot be invoiced,
+	// which makes this as much a part of signup as the role binding above.
+	code, err := s.st.AssignMerchantCode(ctx, tenantID, merchantcode.New)
+	if err != nil {
+		slog.Error("signup: assign merchant code", "err", err, "tenant", tenantID)
+		return nil, status.Error(codes.Internal, "account created but merchant code assignment failed")
+	}
+
 	verify := randomToken()
 	if err := s.st.CreateOneTimeToken(ctx, u.ID, "verify_email", verify, oneTimeTokenTTL); err != nil {
 		slog.Error("signup: verification token", "err", err)
 	}
 
-	slog.Info("signup", "user", u.ID, "tenant", tenantID)
-	return &pb.SignupResponse{User: toPBUser(u), TenantId: tenantID.String(), VerificationToken: verify}, nil
+	slog.Info("signup", "user", u.ID, "tenant", tenantID, "merchant_code", code)
+	return &pb.SignupResponse{
+		User: toPBUser(u), TenantId: tenantID.String(),
+		VerificationToken: verify, MerchantCode: code,
+	}, nil
+}
+
+// GetMerchantCode is how Invoicing learns what to print. It is an RPC rather
+// than a shared table on purpose: when Tenant & Business Profile takes the
+// column over, this call moves and its callers do not change.
+func (s *server) GetMerchantCode(ctx context.Context, req *pb.GetMerchantCodeRequest) (*pb.GetMerchantCodeResponse, error) {
+	tid, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id must be a UUID")
+	}
+	code, assigned, err := s.st.MerchantCode(ctx, tid)
+	if errors.Is(err, store.ErrNoMerchantCode) {
+		return nil, status.Error(codes.NotFound, "that tenant has no merchant code")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not read merchant code")
+	}
+	return &pb.GetMerchantCodeResponse{
+		TenantId: tid.String(), MerchantCode: code, AssignedAt: timestamppb.New(assigned),
+	}, nil
+}
+
+// InviteUser adds a staff member to an existing tenant.
+//
+// It creates the account in the "invited" state with an unusable password, so
+// the address is claimed and the seat is held but nobody can sign in until the
+// invitation is accepted. Auth does not check the seat quota: that is Staff's
+// job, and it has to be checked in one place or it will be checked in none.
+func (s *server) InviteUser(ctx context.Context, req *pb.InviteUserRequest) (*pb.InviteUserResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id must be a UUID")
+	}
+	email := strings.TrimSpace(strings.ToLower(req.GetEmail()))
+	if email == "" || !strings.Contains(email, "@") {
+		return nil, status.Error(codes.InvalidArgument, "a valid email is required")
+	}
+
+	// A password nobody knows, not an empty one. An account with a blank hash
+	// is an account somebody eventually logs into by accident.
+	hash, err := credential.Hash(randomToken())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not create the invitation")
+	}
+
+	u, err := s.st.CreateUser(ctx, store.User{
+		ID: uuid.New(), TenantID: tenantID, Email: email,
+		DisplayName: strings.TrimSpace(req.GetDisplayName()), PasswordHash: hash,
+		Status: "invited", Plane: "tenant",
+	})
+	if errors.Is(err, store.ErrEmailTaken) {
+		return nil, status.Error(codes.AlreadyExists, "that email is already registered")
+	}
+	if err != nil {
+		slog.Error("invite: create user", "err", err)
+		return nil, status.Error(codes.Internal, "could not create the invitation")
+	}
+
+	roleKey := req.GetRoleKey()
+	if roleKey == "" {
+		roleKey = "staff"
+	}
+	if _, err := s.rbac.AssignRole(ctx, &rbacpb.AssignRoleRequest{
+		TenantId: tenantID.String(), SubjectId: u.ID.String(), RoleKey: roleKey,
+	}); err != nil {
+		slog.Error("invite: assign role", "err", err, "user", u.ID, "role", roleKey)
+		return nil, status.Error(codes.Internal, "account created but role assignment failed")
+	}
+
+	token := randomToken()
+	if err := s.st.CreateOneTimeToken(ctx, u.ID, "invite", token, inviteTTL); err != nil {
+		slog.Error("invite: token", "err", err)
+		return nil, status.Error(codes.Internal, "could not issue the invitation")
+	}
+	slog.Info("invited", "user", u.ID, "tenant", tenantID, "role", roleKey)
+	return &pb.InviteUserResponse{User: toPBUser(u), InviteToken: token}, nil
+}
+
+// ReissueInvite sends the same person a new link. It consumes no second seat,
+// because they already hold one.
+func (s *server) ReissueInvite(ctx context.Context, req *pb.ReissueInviteRequest) (*pb.ReissueInviteResponse, error) {
+	tid, err1 := uuid.Parse(req.GetTenantId())
+	uid, err2 := uuid.Parse(req.GetUserId())
+	if err1 != nil || err2 != nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id and user_id must be UUIDs")
+	}
+	u, err := s.st.UserByID(ctx, uid)
+	if err != nil || u.TenantID != tid {
+		return nil, status.Error(codes.NotFound, "no such user")
+	}
+	if u.Status != "invited" {
+		return nil, status.Error(codes.FailedPrecondition, "that invitation has already been accepted")
+	}
+	token := randomToken()
+	if err := s.st.CreateOneTimeToken(ctx, u.ID, "invite", token, inviteTTL); err != nil {
+		return nil, status.Error(codes.Internal, "could not issue the invitation")
+	}
+	return &pb.ReissueInviteResponse{InviteToken: token}, nil
+}
+
+// AcceptInvite turns an invitation into a working account.
+//
+// Consuming the token and setting the password are two statements, and the
+// order matters: the token is spent first, so a crash between them leaves an
+// account that cannot be signed into rather than a link that works twice.
+func (s *server) AcceptInvite(ctx context.Context, req *pb.AcceptInviteRequest) (*pb.AcceptInviteResponse, error) {
+	if err := credential.Validate(req.GetPassword()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	uid, err := s.st.ConsumeOneTimeToken(ctx, "invite", req.GetInviteToken())
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, status.Error(codes.InvalidArgument, "that invitation is invalid or has expired")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not accept the invitation")
+	}
+	hash, err := credential.Hash(req.GetPassword())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not process password")
+	}
+	u, err := s.st.AcceptInvite(ctx, uid, hash)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, status.Error(codes.FailedPrecondition, "that invitation has already been accepted")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not accept the invitation")
+	}
+	slog.Info("invitation accepted", "user", u.ID, "tenant", u.TenantID)
+	return &pb.AcceptInviteResponse{User: toPBUser(u)}, nil
+}
+
+func (s *server) ReactivateUser(ctx context.Context, req *pb.ReactivateUserRequest) (*pb.ReactivateUserResponse, error) {
+	tid, err1 := uuid.Parse(req.GetTenantId())
+	uid, err2 := uuid.Parse(req.GetUserId())
+	if err1 != nil || err2 != nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id and user_id must be UUIDs")
+	}
+	u, err := s.st.ReactivateUser(ctx, tid, uid)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, status.Error(codes.FailedPrecondition, "that account is not deactivated")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not reactivate the account")
+	}
+	return &pb.ReactivateUserResponse{User: toPBUser(u)}, nil
+}
+
+func (s *server) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) (*pb.DeleteUserResponse, error) {
+	tid, err1 := uuid.Parse(req.GetTenantId())
+	uid, err2 := uuid.Parse(req.GetUserId())
+	if err1 != nil || err2 != nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id and user_id must be UUIDs")
+	}
+	deleted, err := s.st.DeleteUser(ctx, tid, uid)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not delete the account")
+	}
+	if !deleted {
+		return nil, status.Error(codes.FailedPrecondition,
+			"that account has been used, so it can only be deactivated")
+	}
+	slog.Info("invitation deleted", "user", uid, "tenant", tid)
+	return &pb.DeleteUserResponse{Deleted: true}, nil
 }
 
 // Login is written so that an unknown account and a wrong password are
 // indistinguishable: same error, and the same argon2 work is done either way.
+// ListMerchantCodes answers a whole directory page at once.
+//
+// Unfiltered by plane on purpose: a merchant code identifies a business, not a
+// person, and it is printed on documents the business hands to the public.
+// There is nothing here to leak that an invoice does not already carry.
+func (s *server) ListMerchantCodes(ctx context.Context, req *pb.ListMerchantCodesRequest) (*pb.ListMerchantCodesResponse, error) {
+	ids := make([]uuid.UUID, 0, len(req.GetTenantIds()))
+	for _, raw := range req.GetTenantIds() {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			// One bad id does not spoil the page. It simply has no code, which
+			// is what a caller sees for an unknown tenant anyway.
+			continue
+		}
+		ids = append(ids, id)
+	}
+	assigned, err := s.st.MerchantCodes(ctx, ids)
+	if err != nil {
+		slog.Error("merchant codes", "err", err)
+		return nil, status.Error(codes.Internal, "could not read merchant codes")
+	}
+	out := make(map[string]string, len(assigned))
+	for id, code := range assigned {
+		out[id.String()] = code
+	}
+	return &pb.ListMerchantCodesResponse{MerchantCodes: out}, nil
+}
+
 func (s *server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
-	plane := planeStr(req.GetPlane())
 	denied := status.Error(codes.Unauthenticated, "invalid email or password")
 
-	u, err := s.st.UserByEmail(ctx, req.GetEmail(), plane)
+	// By address alone. The account's own plane is the answer to "where does
+	// this person go", which is what lets one form serve both.
+	u, err := s.st.UserByEmail(ctx, req.GetEmail())
 	if errors.Is(err, store.ErrNotFound) {
 		credential.VerifyDummy(req.GetPassword()) // equalise timing
 		return nil, denied
@@ -163,7 +435,11 @@ func (s *server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResp
 	if u.LockedUntil != nil && u.LockedUntil.After(time.Now()) {
 		return nil, status.Error(codes.PermissionDenied, "account temporarily locked")
 	}
-	if u.Status == "deactivated" {
+	// An invited account holds a password nobody knows, so this is defence in
+	// depth rather than the only thing stopping a sign-in. It is worth stating
+	// anyway: "invited means cannot sign in" should be visible in the code that
+	// decides, not inferred from how the hash was generated.
+	if u.Status == "deactivated" || u.Status == "invited" {
 		credential.VerifyDummy(req.GetPassword())
 		return nil, denied
 	}
@@ -189,6 +465,24 @@ func (s *server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResp
 		slog.Error("login: create session", "err", err)
 		return nil, status.Error(codes.Internal, "could not sign in")
 	}
+	if err := s.st.RecordLoginSuccess(ctx, u.ID); err != nil {
+		slog.Error("login: record success", "err", err)
+	}
+
+	// The caller is one plane's gateway and can only be handed that plane's
+	// token. When the account belongs to the other one, it gets a code to
+	// redirect with instead, and never sees a token it has no business
+	// holding. That makes "the merchant gateway sets an admin cookie" an
+	// impossible bug rather than an avoided one.
+	if u.Plane != planeStr(req.GetCallerPlane()) {
+		code := randomToken()
+		if err := s.st.CreateHandoff(ctx, u.ID, sess.ID, code, req.GetIp(), handoffTTL); err != nil {
+			slog.Error("login: create handoff", "err", err)
+			return nil, status.Error(codes.Internal, "could not sign in")
+		}
+		slog.Info("login handed off", "user", u.ID, "plane", u.Plane)
+		return &pb.LoginResponse{User: toPBUser(u), HandoffCode: code}, nil
+	}
 
 	tok, exp, err := s.iss.Issue(token.Claims{
 		UserID: u.ID.String(), TenantID: u.TenantID.String(),
@@ -197,12 +491,57 @@ func (s *server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResp
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not issue token")
 	}
-	if err := s.st.RecordLoginSuccess(ctx, u.ID); err != nil {
-		slog.Error("login: record success", "err", err)
-	}
 
 	slog.Info("login", "user", u.ID, "tenant", u.TenantID, "plane", u.Plane)
 	return &pb.LoginResponse{
+		User: toPBUser(u), Token: tok,
+		Session: &pb.Session{
+			Id: sess.ID.String(), UserId: u.ID.String(), TenantId: u.TenantID.String(),
+			IssuedAt: timestamppb.New(sess.IssuedAt), ExpiresAt: timestamppb.New(exp),
+			UserAgent: sess.UserAgent, Ip: sess.IP,
+		},
+	}, nil
+}
+
+// RedeemHandoff swaps a one-time code for a token on the plane that issued it.
+//
+// The code is consumed atomically and bound to the address that was given one,
+// so a replay finds nothing and a code that travelled to another machine finds
+// nothing. Both answer the same way, because telling the two apart would say
+// something about a code the caller does not hold.
+func (s *server) RedeemHandoff(ctx context.Context, req *pb.RedeemHandoffRequest) (*pb.RedeemHandoffResponse, error) {
+	denied := status.Error(codes.Unauthenticated, "that sign-in link is not usable")
+
+	sessionID, err := s.st.RedeemHandoff(ctx, req.GetCode(), req.GetIp())
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, denied
+	}
+	if err != nil {
+		slog.Error("handoff: redeem", "err", err)
+		return nil, status.Error(codes.Internal, "could not sign in")
+	}
+
+	// The session is checked again rather than trusted from the code. Between
+	// issuing and redeeming, somebody could have signed out on the other tab.
+	sess, err := s.st.LiveSession(ctx, sessionID)
+	if err != nil {
+		return nil, denied
+	}
+	u, err := s.st.UserByID(ctx, sess.UserID)
+	if err != nil {
+		return nil, denied
+	}
+
+	tok, exp, err := s.iss.Issue(token.Claims{
+		UserID: u.ID.String(), TenantID: u.TenantID.String(),
+		SessionID: sess.ID.String(), Plane: u.Plane,
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not issue token")
+	}
+
+	slog.Info("handoff redeemed", "user", u.ID, "plane", u.Plane)
+	return &pb.RedeemHandoffResponse{
 		User: toPBUser(u), Token: tok,
 		Session: &pb.Session{
 			Id: sess.ID.String(), UserId: u.ID.String(), TenantId: u.TenantID.String(),
@@ -305,6 +644,15 @@ func (s *server) DeactivateUser(ctx context.Context, req *pb.DeactivateUserReque
 	return &pb.DeactivateUserResponse{Deactivated: ok}, nil
 }
 
+// GetPasswordPolicy states the rule this deployment enforces.
+//
+// A signup form that carries its own copy of the number is a form that will one
+// day accept a password the server refuses, and the merchant will be told their
+// perfectly good password is wrong with no way to find out why.
+func (s *server) GetPasswordPolicy(context.Context, *pb.GetPasswordPolicyRequest) (*pb.GetPasswordPolicyResponse, error) {
+	return &pb.GetPasswordPolicyResponse{MinLength: int32(credential.MinPasswordLength)}, nil
+}
+
 func (s *server) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequest) (*pb.ChangePasswordResponse, error) {
 	uid, err := uuid.Parse(req.GetUserId())
 	if err != nil {
@@ -333,7 +681,7 @@ func (s *server) ChangePassword(ctx context.Context, req *pb.ChangePasswordReque
 // RequestPasswordReset always reports success. Reporting "no such account"
 // would turn this endpoint into an account-enumeration oracle.
 func (s *server) RequestPasswordReset(ctx context.Context, req *pb.RequestPasswordResetRequest) (*pb.RequestPasswordResetResponse, error) {
-	u, err := s.st.UserByEmail(ctx, req.GetEmail(), planeStr(req.GetPlane()))
+	u, err := s.st.UserByEmail(ctx, req.GetEmail())
 	if err == nil {
 		raw := randomToken()
 		if err := s.st.CreateOneTimeToken(ctx, u.ID, "password_reset", raw, time.Hour); err != nil {
@@ -366,6 +714,22 @@ func (s *server) ResetPassword(ctx context.Context, req *pb.ResetPasswordRequest
 	return &pb.ResetPasswordResponse{Reset_: true}, nil
 }
 
+func backfillMerchantCodes(ctx context.Context, st *store.Store) {
+	pending, err := st.TenantsWithoutMerchantCode(ctx)
+	if err != nil {
+		slog.Error("merchant code backfill: list tenants", "err", err)
+		return
+	}
+	for _, tid := range pending {
+		code, err := st.AssignMerchantCode(ctx, tid, merchantcode.New)
+		if err != nil {
+			slog.Error("merchant code backfill", "tenant", tid, "err", err)
+			continue
+		}
+		slog.Info("merchant code backfilled", "tenant", tid, "merchant_code", code)
+	}
+}
+
 func main() {
 	addr := flag.String("addr", ":9102", "gRPC listen address")
 	dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "PostgreSQL DSN")
@@ -395,7 +759,7 @@ func main() {
 			os.Exit(1)
 		}
 		*keyHex = k
-		slog.Warn("no TOKEN_KEY set — generated an ephemeral one; sessions will not survive a restart")
+		slog.Warn("no TOKEN_KEY set; generated an ephemeral one, so sessions will not survive a restart")
 	}
 	iss, err := token.NewIssuer(*keyHex, *ttl)
 	if err != nil {
@@ -413,6 +777,13 @@ func main() {
 		slog.Error("migrate", "err", err)
 		os.Exit(1)
 	}
+
+	// Tenants that existed before merchant codes did still need one. A code is
+	// assigned once and never changes, so doing this at startup rather than
+	// lazily on first read keeps "every tenant has a code" true from the moment
+	// this version is deployed, instead of true only for tenants that happen to
+	// have issued a document.
+	backfillMerchantCodes(ctx, st)
 
 	conn, err := grpc.NewClient(*rbacAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

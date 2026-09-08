@@ -11,6 +11,10 @@
  * sit at awaiting_specialist rather than pretending to be in progress. A
  * checklist that silently half-completes is how a 24-hour promise gets broken
  * the first time a processor is slow.
+ *
+ * Every step also carries who it is waiting on. Twelve steps with no owner is
+ * a progress bar; twelve steps with one is a to-do list, and the merchant can
+ * see at a glance that three of them are theirs and the rest are not.
  */
 import type { OnboardingState, OnboardingStep } from '@twentyfour/api'
 
@@ -20,6 +24,7 @@ interface StepSpec {
   description: string
   hour: 0 | 4 | 12 | 24
   status: OnboardingStep['status']
+  owner: OnboardingStep['owner']
 }
 
 const STEPS: StepSpec[] = [
@@ -29,6 +34,7 @@ const STEPS: StepSpec[] = [
     description: 'What you sell, when you open, and which tax rates apply.',
     hour: 0,
     status: 'done',
+    owner: 'merchant',
   },
   {
     id: 'plan',
@@ -36,6 +42,7 @@ const STEPS: StepSpec[] = [
     description: 'Your tier and everything it switches on.',
     hour: 0,
     status: 'done',
+    owner: 'merchant',
   },
   {
     id: 'entitlement',
@@ -43,6 +50,7 @@ const STEPS: StepSpec[] = [
     description: 'Your modules are enabled and your dashboard is built from them.',
     hour: 4,
     status: 'done',
+    owner: 'platform',
   },
   {
     id: 'catalog_seed',
@@ -50,6 +58,7 @@ const STEPS: StepSpec[] = [
     description: 'Seeded from your trade’s template. Edit anything that is not yours.',
     hour: 4,
     status: 'done',
+    owner: 'platform',
   },
   {
     id: 'tax_setup',
@@ -57,6 +66,7 @@ const STEPS: StepSpec[] = [
     description: 'Rates and categories for your trade, applied to your prices.',
     hour: 4,
     status: 'done',
+    owner: 'platform',
   },
   {
     id: 'staff_accounts',
@@ -64,6 +74,7 @@ const STEPS: StepSpec[] = [
     description: 'Logins and roles for everyone on your team.',
     hour: 4,
     status: 'in_progress',
+    owner: 'merchant',
   },
   {
     id: 'processor_account',
@@ -72,6 +83,7 @@ const STEPS: StepSpec[] = [
       'Your processor is verifying the business. This one is on their clock, so a specialist is watching it for you.',
     hour: 12,
     status: 'awaiting_specialist',
+    owner: 'specialist',
   },
   {
     id: 'hardware',
@@ -79,6 +91,7 @@ const STEPS: StepSpec[] = [
     description: 'Booked with your specialist. Someone needs to be holding the hardware.',
     hour: 12,
     status: 'awaiting_specialist',
+    owner: 'specialist',
   },
   {
     id: 'data_import',
@@ -86,6 +99,7 @@ const STEPS: StepSpec[] = [
     description: 'Products, customers and past bookings brought across and reconciled.',
     hour: 12,
     status: 'pending',
+    owner: 'merchant',
   },
   {
     id: 'subscription',
@@ -93,6 +107,7 @@ const STEPS: StepSpec[] = [
     description: 'Billing starts when you go live, not before.',
     hour: 12,
     status: 'pending',
+    owner: 'platform',
   },
   {
     id: 'training',
@@ -100,6 +115,7 @@ const STEPS: StepSpec[] = [
     description: 'Forty minutes with your specialist, on your own data.',
     hour: 24,
     status: 'pending',
+    owner: 'specialist',
   },
   {
     id: 'first_sale',
@@ -107,6 +123,7 @@ const STEPS: StepSpec[] = [
     description: 'The timer stops here.',
     hour: 24,
     status: 'pending',
+    owner: 'merchant',
   },
 ]
 
@@ -122,10 +139,31 @@ export function buildOnboarding(startedAt = new Date(Date.now() - 5 * 60 * 60 * 
       description: step.description,
       hour: step.hour,
       status: step.status,
+      owner: step.owner,
       completedAt:
         step.status === 'done'
           ? new Date(startedAt.getTime() + step.hour * 60 * 60 * 1000).toISOString()
           : null,
     })),
+  }
+}
+
+/**
+ * A freshly signed-up tenant, whose clock starts now.
+ *
+ * Only the two intake steps are done, because those are what the signup form
+ * itself just recorded. Everything after them is genuinely still to happen.
+ */
+export function freshOnboarding(startedAt = new Date()): OnboardingState {
+  const state = buildOnboarding(startedAt)
+  return {
+    ...state,
+    steps: state.steps.map((step) =>
+      step.hour === 0
+        ? { ...step, status: 'done' as const, completedAt: startedAt.toISOString() }
+        : step.status === 'awaiting_specialist'
+          ? step
+          : { ...step, status: 'pending' as const, completedAt: null },
+    ),
   }
 }

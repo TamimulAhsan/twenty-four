@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  catalog, orders, queryKeys, tables as tablesApi,
-  type CatalogItem, type Order, type ParkOrderInput, type TenderInput,
+  catalog, idempotencyKey, orders, queryKeys, tables as tablesApi,
+  type CatalogItem, type Order, type ParkOrderInput, type PaymentPending, type TenderInput,
 } from '@twentyfour/api'
 import { useTerms } from '@twentyfour/terms'
 import { serialiseMoney } from '@twentyfour/money'
@@ -13,6 +13,8 @@ import {
 import { cartLinesFromOrder, useCart } from './cart'
 import { TenderDialog } from './TenderDialog'
 import { ReceiptDialog } from './ReceiptDialog'
+import { AwaitingPaymentDialog } from './AwaitingPaymentDialog'
+import { PaymentNotCompleted, runCheckout } from './checkout'
 
 /**
  * The till.
@@ -49,6 +51,22 @@ export function Till({
   /** The table this sale belongs to. Set before it is parked as well as after,
    *  so a tab started from the floor keeps its table if it is parked later. */
   const [tableId, setTableId] = useState<string | null>(null)
+  /** Set while the customer is away paying. */
+  const [awaiting, setAwaiting] = useState<PaymentPending | null>(null)
+  /** The browser refused the payment tab, so the dialog has to offer the link. */
+  const [popupBlocked, setPopupBlocked] = useState(false)
+
+  /**
+   * The key that makes this one checkout rather than several.
+   *
+   * Held in a ref, not in state, because every attempt at the same sale must
+   * send the same one and a re-render must not mint a new one. A fresh key per
+   * attempt would charge per attempt. Cleared once the sale is placed, so the
+   * next customer starts a checkout of their own.
+   */
+  const checkoutKey = useRef<string | null>(null)
+  /** Lets the cancel button stop the wait. */
+  const waiting = useRef<AbortController | null>(null)
 
   const { load: loadCart, clear: clearCart } = cart
 
@@ -148,6 +166,30 @@ export function Till({
     })
   }, [items.data, categoryId, search])
 
+  /** Gives back anything taken for a checkout the till is giving up on. */
+  const releaseCheckout = (checkoutId: string): void => {
+    void orders.abandonCheckout(checkoutId).catch(() => {
+      // Said out loud rather than swallowed. Money taken for a sale that did
+      // not happen is the one failure here a merchant has to know about.
+      toast.show({
+        tone: 'danger',
+        title: 'That payment may not have been released',
+        description: 'Check it under Payments before the customer leaves.',
+      })
+    })
+  }
+
+  const cancelWaiting = (): void => {
+    const pending = awaiting
+    waiting.current?.abort()
+    setAwaiting(null)
+    // A new key, because the old one now names a payment that was called off.
+    // Reusing it would ask for a sale against a cancelled payment and be
+    // refused, which reads to a cashier as a till that has jammed.
+    checkoutKey.current = null
+    if (pending) releaseCheckout(pending.checkoutId)
+  }
+
   const place = useMutation({
     // A tab settles as the sale it already is: same id, same number. Placing it
     // afresh would leave the parked one behind and hold its stock forever.
@@ -155,18 +197,42 @@ export function Till({
     // What is on screen is saved first. A tab is resumed precisely so more can
     // go on it, and settling the lines the server still remembers would charge
     // for the first round and quietly throw the second away.
+    //
+    // A card or a wallet answers with somewhere to send the customer rather
+    // than with a sale. The till opens it, waits, and asks again under the same
+    // key: the payment is then found rather than taken twice.
     mutationFn: async (tenders: TenderInput[]) => {
-      if (!parkedId) {
-        return orders.place({
-          lines: lineInput(),
-          tenders,
-          ...(cart.note ? { note: cart.note } : {}),
-        })
+      const key = (checkoutKey.current ??= idempotencyKey())
+      const controller = new AbortController()
+      waiting.current = controller
+
+      const attempt = async () => {
+        if (!parkedId) {
+          return orders.place(
+            { lines: lineInput(), tenders, ...(cart.note ? { note: cart.note } : {}) },
+            key,
+          )
+        }
+        await orders.updateParked(parkedId, parkInput())
+        return orders.settleParked(parkedId, tenders, key)
       }
-      await orders.updateParked(parkedId, parkInput())
-      return orders.settleParked(parkedId, tenders)
+
+      try {
+        return await runCheckout(attempt, {
+          signal: controller.signal,
+          onAwaiting: (pending, tab) => {
+            setAwaiting(pending)
+            setPopupBlocked(tab === null)
+          },
+        })
+      } finally {
+        waiting.current = null
+        setAwaiting(null)
+      }
     },
     onSuccess: (order) => {
+      // The checkout is over, so the next one is a different checkout.
+      checkoutKey.current = null
       leaveTab()
       setTendering(false)
       setCartOpen(false)
@@ -176,6 +242,20 @@ export function Till({
       void queryClient.invalidateQueries()
     },
     onError: (error) => {
+      // Cancelling is not a failure and the dialog already said what happened.
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (error instanceof PaymentNotCompleted) {
+        toast.show({
+          tone: 'warning',
+          title: 'Nobody completed that payment',
+          description: error.message,
+        })
+        return
+      }
+      // The key is dropped so the cashier's next attempt is a clean one. A
+      // refusal leaves nothing taken: whatever was is given back before the
+      // error reaches here.
+      checkoutKey.current = null
       toast.show({ tone: 'danger', title: 'That sale did not go through', description: error.message })
     },
   })
@@ -305,6 +385,12 @@ export function Till({
         pending={place.isPending}
         title={parkedId ? 'Settle this tab' : 'Take payment'}
         confirmLabel={parkedId ? 'Settle the tab' : 'Complete sale'}
+      />
+
+      <AwaitingPaymentDialog
+        pending={awaiting}
+        blocked={popupBlocked}
+        onCancel={cancelWaiting}
       />
 
       <ReceiptDialog order={receipt} onClose={() => setReceipt(null)} />

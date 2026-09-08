@@ -1,3 +1,6 @@
+# where a locally-run process keeps its pidfile and log
+.run/
+
 # compiled binaries
 /core
 services/*/core

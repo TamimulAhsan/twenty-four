@@ -86,6 +86,23 @@ export type OnboardingStepStatus =
   /** Cannot complete unattended: KYC, OAuth consent, hardware pairing. */
   | 'awaiting_specialist'
 
+/**
+ * Who the step is waiting on.
+ *
+ * Orthogonal to status, which is what state the step is in. A merchant-owned
+ * step is still pending, in progress or done like any other; the difference is
+ * that nobody else is going to finish it. Without this a checklist of twelve
+ * steps cannot answer the only question the merchant actually has, which is
+ * which of them are theirs.
+ */
+export type OnboardingStepOwner =
+  /** Runs itself. The merchant watches it happen. */
+  | 'platform'
+  /** Needs a TwentyFour specialist: KYC, hardware, training. */
+  | 'specialist'
+  /** Needs the merchant. Nothing else moves it. */
+  | 'merchant'
+
 export interface OnboardingStep {
   readonly id: string
   readonly title: string
@@ -93,6 +110,7 @@ export interface OnboardingStep {
   /** Which of the 0 / 4 / 12 / 24 hour stages this belongs to. */
   readonly hour: 0 | 4 | 12 | 24
   readonly status: OnboardingStepStatus
+  readonly owner: OnboardingStepOwner
   readonly completedAt: string | null
 }
 
@@ -272,7 +290,15 @@ export interface StockLevel {
   readonly lowStockThreshold: number | null
 }
 
-export type PaymentStatus = 'pending' | 'authorised' | 'captured' | 'refunded' | 'failed'
+export type PaymentStatus =
+  | 'pending'
+  | 'authorised'
+  | 'captured'
+  | 'refunded'
+  | 'failed'
+  /** Never completed, and called off rather than refunded: money that did not
+   *  move is not money given back. */
+  | 'cancelled'
 
 export interface Payment {
   readonly id: string
@@ -284,6 +310,34 @@ export interface Payment {
   readonly createdAt: string
   /** Whatever this market's provider returned. Never parsed for meaning. */
   readonly providerReference: string | null
+}
+
+/**
+ * A checkout that cannot finish inside the software.
+ *
+ * The customer has to complete the payment somewhere the till cannot reach for
+ * them: a hosted page, a bank's app, a terminal's own screen. The till sends
+ * them to `url`, waits for `paymentId` to settle, and then asks for the sale
+ * again under the same idempotency key.
+ *
+ * Asking again is safe by design. The payment is found rather than created a
+ * second time, which is the whole reason the key has to be held on to.
+ */
+export interface PaymentPending {
+  readonly status: 'awaiting_payment'
+  /** Identifies the attempt, for giving the money back if it is abandoned. */
+  readonly checkoutId: string
+  readonly paymentId: string
+  readonly method: TenderMethod
+  readonly url: string
+  readonly amount: Money
+}
+
+/** A sale, or the thing standing between the till and one. */
+export type CheckoutResult = Order | PaymentPending
+
+export function isAwaitingPayment(result: CheckoutResult): result is PaymentPending {
+  return (result as PaymentPending).status === 'awaiting_payment'
 }
 
 export type DocumentKind = 'invoice' | 'receipt' | 'credit_note'

@@ -81,7 +81,8 @@ function tierLabel(nodes: GNode[]): string {
     if (k === 'service') return 'services'
     const roles = new Set(nodes.map((n) => n.role))
     if (roles.size === 1 && roles.has('datastore')) return 'datastore pods'
-    if (roles.size === 1 && roles.has('app')) return 'application pods'
+    if (roles.size === 1 && roles.has('frontend')) return 'frontend pods'
+    if (roles.size === 1 && roles.has('app')) return 'service pods'
     return 'pods'
   }
   return 'mixed'

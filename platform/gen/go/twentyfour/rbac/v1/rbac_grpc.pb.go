@@ -38,7 +38,7 @@ const (
 //
 // RBACService answers one question: may this subject perform this action?
 //
-// It deliberately knows nothing about credentials, passwords or sessions —
+// It deliberately knows nothing about credentials, passwords or sessions:
 // that is Auth's job. It receives a subject ID that Auth has already
 // authenticated, and decides what that subject is permitted to do.
 //
@@ -186,7 +186,7 @@ func (c *rBACServiceClient) ListPermissions(ctx context.Context, in *ListPermiss
 //
 // RBACService answers one question: may this subject perform this action?
 //
-// It deliberately knows nothing about credentials, passwords or sessions —
+// It deliberately knows nothing about credentials, passwords or sessions:
 // that is Auth's job. It receives a subject ID that Auth has already
 // authenticated, and decides what that subject is permitted to do.
 //

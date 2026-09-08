@@ -16,8 +16,10 @@ import type {
   Bootstrap,
   CatalogItem,
   FiscalDocument,
+  CheckoutResult,
   Order,
   OrderLine,
+  PaymentPending,
   Payment,
   Subscription,
   Takings,
@@ -83,6 +85,22 @@ export function parseOrder(value: unknown): Order {
     tax: parseMoney(raw['tax']),
     discount: optionalMoney(raw['discount']),
     refunded: parseMoney(raw['refunded']),
+  }
+}
+
+/**
+ * Reads either half of a checkout's answer.
+ *
+ * The discriminant is in the body rather than the status code, because a client
+ * that has to remember which codes mean what is a client that will one day
+ * print a receipt for a sale that has not happened.
+ */
+export function parseCheckoutResult(value: unknown): CheckoutResult {
+  const raw = asRecord(value, 'checkout')
+  if (raw['status'] !== 'awaiting_payment') return parseOrder(raw)
+  return {
+    ...(raw as unknown as PaymentPending),
+    amount: parseMoney(raw['amount']),
   }
 }
 

@@ -6,7 +6,7 @@ import "google/protobuf/timestamp.proto";
 
 // RBACService answers one question: may this subject perform this action?
 //
-// It deliberately knows nothing about credentials, passwords or sessions —
+// It deliberately knows nothing about credentials, passwords or sessions:
 // that is Auth's job. It receives a subject ID that Auth has already
 // authenticated, and decides what that subject is permitted to do.
 //
@@ -95,7 +95,9 @@ message AssignRoleRequest {
   // Who performed the assignment, for the audit trail.
   string actor_id = 4;
 }
-message AssignRoleResponse { RoleBinding binding = 1; }
+message AssignRoleResponse {
+  RoleBinding binding = 1;
+}
 
 message RoleBinding {
   string id = 1;
@@ -111,7 +113,9 @@ message RevokeRoleRequest {
   string role_key = 3;
   string actor_id = 4;
 }
-message RevokeRoleResponse { bool revoked = 1; }
+message RevokeRoleResponse {
+  bool revoked = 1;
+}
 
 message GetSubjectRolesRequest {
   string tenant_id = 1;
@@ -128,34 +132,48 @@ message ListRolesRequest {
   Plane plane = 2;
   bool include_system = 3;
 }
-message ListRolesResponse { repeated Role roles = 1; }
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
 
 message GetRoleRequest {
   string tenant_id = 1;
   string role_key = 2;
 }
-message GetRoleResponse { Role role = 1; }
+message GetRoleResponse {
+  Role role = 1;
+}
 
 message CreateRoleRequest {
   string tenant_id = 1;
   Role role = 2;
   string actor_id = 3;
 }
-message CreateRoleResponse { Role role = 1; }
+message CreateRoleResponse {
+  Role role = 1;
+}
 
 message UpdateRoleRequest {
   string tenant_id = 1;
   Role role = 2;
   string actor_id = 3;
 }
-message UpdateRoleResponse { Role role = 1; }
+message UpdateRoleResponse {
+  Role role = 1;
+}
 
 message DeleteRoleRequest {
   string tenant_id = 1;
   string role_key = 2;
   string actor_id = 3;
 }
-message DeleteRoleResponse { bool deleted = 1; }
+message DeleteRoleResponse {
+  bool deleted = 1;
+}
 
-message ListPermissionsRequest { string domain = 1; }
-message ListPermissionsResponse { repeated Permission permissions = 1; }
+message ListPermissionsRequest {
+  string domain = 1;
+}
+message ListPermissionsResponse {
+  repeated Permission permissions = 1;
+}

@@ -10,7 +10,22 @@ import { money } from '@twentyfour/money'
 import { MockError, availableTenants, resetStore, storeFor } from './store'
 import { currentTenantId, isSignedIn, setCurrentTenantId, setSignedIn } from './session'
 import { wire } from './wire'
-import { buildOnboarding } from './onboarding'
+import { fixtureForIndustry, readSignup } from './signup'
+import { adminStore } from './admin/store'
+
+/**
+ * Where the admin console lives.
+ *
+ * Its own origin, always. In production that is a sibling host; in development
+ * it is a second dev server on another port, which is why this is read from
+ * the environment rather than being a constant.
+ */
+function adminOrigin(): string {
+  const configured = import.meta.env['VITE_ADMIN_URL']
+  return typeof configured === 'string' && configured.length > 0
+    ? configured.replace(/\/$/, '')
+    : 'http://localhost:5184'
+}
 
 const LATENCY_MS = 180
 
@@ -26,7 +41,7 @@ function ok(body: unknown, status = 200): Response {
 function fail(error: unknown): Response {
   if (error instanceof MockError) {
     return HttpResponse.json(
-      { code: error.code, message: error.message },
+      { code: error.code, message: error.message, fieldErrors: error.fieldErrors },
       { status: error.status },
     )
   }
@@ -80,30 +95,46 @@ export const handlers: HttpHandler[] = [
     if (body.password === 'wrong') {
       return fail(new MockError(401, 'invalid_credentials', 'That email and password do not match.'))
     }
+    // One form, two planes. The address decides which, exactly as Auth does:
+    // it is unique across both, so finding it is the whole resolution.
     const matched = availableTenants().find(
       (tenant) => storeFor(tenant.id).session.email === body.email,
     )
-    if (matched) setCurrentTenantId(matched.id)
-    setSignedIn(true)
-    return ok(store().session)
+    if (matched) {
+      setCurrentTenantId(matched.id)
+      setSignedIn(true)
+      return ok({ session: store().session, redirect: '/' })
+    }
+
+    // A specialist. No session is opened on this origin and no token is
+    // returned here, so there is nothing the merchant gateway could set as a
+    // cookie even by mistake. The browser carries a one-time code to the admin
+    // gateway, which is the only thing that can open a session on that host.
+    const code = adminStore().issueHandoff(body.email)
+    if (code) {
+      return ok({ redirect: `${adminOrigin()}/session?code=${encodeURIComponent(code)}` })
+    }
+
+    return fail(new MockError(401, 'invalid_credentials', 'That email and password do not match.'))
   }),
 
   http.post('/api/auth/signup', async ({ request }) => {
     await delay()
-    const body = (await request.json()) as { industry?: string }
-    // A fresh signup starts on the fixture whose trade matches, so the
-    // onboarding run ends somewhere that looks like the business described.
-    const industry = body.industry ?? ''
-    const target = ['restaurant', 'cafe', 'bakery', 'pizzeria', 'bar_pub', 'food_truck', 'catering'].includes(industry)
-      ? 'cafe'
-      : ['hair_salon', 'barbershop', 'nail_salon', 'beauty_salon', 'spa', 'massage'].includes(industry)
-        ? 'salon'
-        : 'shop'
-    setCurrentTenantId(target)
-    resetStore(target)
-    storeFor(target).onboarding = buildOnboarding()
-    setSignedIn(true)
-    return ok(storeFor(target).session)
+    try {
+      const input = readSignup(await request.json())
+      // A fresh signup starts on the fixture whose trade family matches, so the
+      // dashboard the merchant lands on looks like the business they described
+      // rather than an empty one. Everything they typed is then written over
+      // the fixture, including the tier and the trade.
+      const target = fixtureForIndustry(input.industry)
+      setCurrentTenantId(target)
+      const store = resetStore(target)
+      const session = store.applySignup(input)
+      setSignedIn(true)
+      return ok(session)
+    } catch (error) {
+      return fail(error)
+    }
   }),
 
   http.post('/api/auth/logout', async () => {
@@ -128,7 +159,7 @@ export const handlers: HttpHandler[] = [
         profile: current.profile,
         entitlement: current.entitlement,
         termOverrides: current.termOverrides,
-        onboarding: current.onboarding,
+        onboarding: current.advanceOnboarding(),
       }
     }),
   ),
@@ -136,23 +167,21 @@ export const handlers: HttpHandler[] = [
   http.get('/api/onboarding', async () =>
     handle(() => {
       requireSession()
-      return store().onboarding ?? buildOnboarding()
+      const current = store()
+      // A tenant that went live months ago has no run, and saying so is the
+      // point: a fallback here would show every merchant a setup checklist
+      // forever.
+      if (!current.onboarding) {
+        throw new MockError(404, 'not_found', 'This account is already live.')
+      }
+      return current.advanceOnboarding()
     }),
   ),
 
   http.post('/api/onboarding/steps/:stepId/retry', async ({ params }) =>
     handle(() => {
       requireSession()
-      const current = store()
-      const state = current.onboarding
-      if (!state) throw new MockError(404, 'not_found', 'Nothing to retry.')
-      current.onboarding = {
-        ...state,
-        steps: state.steps.map((step) =>
-          step.id === params['stepId'] ? { ...step, status: 'in_progress' as const } : step,
-        ),
-      }
-      return current.onboarding
+      return store().retryOnboardingStep(String(params['stepId']))
     }),
   ),
 
@@ -338,6 +367,19 @@ export const handlers: HttpHandler[] = [
     try {
       requireModule('pos_orders')
       return ok(store().placeOrder((await request.json()) as never), 201)
+    } catch (error) {
+      return fail(error)
+    }
+  }),
+
+  /* Nothing to release: this mock has no provider that can hold a payment, so
+     every sale it takes completes on the spot. The route exists so the till's
+     cancel path is exercised here rather than only against a real gateway. */
+  http.post('/api/orders/abandon', async () => {
+    await delay()
+    try {
+      requireModule('pos_orders')
+      return ok({ released: 0 })
     } catch (error) {
       return fail(error)
     }

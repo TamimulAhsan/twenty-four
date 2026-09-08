@@ -2,12 +2,18 @@ syntax = "proto3";
 
 package twentyfour.catalog.v1;
 
+import "google/protobuf/timestamp.proto";
 import "twentyfour/common/v1/money.proto";
 
 // Catalog is the single source of truth for what a tenant sells and what it
 // costs. POS, Bookings, Inventory and the Website Builder all read from here;
-// none of them keeps its own price list. That is the whole point — the moment
+// none of them keeps its own price list. That is the whole point: the moment
 // two services hold prices, the numbers stop matching.
+//
+// No request carries a tenant. The gateway resolved it and put it on the
+// request context, and a tenant a client can name is a tenant a client can
+// change. Leaving the field out is what makes that structural rather than a
+// rule someone has to remember.
 service CatalogService {
   rpc GetItem(GetItemRequest) returns (GetItemResponse);
   // Priced in bulk so a POS cart resolves in one call, not one per line.
@@ -15,7 +21,14 @@ service CatalogService {
   rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
   rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
   rpc UpdateItem(UpdateItemRequest) returns (UpdateItemResponse);
+  // Archives rather than deletes. A sold item has to stay resolvable from
+  // every order that ever referenced it.
   rpc ArchiveItem(ArchiveItemRequest) returns (ArchiveItemResponse);
+
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesResponse);
+  rpc CreateCategory(CreateCategoryRequest) returns (CreateCategoryResponse);
+  rpc UpdateCategory(UpdateCategoryRequest) returns (UpdateCategoryResponse);
+  rpc ArchiveCategory(ArchiveCategoryRequest) returns (ArchiveCategoryResponse);
 }
 
 // What kind of thing this is. Deliberately not named for a trade: a hotel Room,
@@ -31,7 +44,6 @@ enum ItemKind {
 
 message Item {
   string id = 1;
-  string tenant_id = 2;
   string sku = 3;
   string name = 4;
   string description = 5;
@@ -43,21 +55,49 @@ message Item {
   twentyfour.common.v1.TaxRate tax_rate = 8;
   bool tax_included = 9;
 
-  string category = 10;
+  // Empty means uncategorised, which is a legitimate state and not an error.
+  string category_id = 10;
   bool track_stock = 11;
   bool active = 12;
   // For services: how long it occupies a resource. Zero for products.
   int32 duration_minutes = 13;
+
+  // What the item costs the merchant, per unit.
+  //
+  // Unset means not recorded, which is not the same as zero: an item with no
+  // recorded cost has no margin, rather than a margin of one hundred percent,
+  // and every report that touches margin has to be able to tell those apart.
+  twentyfour.common.v1.Money cost_price = 14;
+
+  // Till button colour, as the merchant chose it. Presentation only.
+  string colour = 15;
+
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  // Set once archived. An archived item is invisible to the till and still
+  // resolvable from every order that referenced it.
+  google.protobuf.Timestamp archived_at = 18;
+
+  reserved 2;
+  reserved "tenant_id";
+}
+
+message Category {
+  string id = 1;
+  string name = 2;
+  // Display order on the till. Ties break on name.
+  int32 position = 3;
+  int32 item_count = 4;
 }
 
 message GetItemRequest {
-  string tenant_id = 1;
-  string id = 2;
+  string id = 1;
 }
-message GetItemResponse { Item item = 1; }
+message GetItemResponse {
+  Item item = 1;
+}
 
 message PriceItemsRequest {
-  string tenant_id = 1;
   repeated PriceLineRequest lines = 2;
 }
 message PriceLineRequest {
@@ -78,8 +118,8 @@ message PricedLine {
   int64 discount_minor = 6;
 
   // Derived, and returned so every caller agrees on the arithmetic.
-  twentyfour.common.v1.Money gross = 7;  // what the customer pays for this line
-  twentyfour.common.v1.Money net = 8;    // gross minus tax
+  twentyfour.common.v1.Money gross = 7; // what the customer pays for this line
+  twentyfour.common.v1.Money net = 8; // gross minus tax
   twentyfour.common.v1.Money tax = 9;
 }
 
@@ -91,11 +131,17 @@ message PriceItemsResponse {
 }
 
 message ListItemsRequest {
-  string tenant_id = 1;
-  string category = 2;
+  string category_id = 2;
+  // Archived items are excluded unless asked for.
   bool include_archived = 3;
   int32 page_size = 4;
   string page_token = 5;
+  // Unspecified returns both kinds.
+  ItemKind kind = 6;
+  // Case-insensitive substring of name or SKU.
+  string search = 7;
+  // Inactive items are stocked but not currently sold. Excluded unless asked.
+  bool include_inactive = 8;
 }
 message ListItemsResponse {
   repeated Item items = 1;
@@ -103,19 +149,56 @@ message ListItemsResponse {
 }
 
 message CreateItemRequest {
-  string tenant_id = 1;
   Item item = 2;
 }
-message CreateItemResponse { Item item = 1; }
+message CreateItemResponse {
+  Item item = 1;
+}
 
 message UpdateItemRequest {
-  string tenant_id = 1;
   Item item = 2;
+  // Which fields to change. Empty replaces every settable field, which is what
+  // a form that submits the whole object wants; naming fields is what a
+  // partial edit wants. Without this a PATCH of one field would blank the rest.
+  repeated string update_mask = 3;
 }
-message UpdateItemResponse { Item item = 1; }
+message UpdateItemResponse {
+  Item item = 1;
+}
 
 message ArchiveItemRequest {
-  string tenant_id = 1;
   string id = 2;
 }
-message ArchiveItemResponse { Item item = 1; }
+message ArchiveItemResponse {
+  Item item = 1;
+}
+
+message ListCategoriesRequest {
+  bool include_archived = 2;
+}
+message ListCategoriesResponse {
+  repeated Category categories = 1;
+}
+
+message CreateCategoryRequest {
+  Category category = 2;
+}
+message CreateCategoryResponse {
+  Category category = 1;
+}
+
+message UpdateCategoryRequest {
+  Category category = 2;
+}
+message UpdateCategoryResponse {
+  Category category = 1;
+}
+
+// Archiving a category leaves its items in place and uncategorised, rather
+// than taking a shelf's worth of stock off the till with it.
+message ArchiveCategoryRequest {
+  string id = 2;
+}
+message ArchiveCategoryResponse {
+  int32 items_uncategorised = 1;
+}

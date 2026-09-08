@@ -27,7 +27,7 @@ spec:
             - |
               set -e
               until pg_isready -q; do sleep 2; done
-              for db in rbac auth catalog; do
+              for db in rbac auth catalog inventory staff payments pos tenant provisioning; do
                 # CREATE DATABASE has no IF NOT EXISTS, so ask first.
                 if ! psql -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1; then
                   psql -c "CREATE DATABASE \"$db\""

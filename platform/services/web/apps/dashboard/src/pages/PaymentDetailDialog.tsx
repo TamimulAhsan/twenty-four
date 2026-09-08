@@ -13,6 +13,9 @@ const TONE: Record<Payment['status'], BadgeTone> = {
   captured: 'success',
   refunded: 'neutral',
   failed: 'danger',
+  // Never completed rather than declined. Neutral because nothing went wrong:
+  // a customer changed their mind, and no money moved.
+  cancelled: 'neutral',
 }
 
 /**

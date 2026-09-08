@@ -13,6 +13,7 @@ import {
   parseDayClose,
   parseDocument,
   parseList,
+  parseCheckoutResult,
   parseOrder,
   parsePayment,
   parseSubscription,
@@ -32,6 +33,7 @@ import type {
   Bootstrap,
   CatalogCategory,
   CatalogItem,
+  CheckoutResult,
   FiscalDocument,
   ItemKind,
   OnboardingState,
@@ -54,9 +56,20 @@ export interface Credentials {
   password: string
 }
 
+/**
+ * The shortest password the gateway will accept.
+ *
+ * Stated here rather than in the form, because the form is not the control and
+ * the mock enforces the same number. Two copies of this rule drift, and the
+ * one that drifts is always the one the merchant sees.
+ */
+export const MIN_PASSWORD_LENGTH = 10
+
 export interface SignupInput {
   email: string
   password: string
+  /** The owner's own name. Signs their sales, and seeds their CRM member. */
+  displayName: string
   businessName: string
   /** Business type, chosen from the selector. Decides everything trade-specific. */
   industry: string
@@ -64,9 +77,27 @@ export interface SignupInput {
   tier: TierId
 }
 
+/**
+ * What signing in answers.
+ *
+ * One form serves both planes, so the client does not decide where somebody
+ * goes: Auth resolves the account from the address and the gateway answers with
+ * a destination. The form follows it and never has to know that two planes
+ * exist.
+ *
+ * session is absent for a specialist. They have no session on this origin and
+ * never will: their cookie is set by the admin gateway, on its own host, when
+ * it redeems the one-time code carried in the redirect.
+ */
+export interface LoginResult {
+  readonly session?: Session
+  readonly redirect: string
+}
+
 export const auth = {
   session: () => request<Session | null>('/auth/session'),
-  login: (input: Credentials) => request<Session>('/auth/login', { method: 'POST', body: input }),
+  login: (input: Credentials) =>
+    request<LoginResult>('/auth/login', { method: 'POST', body: input }),
   signup: (input: SignupInput) => request<Session>('/auth/signup', { method: 'POST', body: input }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   requestPasswordReset: (email: string) =>
@@ -194,14 +225,38 @@ export const orders = {
   detail: (id: string) =>
     request<unknown>(`/orders/${encodeURIComponent(id)}`).then(parseOrder) as Promise<Order>,
 
-  /** Idempotent by contract. A retried checkout without a key is a double
-   *  charge, so the key is generated here rather than left to the caller. */
-  place: (input: PlaceOrderInput) =>
+  /**
+   * Rings up a sale and takes the money for it.
+   *
+   * Answers with the sale, or with what is standing between the till and one:
+   * a payment the customer has to complete somewhere else. In that case the
+   * till sends them there and calls this again with the same `key` once the
+   * payment settles.
+   *
+   * The key is the caller's precisely so it can be held across those attempts.
+   * A retry that generated a fresh one would be a second checkout, and a second
+   * checkout is a second charge. It defaults to a new key for the ordinary case
+   * of a sale asked for once.
+   */
+  place: (input: PlaceOrderInput, key: string = idempotencyKey()) =>
     request<unknown>('/orders', {
       method: 'POST',
       body: input,
-      idempotencyKey: idempotencyKey(),
-    }).then(parseOrder) as Promise<Order>,
+      idempotencyKey: key,
+    }).then(parseCheckoutResult) as Promise<CheckoutResult>,
+
+  /**
+   * Gives back the money of a checkout nobody finished.
+   *
+   * There is no sale to void: a sale is only written once its money is in. What
+   * exists is a payment against a checkout that will now never become one, and
+   * leaving it there is leaving a customer out of pocket.
+   */
+  abandonCheckout: (checkoutId: string, reason?: string) =>
+    request<{ released: number }>('/orders/abandon', {
+      method: 'POST',
+      body: { checkoutId, ...(reason ? { reason } : {}) },
+    }),
 
   void: (id: string, reason: string) =>
     request<unknown>(`/orders/${encodeURIComponent(id)}/void`, {
@@ -252,12 +307,12 @@ export const orders = {
 
   /** Takes the money on a parked sale. It becomes the same sale it always was:
    *  same id, same number, stock moving from reserved to gone. */
-  settleParked: (id: string, tenders: TenderInput[]) =>
+  settleParked: (id: string, tenders: TenderInput[], key: string = idempotencyKey()) =>
     request<unknown>(`/orders/parked/${encodeURIComponent(id)}/settle`, {
       method: 'POST',
       body: { tenders },
-      idempotencyKey: idempotencyKey(),
-    }).then(parseOrder) as Promise<Order>,
+      idempotencyKey: key,
+    }).then(parseCheckoutResult) as Promise<CheckoutResult>,
 
   /* ----------------------------------------------------------- day close */
 

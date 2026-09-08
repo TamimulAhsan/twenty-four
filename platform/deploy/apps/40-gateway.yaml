@@ -21,6 +21,13 @@ spec:
             - "-addr=:8081"
             - "-auth=auth.twentyfour.svc.cluster.local:9102"
             - "-rbac=rbac.twentyfour.svc.cluster.local:9101"
+            - "-catalog=catalog.twentyfour.svc.cluster.local:9103"
+            - "-inventory=inventory.twentyfour.svc.cluster.local:9104"
+            - "-staff=staff.twentyfour.svc.cluster.local:9105"
+            - "-payments=payments.twentyfour.svc.cluster.local:9106"
+            - "-pos=pos.twentyfour.svc.cluster.local:9108"
+            - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
+            - "-provisioning=provisioning.twentyfour.svc.cluster.local:9110"
             # Local development is plain HTTP on a single host, so the cookie is
             # host-only and not Secure. Both must change before this is exposed
             # anywhere real: a session cookie sent over HTTP is a session anyone
@@ -64,5 +71,8 @@ spec:
       services:
         - name: gateway
           port: 80
-      middlewares:
-        - name: web-unavailable
+      # No errors middleware here, deliberately. It exists to serve the
+      # "temporarily unavailable" HTML page when a frontend is scaled to zero.
+      # On /api it would replace every genuine 5xx with that page, so a client
+      # expecting JSON gets HTML and cannot read the error it was given. A
+      # payment that nobody approved came back as "the service is down".

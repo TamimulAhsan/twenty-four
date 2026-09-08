@@ -2,10 +2,19 @@ go 1.26.0
 
 use (
 	./gen
+	./packages
+	./services/admin
+	./services/auth
+	./services/catalog
 	./services/core
 	./services/dashboard
-	./services/catalog
-	./services/rbac
-	./services/auth
 	./services/gateway
+	./services/inventory
+	./services/payments
+	./services/pos
+	./services/provisioning
+	./services/rbac
+	./services/relay
+	./services/staff
+	./services/tenant
 )

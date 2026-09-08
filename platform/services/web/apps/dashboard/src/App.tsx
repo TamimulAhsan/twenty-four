@@ -18,6 +18,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { Placeholder } from './pages/Placeholder'
 import { NotFound } from './pages/NotFound'
 import { CatalogMoved } from './pages/CatalogMoved'
+import { OnboardingPage } from './onboarding/OnboardingPage'
 
 export function App() {
   return (
@@ -28,6 +29,9 @@ export function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Overview />} />
+            {/* Not derived from entitlement, because it is not a module. Every
+                tenant passes through it once and no tenant buys it. */}
+            <Route path="onboarding" element={<OnboardingPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="customers" element={<CustomersPage />} />

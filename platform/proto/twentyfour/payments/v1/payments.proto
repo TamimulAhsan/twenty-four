@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package twentyfour.payments.v1;
 
-import "twentyfour/common/v1/money.proto";
 import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
 
 // PaymentsService is SWAPPED PER MARKET. Hungary and Bangladesh each deploy
 // their own implementation of this exact interface; nothing upstream knows
@@ -18,17 +18,30 @@ import "google/protobuf/timestamp.proto";
 //
 // POS asks for a payment and gets a result. It never learns that Bangladesh
 // answered with a mobile wallet and Hungary with a card.
+//
+// No request carries a tenant: the gateway resolved it onto the request
+// context. Note also what is NOT here. There is no Approve and no Decline,
+// because no real provider has such a call. The development provider's manual
+// approval screen is its own HTTP surface, outside this contract, exactly where
+// a hosted payment page would be.
 service PaymentsService {
   // Idempotent on idempotency_key: the same key always returns the same
   // payment, never a second charge. A till that loses its network mid-tender
   // and retries must not double-charge the customer.
   rpc CreateIntent(CreateIntentRequest) returns (CreateIntentResponse);
   rpc Capture(CaptureRequest) returns (CaptureResponse);
+  // Gives up on a payment that was never completed. A customer who walked
+  // away from the terminal leaves a payment nobody will ever approve, and it
+  // must not sit on the provider's books waiting forever.
+  rpc Cancel(CancelRequest) returns (CancelResponse);
   rpc Refund(RefundRequest) returns (RefundResponse);
   rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
   // Which tender types this deployment can actually accept. The till renders
   // its buttons from this rather than hardcoding "cash / card".
   rpc ListMethods(ListMethodsRequest) returns (ListMethodsResponse);
+  // Everything taken for one reference, or one day's takings. The till and the
+  // Payments page both read from here rather than keeping their own list.
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
 }
 
 enum PaymentStatus {
@@ -51,7 +64,7 @@ message PaymentMethod {
   string key = 1;
   // Human label for the till, already in the tenant's language.
   string label = 2;
-  // Whether completing this method needs something outside the software —
+  // Whether completing this method needs something outside the software:
   // a terminal to be tapped, an app to confirm. The till waits differently.
   bool requires_external_action = 3;
   // Whether the platform ever holds the funds. Cash never does.
@@ -59,7 +72,6 @@ message PaymentMethod {
 }
 
 message CreateIntentRequest {
-  string tenant_id = 1;
   // Caller-supplied and stable across retries. Required.
   string idempotency_key = 2;
   twentyfour.common.v1.Money amount = 3;
@@ -80,7 +92,7 @@ message CreateIntentResponse {
 
 message Payment {
   string id = 1;
-  string tenant_id = 2;
+  reserved 2; // was tenant_id, before the tenant moved to the request context
   string idempotency_key = 3;
   twentyfour.common.v1.Money amount = 4;
   twentyfour.common.v1.Money refunded_amount = 5;
@@ -89,7 +101,7 @@ message Payment {
   string reference_type = 8;
   string reference_id = 9;
   // This market's provider reference, for support and reconciliation.
-  // Opaque upstream — never parsed by a caller.
+  // Opaque upstream, never parsed by a caller.
   string provider_reference = 10;
   string failure_reason = 11;
   google.protobuf.Timestamp created_at = 12;
@@ -97,31 +109,57 @@ message Payment {
 }
 
 message CaptureRequest {
-  string tenant_id = 1;
   string payment_id = 2;
   // Omit to capture the full authorised amount.
   twentyfour.common.v1.Money amount = 3;
 }
-message CaptureResponse { Payment payment = 1; }
+message CaptureResponse {
+  Payment payment = 1;
+}
+
+message CancelRequest {
+  string payment_id = 1;
+  // Kept on the payment so support can see why it never completed.
+  string reason = 2;
+}
+message CancelResponse {
+  Payment payment = 1;
+}
 
 message RefundRequest {
-  string tenant_id = 1;
   string payment_id = 2;
   string idempotency_key = 3;
   // Omit to refund everything still refundable.
   twentyfour.common.v1.Money amount = 4;
   string reason = 5;
 }
-message RefundResponse { Payment payment = 1; }
+message RefundResponse {
+  Payment payment = 1;
+}
 
 message GetPaymentRequest {
-  string tenant_id = 1;
   // Look up by either. Supplying the idempotency key is how a caller recovers
   // after a crash without knowing whether its request landed.
   string payment_id = 2;
   string idempotency_key = 3;
 }
-message GetPaymentResponse { Payment payment = 1; }
+message GetPaymentResponse {
+  Payment payment = 1;
+}
 
-message ListMethodsRequest { string tenant_id = 1; }
-message ListMethodsResponse { repeated PaymentMethod methods = 1; }
+message ListMethodsRequest {}
+message ListMethodsResponse {
+  repeated PaymentMethod methods = 1;
+}
+
+message ListPaymentsRequest {
+  // Narrow to one thing that was paid for. Empty returns the tenant's most
+  // recent payments.
+  string reference_type = 1;
+  string reference_id = 2;
+  PaymentStatus status = 3;
+  int32 page_size = 4;
+}
+message ListPaymentsResponse {
+  repeated Payment payments = 1;
+}

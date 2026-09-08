@@ -67,16 +67,26 @@ import {
   type RoleDefinition,
   type TeamMember,
 } from '@twentyfour/rbac'
-import { industryProfile } from '@twentyfour/entitlement'
+import { industryProfile, resolveEntitlement, TIERS, type TierId } from '@twentyfour/entitlement'
 import { seedFor, SEEDS, type TenantSeed } from './seed'
+import { freshOnboarding } from './onboarding'
 
 export class MockError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** Which fields were refused, so a form can put the message under the input
+   *  that caused it rather than in a banner above all of them. */
+  readonly fieldErrors: ReadonlyArray<{ field: string; message: string }>
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fieldErrors: ReadonlyArray<{ field: string; message: string }> = [],
+  ) {
     super(message)
     this.status = status
     this.code = code
+    this.fieldErrors = fieldErrors
   }
 }
 
@@ -85,6 +95,10 @@ interface StockRow {
   reserved: number
   lowStockThreshold: number | null
 }
+
+/** How long a self-running provisioning step appears to take. Short enough to
+ *  watch, long enough that the checklist is not finished before it is read. */
+const ONBOARDING_STEP_MS = 8_000
 
 function isoDate(value: Date): string {
   return value.toISOString().slice(0, 10)
@@ -129,6 +143,9 @@ export class TenantStore {
   }
   payments: Payment[] = []
   documents: FiscalDocument[] = []
+
+  /** When the checklist last moved. Mock pacing, not part of the contract. */
+  private onboardingTickAt = Date.now()
 
   private stock = new Map<string, StockRow>()
   private counters = { order: 0, document: 0, booking: 0, payment: 0, item: 0, staff: 0 }
@@ -1104,6 +1121,135 @@ export class TenantStore {
   }
 
   /* ------------------------------------------------------------- settings */
+
+  /* ------------------------------------------------------------- signup */
+
+  /**
+   * Stamps a signup onto a fixture.
+   *
+   * A brand-new tenant with nothing in it would be an honest fixture and a
+   * useless one: the dashboard the merchant lands on would be twelve empty
+   * states, and nothing about the product would be demonstrated. So the trade
+   * they picked chooses the nearest seeded fixture, and everything they typed
+   * is written over the top of it, including the tier they bought.
+   *
+   * The one thing left inconsistent is the catalog, which stays whatever the
+   * fixture shipped. That is a fixture limitation and not a design position:
+   * provisioning seeds the catalog from the trade template, which is exactly
+   * what the catalog_seed step in the checklist stands for.
+   */
+  applySignup(input: {
+    email: string
+    displayName: string
+    businessName: string
+    industry: string
+    tier: TierId
+  }): Session {
+    this.profile = { ...this.profile, name: input.businessName, industry: input.industry }
+
+    // Rebuilt from tier and trade together, because the profile contributes
+    // capabilities the tier knows nothing about. Resolving it here rather than
+    // patching the tier keeps this the same computation the gateway runs.
+    const record = resolveEntitlement({
+      tenantId: this.id,
+      tier: input.tier,
+      industry: input.industry,
+      seatsUsed: this.entitlement.seats.used,
+    })
+    this.entitlement = {
+      tier: record.tier,
+      modules: record.modules,
+      capabilities: record.capabilities,
+      seats: record.seats,
+      pending: record.pending,
+    }
+
+    const definition = TIERS[input.tier]
+    this.subscription = {
+      ...this.subscription,
+      tier: input.tier,
+      // Enterprise is quoted rather than listed, so it bills at nothing until
+      // a specialist puts the agreed figure on it.
+      amount: money(definition.monthlyMinor ?? 0, definition.currency),
+    }
+
+    this.session = { ...this.session, email: input.email, name: input.displayName }
+    // The owner exists twice: once as the session and once as a staff record
+    // holding the seat. Renaming one and not the other puts two different
+    // people's names on the same person's sales.
+    this.staff = this.staff.map((member) =>
+      member.id === this.session.userId
+        ? { ...member, name: input.displayName, email: input.email }
+        : member,
+    )
+
+    this.onboarding = freshOnboarding()
+    this.onboardingTickAt = Date.now()
+    return this.session
+  }
+
+  /* --------------------------------------------------------- onboarding */
+
+  /**
+   * Moves the checklist on, so it is something to watch rather than a picture.
+   *
+   * Called on every read. Only steps that would genuinely run themselves are
+   * advanced: a merchant step waits for the merchant, and a specialist step
+   * waits until somebody asks for it to be retried. A mock that ticked every
+   * step to done on a timer would demonstrate the opposite of the point, which
+   * is that two of these cannot complete unattended and the guarantee has to
+   * survive that.
+   */
+  advanceOnboarding(): OnboardingState | null {
+    const state = this.onboarding
+    if (!state || state.completedAt) return state
+    if (Date.now() - this.onboardingTickAt < ONBOARDING_STEP_MS) return state
+
+    const running = state.steps.find(
+      (step) => step.status === 'in_progress' && step.owner !== 'merchant',
+    )
+    const next = state.steps.find((step) => step.status === 'pending' && step.owner === 'platform')
+    if (!running && !next) return state
+
+    this.onboardingTickAt = Date.now()
+    const now = new Date().toISOString()
+    const steps = state.steps.map((step) => {
+      if (running && step.id === running.id) {
+        return { ...step, status: 'done' as const, completedAt: now }
+      }
+      if (!running && next && step.id === next.id) {
+        return { ...step, status: 'in_progress' as const }
+      }
+      return step
+    })
+
+    this.onboarding = {
+      ...state,
+      steps,
+      completedAt: steps.every((step) => step.status === 'done') ? now : null,
+    }
+    return this.onboarding
+  }
+
+  retryOnboardingStep(stepId: string): OnboardingState {
+    const state = this.onboarding
+    if (!state) throw new MockError(404, 'not_found', 'Nothing to retry.')
+    const step = state.steps.find((entry) => entry.id === stepId)
+    if (!step) throw new MockError(404, 'not_found', 'No such step.')
+    if (step.status === 'done') {
+      throw new MockError(409, 'already_done', 'That step is already finished.')
+    }
+    // The clock restarts here, so a retry the merchant just asked for does not
+    // complete in the same instant and look like nothing happened.
+    this.onboardingTickAt = Date.now()
+    this.onboarding = {
+      ...state,
+      steps: state.steps.map((entry) =>
+        entry.id === stepId ? { ...entry, status: 'in_progress' as const } : entry,
+      ),
+    }
+    return this.onboarding
+  }
 
   updateProfile(input: Partial<BusinessProfile>): BusinessProfile {
     this.profile = { ...this.profile, ...input, tenantId: this.profile.tenantId }

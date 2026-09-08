@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Graph, GNode } from './types'
 import { Topology } from './Topology'
 import { Legend } from './Legend'
+import { Actions } from './Actions'
 
 export default function App() {
   const [g, setG] = useState<Graph | null>(null)
@@ -77,10 +78,22 @@ export default function App() {
       <div className="tiles">
         <Tile k="Pods ready" v={s ? `${s.PodsReady}/${s.Pods}` : '—'}
               tone={allReady ? 'ok' : 'warn'}
-              sub={allReady ? 'all containers passing probes' : 'some not ready'} />
+              sub={
+                !s ? 'connecting'
+                  : allReady
+                    ? s.Completed
+                      ? `all passing probes · ${s.Completed} finished job${s.Completed === 1 ? '' : 's'} not counted`
+                      : 'all containers passing probes'
+                    : 'some not ready'
+              } />
+        <Tile k="Stopped" v={s?.Stopped ?? '—'}
+              tone={(s?.Stopped ?? 0) > 0 ? 'warn' : 'ok'}
+              sub={(s?.Stopped ?? 0) > 0
+                ? 'scaled to zero on purpose'
+                : 'nothing scaled to zero'} />
         <Tile k="Services" v={s?.Services ?? '—'} sub="stable cluster IPs" />
-        <Tile k="Ingresses" v={s?.Ingresses ?? '—'} sub="host routes via Traefik" />
-        <Tile k="Dependencies" v={connected} sub="pod → service, from env" />
+        <Tile k="Routes" v={s?.Ingresses ?? '—'} sub="Traefik host and path rules" />
+        <Tile k="Dependencies" v={connected} sub="pod → service, from flags and env" />
         <Tile k="Restarts" v={s?.Restarts ?? '—'}
               tone={(s?.Restarts ?? 0) > 0 ? 'warn' : 'ok'} sub="since pod creation" />
         <Tile k="Problems" v={g?.problems.length ?? '—'}
@@ -105,14 +118,45 @@ export default function App() {
                 <span className="badge">{sel.kind}</span>
                 <span className="badge dim">{sel.namespace}</span>
                 <span className="badge dim">{sel.role}</span>
+                {sel.domain && <span className="badge dim">{sel.domain}</span>}
+                {sel.stopped && <span className="badge stop">stopped</span>}
               </div>
+              {/* A pod whose surface has another half should say so here, not
+                  only in the confirmation. Half of "pos" reading as all of it
+                  is what made stopping the till leave its frontend serving. */}
+              {sel.kind === 'pod' && (sel.moves?.length ?? 0) > 1 && (
+                <p className="dimline surfaceline">
+                  part of the <b>{sel.workload}</b> surface:
+                  {' '}{sel.moves!.join(' + ')}
+                </p>
+              )}
+
+              {/* What it is for comes first. Everything below it is detail
+                  about a thing you have to already know the shape of. */}
+              {sel.purpose && <p className="purpose">{sel.purpose}</p>}
               <p className="desc">{describe(sel)}</p>
 
+              {sel.kind === 'pod' && sel.actions?.length
+                ? <Actions node={sel} />
+                : null}
+
               <dl className="kv">
-                {sel.kind === 'pod' && <>
+                {/* A stopped workload has no pod, so it has no node, no IP and
+                    no metrics. Those rows are omitted rather than printed as a
+                    column of dashes that reads like a broken collector. */}
+                {sel.kind === 'pod' && sel.stopped && <>
+                  <dt>state</dt><dd>scaled to zero</dd>
+                  <dt>deployment</dt><dd>{sel.deployment}</dd>
+                  <dt>replicas</dt><dd>{sel.desired} wanted, 0 running</dd>
+                  <dt>image</dt><dd>{sel.image || '—'}</dd>
+                  <dt>declared since</dt><dd>{sel.age}</dd>
+                  {sel.ports?.length ? <><dt>ports</dt><dd>{sel.ports.join(', ')}</dd></> : null}
+                </>}
+                {sel.kind === 'pod' && !sel.stopped && <>
                   <dt>phase</dt><dd>{sel.phase}</dd>
                   <dt>ready</dt><dd>{sel.readyStr}</dd>
                   <dt>restarts</dt><dd>{sel.restarts}</dd>
+                  <dt>deployment</dt><dd>{sel.deployment}</dd>
                   <dt>image</dt><dd>{sel.image || '—'}</dd>
                   <dt>node</dt><dd>{sel.nodeName}</dd>
                   <dt>pod ip</dt><dd>{sel.podIP || '—'}</dd>
@@ -151,7 +195,7 @@ export default function App() {
                 ))}
               </> : null}
 
-              {sel.kind === 'pod' && <>
+              {sel.kind === 'pod' && !sel.stopped && <>
                 <button className="btn" onClick={fetchLogs}>fetch last 200 log lines</button>
                 {logs && <pre className="logs">{logs}</pre>}
               </>}
@@ -205,16 +249,21 @@ function Connections({ g, id, onSelect }: {
   )
 }
 
+/** How this kind of thing works, as opposed to what this one is for. */
 function describe(n: GNode): string {
+  if (n.stopped)
+    return `Deployed but scaled to zero, so it has no pod right now. Nothing was deleted: its manifest, its image and any volume are all still here, and start brings it back without a rebuild.`
   if (n.kind === 'ingress')
-    return `Traefik routes requests for this host into the cluster and hands them to a Service.`
+    return `A Traefik route. It matches a host and a path and hands the request to a Service.`
   if (n.kind === 'service')
     return `A stable cluster IP and DNS name. Traffic sent here is load-balanced across whichever pods currently match its selector.`
   if (n.role === 'datastore')
-    return `A stateful workload with an attached volume. In production this is replaced by an operator-managed cluster — see graph.html §17.`
+    return `A stateful workload with an attached volume, which outlives the pod. In production this is replaced by an operator-managed cluster.`
   if (n.role === 'system')
-    return `Part of k3s itself, running in kube-system. Not something we deploy.`
-  return `One of our Go services. Its dependencies below were read from its own environment variables.`
+    return `Part of k3s itself, running in kube-system. Not something we deploy, and not something to act on from here.`
+  if (n.role === 'frontend')
+    return `An nginx pod serving one built bundle. Its own image and its own deployment, so it moves without touching the others.`
+  return `A Go service we wrote. The dependencies below were read from the flags it was started with.`
 }
 
 function Tile({ k, v, sub, tone }: {

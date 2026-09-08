@@ -12,20 +12,35 @@ NS=twentyfour
 REG=localhost:5000/twentyfour
 
 usage() {
-  echo "usage: web-app.sh <build|deploy|up|down|status> <dashboard|pos|bookings|auth|unavailable|all>"
+  echo "usage: web-app.sh <build|deploy|up|down|status> <dashboard|pos|bookings|auth|admin|unavailable|all>"
   exit 2
 }
 [ $# -ge 2 ] || usage
 action=$1 app=$2
 
-apps() { echo "dashboard auth pos bookings"; }
+apps() { echo "dashboard auth pos bookings admin"; }
 expand() { [ "$app" = all ] && apps || echo "$app"; }
 
+# Builds only when asked, or when there is nothing to reuse. Bringing an
+# application back up after a "down" is the common case and needs no build:
+# the image in the registry is already the one that was running.
 build_one() {
   local a=$1
+  if [ "${REBUILD:-0}" != 1 ] && image_present "web-$a"; then
+    echo "    reusing the image already in the registry (REBUILD=1 to build)"
+    return 0
+  fi
   echo "==> building web-$a"
   podman build -f "$WEB/apps/$a/Containerfile" -t "$REG/web-$a:dev" "$WEB"
   podman push --tls-verify=false "$REG/web-$a:dev"
+}
+
+# Whether the registry already holds a :dev tag for this repository. Podman
+# pushes OCI manifests, so that media type has to be requested by name.
+image_present() {
+  curl -sf -o /dev/null \
+    -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+    "http://localhost:5000/v2/twentyfour/$1/manifests/dev" 2>/dev/null
 }
 
 deploy_one() {

@@ -10,7 +10,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/tsconfig.json && tsc -p apps/dashboard/tsconfig.json && tsc -p apps/pos/tsconfig.json && tsc -p apps/bookings/tsconfig.json && tsc -p apps/auth/tsconfig.json",
+    "typecheck": "tsc -p packages/tsconfig.json && tsc -p apps/dashboard/tsconfig.json && tsc -p apps/pos/tsconfig.json && tsc -p apps/bookings/tsconfig.json && tsc -p apps/auth/tsconfig.json && tsc -p apps/admin/tsconfig.json",
     "dev:dashboard": "npm run dev --workspace @twentyfour/dashboard",
     "build:dashboard": "npm run build --workspace @twentyfour/dashboard",
     "dev:pos": "npm run dev --workspace @twentyfour/pos",
@@ -18,7 +18,10 @@
     "dev:bookings": "npm run dev --workspace @twentyfour/bookings",
     "build:bookings": "npm run build --workspace @twentyfour/bookings",
     "dev:auth": "npm run dev --workspace @twentyfour/auth",
-    "build:auth": "npm run build --workspace @twentyfour/auth"
+    "build:auth": "npm run build --workspace @twentyfour/auth",
+    "dev:admin": "npm run dev --workspace @twentyfour/admin",
+    "dev:admin:live": "VITE_ADMIN_API=http://admin.twentyfour.localhost npm run dev --workspace @twentyfour/admin",
+    "build:admin": "npm run build --workspace @twentyfour/admin"
   },
   "devDependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -43,5 +46,14 @@
     "typescript": "^5.9.0",
     "vite": "^7.3.6",
     "vitest": "^3.0.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "apps/dashboard/public",
+      "apps/pos/public",
+      "apps/bookings/public",
+      "apps/auth/public",
+      "apps/admin/public"
+    ]
   }
 }

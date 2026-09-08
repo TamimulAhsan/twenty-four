@@ -2,7 +2,7 @@
   --bg:#0a0c10; --panel:#11141b; --panel2:#161a23; --line:#232936;
   --fg:#e6e9ef; --muted:#8b93a7; --faint:#5b6377;
   --ok:#2ee6a8; --warn:#ffb443; --bad:#ff5470; --edge:#3d68d8;
-  --app:#2ee6a8; --data:#ffb443; --svc:#5b8dee; --sys:#6f7788; --ingress:#c084fc;
+  --app:#2ee6a8; --fe:#67e8f9; --data:#ffb443; --svc:#5b8dee; --sys:#6f7788; --ingress:#c084fc;
   --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 *{box-sizing:border-box}
@@ -149,3 +149,47 @@ pre.logs{background:#06080b;border:1px solid var(--line);border-radius:6px;paddi
 .panhint{position:absolute;left:16px;bottom:16px;font-family:var(--mono);font-size:10px;
   color:var(--faint);background:#0a0c10aa;padding:4px 9px;border-radius:5px;
   border:1px solid var(--line);pointer-events:none;user-select:none}
+
+/* --- what a workload is for, and the actions on it ------------------------ */
+
+.purpose{
+  margin:10px 0 0; padding:9px 11px; border-radius:7px;
+  background:var(--panel2); border:1px solid var(--line);
+  color:var(--fg); font-size:12.5px; line-height:1.5;
+}
+.sect .wl{ color:var(--app); font-family:var(--mono); text-transform:none; }
+.actnote{ margin:2px 0 8px; }
+
+.acts{ display:flex; flex-wrap:wrap; gap:6px; }
+.act{
+  border:1px solid var(--line); background:var(--panel2); color:var(--fg);
+  border-radius:6px; padding:5px 11px; font:inherit; font-size:12px;
+  cursor:pointer; transition:background .12s, border-color .12s;
+}
+.act:hover:not(:disabled){ background:#1c2130; border-color:#33405c; }
+.act:disabled{ opacity:.4; cursor:default; }
+/* Stop and rebuild both take something away for minutes. The colour is the
+   only warning before the confirm, so it is worth spending. */
+.act.danger{ border-color:#5b2733; color:var(--bad); }
+.act.danger:hover:not(:disabled){ background:#2a1620; }
+.act.ghost{ border-color:transparent; color:var(--muted); }
+
+.confirm{
+  margin-top:9px; padding:10px 11px; border-radius:7px;
+  border:1px solid #3a2b3a; background:#1a1420;
+}
+.confirm b{ font-size:12.5px; }
+.confirm p{ margin:5px 0 9px; color:var(--muted); font-size:12px; line-height:1.5; }
+.confirmRow{ display:flex; gap:6px; }
+
+.actErr{ margin-top:8px; color:var(--bad); font-size:12px; }
+.jobline{ display:flex; align-items:center; gap:8px; margin:10px 0 5px; }
+.confirmRow{ align-items:center; }
+.confirmRow .esc{ margin-left:2px; }
+
+/* Stopped is deliberate, so it reads as muted rather than alarming. */
+.badge.stop{ background:#2b3346; color:#9aa6c0; border-color:#3a4459; }
+.surfaceline{ margin:6px 0 0; }
+.confirm .moves{ margin:6px 0 10px; font-size:11px; color:var(--dim); }
+.confirm .moves code{ background:#1b2233; border:1px solid var(--line);
+  border-radius:4px; padding:1px 5px; margin-right:5px; }

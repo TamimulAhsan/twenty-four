@@ -19,12 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CatalogService_GetItem_FullMethodName     = "/twentyfour.catalog.v1.CatalogService/GetItem"
-	CatalogService_PriceItems_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/PriceItems"
-	CatalogService_ListItems_FullMethodName   = "/twentyfour.catalog.v1.CatalogService/ListItems"
-	CatalogService_CreateItem_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/CreateItem"
-	CatalogService_UpdateItem_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/UpdateItem"
-	CatalogService_ArchiveItem_FullMethodName = "/twentyfour.catalog.v1.CatalogService/ArchiveItem"
+	CatalogService_GetItem_FullMethodName         = "/twentyfour.catalog.v1.CatalogService/GetItem"
+	CatalogService_PriceItems_FullMethodName      = "/twentyfour.catalog.v1.CatalogService/PriceItems"
+	CatalogService_ListItems_FullMethodName       = "/twentyfour.catalog.v1.CatalogService/ListItems"
+	CatalogService_CreateItem_FullMethodName      = "/twentyfour.catalog.v1.CatalogService/CreateItem"
+	CatalogService_UpdateItem_FullMethodName      = "/twentyfour.catalog.v1.CatalogService/UpdateItem"
+	CatalogService_ArchiveItem_FullMethodName     = "/twentyfour.catalog.v1.CatalogService/ArchiveItem"
+	CatalogService_ListCategories_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/ListCategories"
+	CatalogService_CreateCategory_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/CreateCategory"
+	CatalogService_UpdateCategory_FullMethodName  = "/twentyfour.catalog.v1.CatalogService/UpdateCategory"
+	CatalogService_ArchiveCategory_FullMethodName = "/twentyfour.catalog.v1.CatalogService/ArchiveCategory"
 )
 
 // CatalogServiceClient is the client API for CatalogService service.
@@ -33,8 +37,13 @@ const (
 //
 // Catalog is the single source of truth for what a tenant sells and what it
 // costs. POS, Bookings, Inventory and the Website Builder all read from here;
-// none of them keeps its own price list. That is the whole point — the moment
+// none of them keeps its own price list. That is the whole point: the moment
 // two services hold prices, the numbers stop matching.
+//
+// No request carries a tenant. The gateway resolved it and put it on the
+// request context, and a tenant a client can name is a tenant a client can
+// change. Leaving the field out is what makes that structural rather than a
+// rule someone has to remember.
 type CatalogServiceClient interface {
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	// Priced in bulk so a POS cart resolves in one call, not one per line.
@@ -42,7 +51,13 @@ type CatalogServiceClient interface {
 	ListItems(ctx context.Context, in *ListItemsRequest, opts ...grpc.CallOption) (*ListItemsResponse, error)
 	CreateItem(ctx context.Context, in *CreateItemRequest, opts ...grpc.CallOption) (*CreateItemResponse, error)
 	UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error)
+	// Archives rather than deletes. A sold item has to stay resolvable from
+	// every order that ever referenced it.
 	ArchiveItem(ctx context.Context, in *ArchiveItemRequest, opts ...grpc.CallOption) (*ArchiveItemResponse, error)
+	ListCategories(ctx context.Context, in *ListCategoriesRequest, opts ...grpc.CallOption) (*ListCategoriesResponse, error)
+	CreateCategory(ctx context.Context, in *CreateCategoryRequest, opts ...grpc.CallOption) (*CreateCategoryResponse, error)
+	UpdateCategory(ctx context.Context, in *UpdateCategoryRequest, opts ...grpc.CallOption) (*UpdateCategoryResponse, error)
+	ArchiveCategory(ctx context.Context, in *ArchiveCategoryRequest, opts ...grpc.CallOption) (*ArchiveCategoryResponse, error)
 }
 
 type catalogServiceClient struct {
@@ -113,14 +128,59 @@ func (c *catalogServiceClient) ArchiveItem(ctx context.Context, in *ArchiveItemR
 	return out, nil
 }
 
+func (c *catalogServiceClient) ListCategories(ctx context.Context, in *ListCategoriesRequest, opts ...grpc.CallOption) (*ListCategoriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCategoriesResponse)
+	err := c.cc.Invoke(ctx, CatalogService_ListCategories_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *catalogServiceClient) CreateCategory(ctx context.Context, in *CreateCategoryRequest, opts ...grpc.CallOption) (*CreateCategoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCategoryResponse)
+	err := c.cc.Invoke(ctx, CatalogService_CreateCategory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *catalogServiceClient) UpdateCategory(ctx context.Context, in *UpdateCategoryRequest, opts ...grpc.CallOption) (*UpdateCategoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateCategoryResponse)
+	err := c.cc.Invoke(ctx, CatalogService_UpdateCategory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *catalogServiceClient) ArchiveCategory(ctx context.Context, in *ArchiveCategoryRequest, opts ...grpc.CallOption) (*ArchiveCategoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveCategoryResponse)
+	err := c.cc.Invoke(ctx, CatalogService_ArchiveCategory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CatalogServiceServer is the server API for CatalogService service.
 // All implementations must embed UnimplementedCatalogServiceServer
 // for forward compatibility.
 //
 // Catalog is the single source of truth for what a tenant sells and what it
 // costs. POS, Bookings, Inventory and the Website Builder all read from here;
-// none of them keeps its own price list. That is the whole point — the moment
+// none of them keeps its own price list. That is the whole point: the moment
 // two services hold prices, the numbers stop matching.
+//
+// No request carries a tenant. The gateway resolved it and put it on the
+// request context, and a tenant a client can name is a tenant a client can
+// change. Leaving the field out is what makes that structural rather than a
+// rule someone has to remember.
 type CatalogServiceServer interface {
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	// Priced in bulk so a POS cart resolves in one call, not one per line.
@@ -128,7 +188,13 @@ type CatalogServiceServer interface {
 	ListItems(context.Context, *ListItemsRequest) (*ListItemsResponse, error)
 	CreateItem(context.Context, *CreateItemRequest) (*CreateItemResponse, error)
 	UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error)
+	// Archives rather than deletes. A sold item has to stay resolvable from
+	// every order that ever referenced it.
 	ArchiveItem(context.Context, *ArchiveItemRequest) (*ArchiveItemResponse, error)
+	ListCategories(context.Context, *ListCategoriesRequest) (*ListCategoriesResponse, error)
+	CreateCategory(context.Context, *CreateCategoryRequest) (*CreateCategoryResponse, error)
+	UpdateCategory(context.Context, *UpdateCategoryRequest) (*UpdateCategoryResponse, error)
+	ArchiveCategory(context.Context, *ArchiveCategoryRequest) (*ArchiveCategoryResponse, error)
 	mustEmbedUnimplementedCatalogServiceServer()
 }
 
@@ -156,6 +222,18 @@ func (UnimplementedCatalogServiceServer) UpdateItem(context.Context, *UpdateItem
 }
 func (UnimplementedCatalogServiceServer) ArchiveItem(context.Context, *ArchiveItemRequest) (*ArchiveItemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ArchiveItem not implemented")
+}
+func (UnimplementedCatalogServiceServer) ListCategories(context.Context, *ListCategoriesRequest) (*ListCategoriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCategories not implemented")
+}
+func (UnimplementedCatalogServiceServer) CreateCategory(context.Context, *CreateCategoryRequest) (*CreateCategoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCategory not implemented")
+}
+func (UnimplementedCatalogServiceServer) UpdateCategory(context.Context, *UpdateCategoryRequest) (*UpdateCategoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCategory not implemented")
+}
+func (UnimplementedCatalogServiceServer) ArchiveCategory(context.Context, *ArchiveCategoryRequest) (*ArchiveCategoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveCategory not implemented")
 }
 func (UnimplementedCatalogServiceServer) mustEmbedUnimplementedCatalogServiceServer() {}
 func (UnimplementedCatalogServiceServer) testEmbeddedByValue()                        {}
@@ -286,6 +364,78 @@ func _CatalogService_ArchiveItem_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CatalogService_ListCategories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCategoriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).ListCategories(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_ListCategories_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).ListCategories(ctx, req.(*ListCategoriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CatalogService_CreateCategory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCategoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).CreateCategory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_CreateCategory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).CreateCategory(ctx, req.(*CreateCategoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CatalogService_UpdateCategory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCategoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).UpdateCategory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_UpdateCategory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).UpdateCategory(ctx, req.(*UpdateCategoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CatalogService_ArchiveCategory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveCategoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).ArchiveCategory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_ArchiveCategory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).ArchiveCategory(ctx, req.(*ArchiveCategoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CatalogService_ServiceDesc is the grpc.ServiceDesc for CatalogService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -316,6 +466,22 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ArchiveItem",
 			Handler:    _CatalogService_ArchiveItem_Handler,
+		},
+		{
+			MethodName: "ListCategories",
+			Handler:    _CatalogService_ListCategories_Handler,
+		},
+		{
+			MethodName: "CreateCategory",
+			Handler:    _CatalogService_CreateCategory_Handler,
+		},
+		{
+			MethodName: "UpdateCategory",
+			Handler:    _CatalogService_UpdateCategory_Handler,
+		},
+		{
+			MethodName: "ArchiveCategory",
+			Handler:    _CatalogService_ArchiveCategory_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

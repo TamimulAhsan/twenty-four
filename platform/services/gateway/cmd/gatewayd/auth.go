@@ -3,12 +3,12 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	authpb "github.com/twentyfour/platform/gen/go/twentyfour/auth/v1"
 	rbacpb "github.com/twentyfour/platform/gen/go/twentyfour/rbac/v1"
-	"github.com/twentyfour/platform/services/gateway/internal/httpx"
-	"github.com/twentyfour/platform/services/gateway/internal/session"
+	"github.com/twentyfour/platform/packages/httpx"
 )
 
 // sessionBody is what the frontend expects back from login and /auth/session.
@@ -18,6 +18,17 @@ type sessionBody struct {
 	Name     string `json:"name"`
 	Role     string `json:"role"`
 	TenantID string `json:"tenantId"`
+}
+
+// loginBody is what one sign-in form gets back.
+//
+// Redirect is always set and the client always follows it, so the form does not
+// have to know that two planes exist. Session is set only for a merchant: an
+// admin has no session on this origin and never will, which is why the field is
+// omitted rather than sent empty.
+type loginBody struct {
+	Session  *sessionBody `json:"session,omitempty"`
+	Redirect string       `json:"redirect"`
 }
 
 func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
@@ -30,11 +41,14 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := g.auth.Login(r.Context(), &authpb.LoginRequest{
-		Email:     strings.TrimSpace(in.Email),
-		Password:  in.Password,
-		Plane:     authpb.Plane_PLANE_TENANT,
-		UserAgent: r.UserAgent(),
-		Ip:        clientIP(r),
+		Email:    strings.TrimSpace(in.Email),
+		Password: in.Password,
+		// Which gateway is asking, not which account to look for. Auth resolves
+		// the account from the address alone and answers with a token only if
+		// it belongs to this plane.
+		CallerPlane: authpb.Plane_PLANE_TENANT,
+		UserAgent:   r.UserAgent(),
+		Ip:          clientIP(r),
 	})
 	if err != nil {
 		status, code, message := grpcStatus(err)
@@ -47,12 +61,24 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A specialist signing in on the merchant origin. Auth gave us a one-time
+	// code instead of a token, so there is nothing here that could be set as a
+	// cookie even by mistake, and the browser is sent to the admin gateway to
+	// exchange it for a session on its own host.
+	if code := resp.GetHandoffCode(); code != "" {
+		httpx.JSON(w, r, http.StatusOK, loginBody{
+			Redirect: g.adminURL + "/session?code=" + url.QueryEscape(code),
+		})
+		return
+	}
+
 	g.cookies.Set(w, resp.GetToken())
-	httpx.JSON(w, r, http.StatusOK, g.sessionOf(r, resp.GetUser()))
+	body := g.sessionOf(r, resp.GetUser())
+	httpx.JSON(w, r, http.StatusOK, loginBody{Session: &body, Redirect: "/"})
 }
 
 func (g *gateway) logout(w http.ResponseWriter, r *http.Request) {
-	if token := session.Token(r); token != "" {
+	if token := g.cookies.Token(r); token != "" {
 		// Revoke server-side as well as clearing the cookie. Clearing alone
 		// leaves a valid token that anything holding a copy could still use.
 		if _, err := g.auth.Logout(r.Context(), &authpb.LogoutRequest{Token: token}); err != nil {
@@ -67,7 +93,7 @@ func (g *gateway) logout(w http.ResponseWriter, r *http.Request) {
 // is no session: SessionGate calls it to decide whether to redirect, and an
 // error would make a normal signed-out visit look like a fault.
 func (g *gateway) currentSession(w http.ResponseWriter, r *http.Request) {
-	token := session.Token(r)
+	token := g.cookies.Token(r)
 	if token == "" {
 		httpx.JSON(w, r, http.StatusOK, nil)
 		return

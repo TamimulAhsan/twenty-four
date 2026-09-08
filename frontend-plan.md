@@ -1,29 +1,40 @@
-# TwentyFour Merchant Frontend
+# TwentyFour Frontend
 
-Four applications, one design system, one origin. What is built, why it is
+Five applications, two planes, one design system. What is built, why it is
 shaped this way, and what comes next.
 
-Reference: [`system-architecture.html`](system-architecture.html) §1, §4, §6, §7, §11, §14.
+Reference: [`system-architecture.html`](system-architecture.html) §1, §4, §6, §7, §10, §11, §14.
 Rules this code must respect: [`CLAUDE.md`](CLAUDE.md). Backend sequencing: [`roadmap.md`](roadmap.md).
 
 > **No backend yet.** Every screen runs against a stateful mock that speaks the
-> intended Merchant BFF contract over real HTTP. Connecting the live gateway is
-> deleting one dynamic import; no component changes.
+> intended contract over real HTTP. Connecting the live gateway is deleting one
+> dynamic import; no component changes.
 
 ---
 
-## Four applications, not one dashboard
+## Five applications, two planes
 
-| Application | Path | Device it lives on | Bundle |
+| Application | Host and path | Device it lives on | Bundle |
 |---|---|---|---|
-| **Merchant dashboard** | `/` | A desk. Analysis, money, configuration, the team. | 312 kB |
-| **Point of sale** | `/pos` | A tablet at a counter, full screen, touched all day. | 162 kB |
-| **Bookings and appointments** | `/bookings` | A screen behind a desk, watched all day. | 96 kB |
-| **Sign in** | `/auth` | Wherever somebody arrives without a session. | 51 kB |
+| **Merchant dashboard** | `app` `/` | A desk. Analysis, money, configuration, the team. | 327 kB |
+| **Point of sale** | `app` `/pos` | A tablet at a counter, full screen, touched all day. | 172 kB |
+| **Bookings and appointments** | `app` `/bookings` | A screen behind a desk, watched all day. | 132 kB |
+| **Sign in and sign up** | `app` `/auth` | Wherever somebody arrives without a session. | 97 kB |
+| **Admin console** | `admin` `/` | A specialist's desk, inside the office network. | 172 kB |
 
-Four applications, four builds, four images, four Deployments. Taking one down
+Five applications, five builds, five images, five Deployments. Taking one down
 scales it to zero and Traefik serves the unavailable page in its place; the
-other three are untouched.
+others are untouched.
+
+**The fifth one is on a different host, and that is the point.** The four
+merchant applications share `app.` so the session cookie issued on the parent
+domain carries between them, which is what lets the dashboard launch the till
+without a second sign-in. The admin console is the plane that can see every
+merchant, and putting it inside that cookie's namespace would be handing the
+staff plane to the merchant one. It gets its own host, its own gateway
+(`/admin/api`), its own auth realm and its own sign-in screen, and it shares
+the design system, the money package and the module registry and nothing
+else.
 
 **The catalog belongs to the applications, not the back office.** It is edited on
 the device that sells from it, so the till owns it and the calendar owns the
@@ -42,11 +53,13 @@ them. A till and a calendar have nothing in common with a reporting screen
 except the data underneath, and putting all three behind one sidebar
 compromises each of them for the other two.
 
-**Separate bundles, one origin.** Separate bundles because the till should not
-carry the reporting code. One origin because the session cookie is issued on the
-parent domain: put the till on another origin and a merchant who opens it from
-the dashboard has to sign in again. This is exactly what the NGINX frontend pod
-in §1 serves.
+**Separate bundles, one origin per plane.** Separate bundles because the till
+should not carry the reporting code. One origin *within* the merchant plane
+because the session cookie is issued on the parent domain: put the till on
+another origin and a merchant who opens it from the dashboard has to sign in
+again. A *different* origin for the admin console, for exactly the same reason
+read the other way round. This is what the NGINX frontend pod in §1 serves and
+what §14 means by the two consoles owning different things.
 
 Shared vendor chunk is 312 kB (99 kB gzipped). MSW itself is behind an
 `import.meta.env.DEV` guard and a dynamic import in `boot`, so the service
@@ -181,7 +194,15 @@ they must not be able to disagree about which lines have already gone back.
 
 **Foundation.** Design tokens on a three-layer architecture (primitives,
 semantic roles, utilities) with a hand-built light and dark palette; Archivo and
-IBM Plex Mono self-hosted; Lucide icons on one stroke weight; 80 tests green.
+IBM Plex Mono self-hosted; Lucide icons on one stroke weight; 309 tests green.
+
+Most of those run in node against the two stores, because most of what is worth
+asserting here is a rule rather than a rendering, and on the admin side the
+rules that matter are refusals. Three files are the exception and run in jsdom:
+a four-step signup form that sends the wrong trade or the wrong tier is not
+visibly broken, and neither is a tier matrix that writes on click instead of
+staging. A file asks for jsdom in its own docblock, so the rest do not pay
+for it.
 
 **Merchant dashboard.** Overview with app launchers and the day's figures;
 Analytics; Catalog; Inventory with reasoned adjustments; Orders; Team with full
@@ -297,6 +318,300 @@ hours and the rules behind the slots.
 tooltips and accessible names carrying the labels. Persisted, because someone who
 collapsed it to get more table on screen wants it collapsed tomorrow.
 
+**Signing out.** One implementation in `shell`, on all three surfaces: a
+labelled row under Settings in the dashboard sidebar, where people look for it,
+and an icon button in the till and calendar headers, because a counter device is
+shared and ending a shift has to be one press from where the person is standing.
+The server ends the session and the browser is sent to the sign-in application;
+there is nothing for JavaScript to delete, since the cookie is httpOnly.
+
+It returns to the application's **own front door**, never to the page it was on:
+whoever signs in next at a till should get the till, and should not be dropped
+into the last person's screen. A failed sign-out does not redirect, because the
+cookie would still be valid and the gate would send the browser straight back,
+which reads as a flicker rather than a refusal.
+
+---
+
+## Signing up, and the twenty-four hours after it
+
+The commercial model is the product, so the two screens that carry it are the
+signup form and the checklist that follows it. They are one flow across two
+applications: the form lives in `/auth`, which is where somebody with no session
+already is, and the checklist lives in the dashboard, because by then they have
+one.
+
+### Four questions, one at a time
+
+**The business type is asked first**, before the email and before the plan. It is
+the single most consequential field in the product: it decides which capabilities
+switch on, what things are called, which catalog template seeds and which tax
+categories exist. Asking it first means nothing after it has to be revisited.
+Forty-three trades are searchable and grouped by family, because it is a question
+a merchant answers in four seconds and a dropdown of forty makes it a chore.
+
+A wizard rather than one long page, for a specific reason: the two decisions that
+cost money are the trade and the tier, and on one page with an email field both
+of them get scrolled past.
+
+| Step | Asks | Why it is where it is |
+|---|---|---|
+| 1 | Business type | Everything trade-specific follows from it |
+| 2 | Business name, your name, email, password | The account, and the owner who holds the first seat |
+| 3 | Plan | Four cards showing what each includes, never priced per module |
+| 4 | Review | What will be switched on, said before anything is created |
+
+The pricing page can link straight in with `?tier=` and `?industry=` already set.
+Both are validated against the registry rather than trusted: a query string is
+whatever the person holding the address bar typed, and an unknown value falls
+back rather than throwing.
+
+**The review step lists what switches on**, resolved from the same registry the
+gateway enforces against, so a card cannot promise something entitlement will
+then refuse. It also names the capabilities the trade switches on for free, which
+is the clearest place in the product to see that a restaurant and a candy shop
+buy the same POS and get different tills.
+
+### The form is not the control
+
+Every rule the form checks is checked again on the way in, and the answer comes
+back **per field** so it lands under the input that caused it rather than in a
+banner above all of them. A rejection also **sends the merchant back to the step
+that owns the field**: an email already in use is no use as a message on the
+review screen, because the email is not on it. `MIN_PASSWORD_LENGTH` lives in
+`packages/api` beside the contract, so the form and the gateway read one number.
+
+The owner is written to two places at once, the session and the staff record that
+holds their seat. Renaming one and not the other puts two different people's
+names on the same person's sales depending on which surface rendered them.
+
+### The checklist is a to-do list, not a progress bar
+
+`§11` gives twelve provisioning steps across the 0 / 4 / 12 / 24 hour stages, and
+two of them cannot complete unattended: processor KYC is an external approval and
+terminal pairing needs somebody holding the hardware. The screen is built around
+that fact rather than around it.
+
+**Every step carries an owner** as well as a status, which is a contract addition:
+`platform`, `specialist` or `merchant`. Status is what state a step is in; owner
+is who it is waiting on, and they are orthogonal. Without it, twelve steps cannot
+answer the only question the merchant actually has, which is which of them are
+theirs. Three are, and each offers somewhere to go: the team page, the catalog,
+and the till itself.
+
+Two things the screen refuses to do. It shows **no single percentage**, because
+most of the twelve are somebody else's and a merchant staring at 58% cannot tell
+whether they are the hold-up; the bar is twelve segments, one per step. And it
+never dresses a step that needs a person as one that is running. A specialist step
+can be nudged, which is the retry endpoint the architecture already specifies,
+and a failed one can be retried; neither pretends to be progress.
+
+The countdown is real, ticking every thirty seconds against `dueAt`, and past the
+deadline it says so and says the first month is free rather than hiding.
+
+**It appears in three places while it is running and nowhere afterwards**: a row at
+the top of the sidebar with the step count, a strip on the overview, and the page
+itself. None of the three is derived from entitlement, because this is not a
+module: nobody buys it and every tenant passes through it once.
+
+### The mock earns its keep here
+
+The checklist would be a screenshot if the fixture never moved, so the store
+advances it: a step that would genuinely run itself completes after eight seconds
+and the next one starts. **Merchant steps never auto-complete**, and the two that
+need a person stay put until somebody asks for an update. A mock that ticked all
+twelve off on a timer would demonstrate the opposite of the design.
+
+Signing up now applies what was typed rather than dropping the merchant into a
+fixture wearing somebody else's name: the business name, the trade, the owner and
+the tier all land on the store, and the entitlement record is rebuilt by the same
+`resolveEntitlement` the gateway runs. What stays fixture-shaped is the catalog,
+which is the `catalog_seed` step's job and is called out as such.
+
+The salon fixture now carries a run in progress, so all three screens can be
+looked at without signing up first.
+
+---
+
+## The admin console
+
+The staff plane. One market per deployment, so it sees every merchant in this
+environment and cannot be pointed at another one: the other market is a
+different VPS with its own database, its own event bus, its own books and its
+own console.
+
+Built from a design import, and the interesting decisions were the ones about
+what not to build.
+
+### Two planes, and nothing shared between them
+
+| | Merchant plane | Admin plane |
+|---|---|---|
+| Host | `app.twentyfour.localhost` | `admin.twentyfour.localhost` |
+| Gateway | `/api` | `/admin/api` |
+| Sign-in | Email and password at `/auth` | Staff SSO, MFA, IP allowlist |
+| Gate component | `SessionGate`, redirects to `/auth` | `AdminGate`, renders its own sign-in |
+| Query cache | `queryKeys.*` | `adminKeys.*`, prefixed `admin` |
+| Mock handlers | `handlers` | `adminHandlers` |
+
+The transport is shared and nothing else is. `request()` goes to the tenant
+gateway and `adminRequest()` to the admin one, picked per call rather than per
+module, so sending a merchant token to the staff plane would be a compile error
+at the call site rather than a runtime surprise.
+
+The dev worker registers **one plane's handlers, not both**. `boot(<App/>, {
+plane: 'admin' })` is what selects them, so an admin screen that reached for
+`/api` fails in development instead of quietly working against the wrong
+gateway.
+
+### What the console shows
+
+| Screen | What it answers |
+|---|---|
+| **Tenants** | Every merchant here, filtered by status, health, tier or module held |
+| **Tenant → Overview** | What this business is, what it sold, what it pays us, what it holds, what it is connected to |
+| **Tenant → Sales** | One order, found by number, when a support call is about one order |
+| **Tenant → Modules and tier** | Move a tier, or grant a module against it |
+| **Tenant → Billing** | The subscription and every document we issued them |
+| **Tenant → Getting live** | The saga, step by step, with a re-run on the stuck one |
+| **Tenant → Audit** | Everything that has happened to this account |
+| **Getting live** | Every run still in flight, closest deadline first |
+| **Tiers and modules** | The registry: what each tier grants, and what that resolves to |
+| **Platform billing** | Recurring revenue, the tier mix, and who is being chased |
+| **Impersonation** | Who is inside a merchant account, and everyone who has been |
+| **Audit log** | Every automated and human decision, refusals included |
+| **Team and roles** | Who can see every merchant, and what each of them may do |
+| **Settings** | What this deployment is and what it promises |
+
+### The registry is the product, so the console reads it
+
+The imported design carried its own list of twenty-one modules, its own
+dependency graph, its own four tiers and its own prices. Every one of those is
+already a value in `@twentyfour/entitlement`, which is the same registry the
+gateway enforces against.
+
+So none of it was transcribed. The tier cards, the entitlement table, the
+matrix and the dependency resolution all read `MODULES`, `TIERS` and
+`resolveDependencies`. A console with its own module list is a console that
+starts lying the first time the registry changes, and it would lie
+convincingly, because it would still render.
+
+The same rule caught two smaller things. The design's saga steps were a second
+twelve-step model of provisioning; onboarding lives *inside* Provisioning, so
+the console renders the merchant's own `OnboardingStep` rows and a step a
+specialist re-runs is the step the merchant watches turn green. And the design
+priced Enterprise at a figure; the registry carries no list price for it,
+because it is quoted, so the card says so rather than showing a number.
+
+### Impersonation hands off; it does not draw a copy
+
+The largest single piece of the imported design was a takeover screen: a
+hand-built merchant dashboard rendered inside the console, with its own
+sidebar, its own takings figure and its own list of open tickets.
+
+That was not built. It is a second implementation of a surface that already
+ships as its own application, it would have drifted from the real one within a
+release, and the thing a specialist on a support call most needs is to see
+*exactly* what the merchant is seeing, which is the one thing a lookalike
+cannot do.
+
+What was built is the part that is genuinely admin-plane work:
+
+- A **read-only token by default**, whatever the role allows. Write is a second,
+  deliberate step, because the reason for writing is never known before you have
+  looked, and a reason given in advance is a reason invented in advance.
+- **A reason on every session**, and a second one to elevate. Elevating issues a
+  *new* token at the wider scope and re-emits `impersonation.started`, so the
+  audit log carries two records with two reasons rather than one record whose
+  scope quietly changed.
+- **A shorter window when the scope widens.** Thirty minutes read, fifteen write.
+- **One session at a time.** Two open tokens mean the audit log has to guess
+  which tenant an action belonged to, and not guessing is the whole point.
+- **A strip across the top of every screen** while one is open, with the
+  countdown, and a link that opens the merchant's real dashboard.
+- **Signing out kills every token it holds.** A specialist who signs out and
+  leaves a write token alive is the exact failure the time box exists to prevent.
+
+### The customer directory was removed
+
+The design's tenant page had a Customers tab: every one of a merchant's
+customers, with email, phone and lifetime spend, sorted by who had spent the
+most, plus a full customer record with a CRM timeline.
+
+That is not support. It is a marketing list assembled out of somebody else's
+customer base, and it is the one screen in the design that could not be
+justified to the person whose data is in it. The legitimate need behind it is a
+data subject request, which is finding *one* record by exact address, not
+browsing a ranked directory. The orders table stayed, because a support call
+really is about one order; the browse did not.
+
+Also removed, for smaller reasons: a feature-flag panel and a module attach-rate
+table (both computed in the design's own source and never rendered by it), a
+"New tenant" button with no flow behind it, and the density and accent-colour
+knobs, which are design-canvas controls rather than product.
+
+### Market variation stays in the deployment
+
+The design named a specific tax authority in eight places, its invoice
+numbering, its card scheme and its national payment card. None of that is in
+the code. The console reads a `fiscalAuthority` **label** off the environment
+and repeats it back, and the document number is the platform-wide
+`year-merchantcode-sequence`. There is no country code and no branch on market
+anywhere in the application, which is the constraint that makes swapping the
+Payments and Invoicing pods work at all.
+
+### Every write leaves a trail, in the same call
+
+The store writes an audit event in the transaction that makes the change, and
+refuses the things the real services would refuse:
+
+| Refused | Because |
+|---|---|
+| Anything at all, signed out | 401, including the reads |
+| Any write, as a read-only auditor | The role is the whole point of the role |
+| Withdrawing a module something held depends on | The record would not resolve |
+| Switching off an always-on module | It ships with every tenant at any price |
+| A change with no reason | It is the only part of the record a reader cannot reconstruct |
+| A downgrade below the seats in use | The gateway would start refusing staff logins |
+| Suspending a tenant mid-provisioning | Finish or cancel the run first |
+| A second open support session | The log would have to guess |
+| Editing the tier registry, as anyone but the owner | Blast radius is every tenant on the tier |
+| A registry change that makes an upgrade take something away | An upgrade that removes a screen |
+
+That last one is worth naming. Tiers are a ladder, so if Starter ends up
+granting something Growth does not, upgrading *takes a module away*, and the
+tenant it happens to finds out when a screen disappears. The registry checks the
+whole ladder after every edit and rolls back rather than accepting it.
+
+### The most destructive screen stages, it does not write
+
+A cell in the tier matrix decides what every tenant on that tier holds. So
+nothing applies as you click: changes stage, a sticky bar names how many
+businesses would be rewritten, and applying is a separate confirmation that
+lists what is added and removed per tier. The design wrote each cell through on
+click with an apply banner that had already been overtaken by the write.
+
+Three kinds of cell cannot be clicked at all, and the reason differs: an
+always-on module ships with every tenant, a dependency arrives because something
+else needed it, and both are facts about the platform rather than choices about
+a tier.
+
+**Self-serve capability is derived, not toggled.** The design had a per-tier
+switch for "auto-provision on signup". It is not a policy: a tier goes live
+unattended exactly when every module it resolves to can, so adding one that
+needs KYC or an OAuth consent flips it and nobody has to remember to. The card
+names the module responsible rather than just saying a specialist is needed.
+
+### The fixture is the same three businesses
+
+The console's tenant directory holds thirteen businesses, and the first three
+are the cafe, the salon and the shop the merchant applications already run on,
+with their real ids, names, tiers and business types read from the seeds rather
+than restated. So opening a support session on the cafe and following the
+handoff lands in the cafe the till is already showing. A directory of thirteen
+invented businesses would demo just as well and be wrong in the one way that
+matters.
+
 ---
 
 ## Defects found and fixed while building
@@ -334,61 +649,130 @@ Worth recording, because each was invisible until the screen existed.
 | Nothing stopped a line being refunded twice | Two credit notes, two returns to stock and two payouts against a sale that happened once. |
 | The day's refunded figure counted whole orders by status | A sale with one line of four returned counted as nothing. Now it is the sum of what was actually given back. |
 | `frontend-plan.md` described a layout that no longer existed | It documented `apps/web/` with three entries in one build; the code has four applications with their own images and Deployments. |
+| Signup ignored almost everything it was sent | Only the trade was read. A merchant signed up as their own business and landed in a fixture wearing somebody else's name, email and tier. |
+| Every live tenant would have been shown a setup checklist | `GET /onboarding` fell back to the mid-flight fixture when a tenant had no run, so a business live for two years had one that never finished. |
+| A live tenant would have sat on a loading skeleton forever | The onboarding query is disabled when there is no run, and a disabled query never leaves pending, so "loading" and "nothing to load" looked identical. |
+| The countdown read an hour short | Flooring the hours says "18 h left" for the whole of the nineteenth. On a promise measured in hours that is the wrong direction to be wrong in. |
+| `npm run dev` could not start the mock gateway | All four applications declared `msw.workerDirectory` and none of them contained `mockServiceWorker.js`. Generated for each. |
+| Two merchant codes in the admin fixture contained `L` | Crockford base32 excludes `I`, `L`, `O` and `U` because the first three are misread off a printed invoice. Caught by a test asserting the alphabet rather than by reading them. |
+| The tier registry had no ladder check | Nothing stopped a lower tier granting something a higher one does not, which turns an upgrade into a downgrade: the tenant it happens to finds out when a screen disappears. Checked across the whole ladder now, and rolled back rather than accepted. |
+| `<dialog>` threw in every component test | jsdom implements neither `showModal` nor `close`, so any test rendering a design-system `Dialog` failed on first render rather than on an assertion. Stubbed in `vitest.setup.ts`, honestly enough that the component's own `open` check still works. |
 
 ---
 
 ## What is next
 
-F3 is finished. What remains, in the order it earns its place:
+F3 is finished, so are the two halves of F7 a merchant touches (signup and the
+24-hour checklist), and the admin console now covers §14's half of the split.
+What remains, in the order it earns its place:
 
 | Phase | Work |
 |---|---|
 | **F4** | Week view, buffers, deposits taken at booking, rota grid |
 | **F5** | The document viewer against the stored artifact rather than the recorded fields |
 | **F6** | Marketing, Website builder, notification centre |
-| **F7** | Marketing site in React, signup, and the 24-hour onboarding checklist |
+| **F7** | Marketing site in React, and the password reset and invite flows |
 | **Any** | Export: CSV, a print layout, a scheduled report |
+
+The console's own gap is the gateway behind it. `admin-gateway` is now in
+`deploy/inventory.tsv` as `later`, so status displays show it as not built
+rather than not existing. Until it does, the console's nginx answers
+`/admin/api` with a JSON 503 rather than letting the catch-all hand an API call
+the index document and a 200.
 
 ## Open items
 
-1. **The 24-hour onboarding flow is designed but not built.** The checklist
-   fixture exists in the mock with the §11 hour 0/4/12/24 stages, including the
-   two steps that cannot complete unattended. The screens are F7.
-2. **Signup and the business type selector.** 43 industry profiles are defined
-   and searchable; the form is not built.
-3. **Offline till.** §7 says a third party being down must never block a sale.
+1. **Signup collects no billing period.** The tier page states an annual
+   discount and the subscription record carries a period, but `SignupInput` has
+   no field for one, so the form shows the monthly figure and says billing
+   starts at go-live. Adding it is one field on the contract and a toggle on the
+   plan step; it was left out rather than shown as a control that sends nothing.
+2. **Signing up does not verify the email.** `auth.proto` is explicit that
+   signup issues a verification token and does not sign you in. The BFF contract
+   here returns a session, because the Notification service does not exist and a
+   wall nobody can get past is worse than no wall. When mail can be delivered
+   this becomes a fifth step, not a redesign: the checklist already models a
+   step nobody can complete unattended.
+3. **Password reset and invite acceptance are still routed placeholders.** Both
+   need the same thing, which is somewhere for a link to be delivered to.
+4. **The checklist has no per-step history.** A step that failed, was retried
+   and then succeeded shows as done, with nothing saying it took three attempts.
+   That is a question a specialist will eventually ask on behalf of a merchant
+   who says the setup was rough.
+5. **Offline till.** §7 says a third party being down must never block a sale.
    That is a backend guarantee, but a till that cannot queue a tender locally
    breaks it from the front. The tender flow is still shaped so queueing can be
    added without redesign: a payment is accepted against a balance and only the
    completed set is sent, so a queued one changes where the tenders go, not how
    they are taken.
-4. **Document rendering.** The viewer must display a stored artifact, never a
+6. **Document rendering.** The viewer must display a stored artifact, never a
    recomputation. Until Invoicing exists the mock must serve a fixed file, or
    the immutability rule gets designed away.
-5. **Prices and seat counts** are still unset. They are Registry values and the
+7. **Prices and seat counts** are still unset. They are Registry values and the
    apps read them from one place.
-6. **Tables are a grid by area, not a drawn floor plan.** A real plan needs an
+8. **Tables are a grid by area, not a drawn floor plan.** A real plan needs an
    editor and a canvas. A grid grouped by area answers the two questions a
    server actually has, which table is free and who has been waiting longest.
    A table now carries its open tab; what it still does not do is let a tab be
    moved between tables, or split between two parties.
-7. **Exporting is still missing.** Every figure can be read and acted on, but
+9. **Exporting is still missing.** Every figure can be read and acted on, but
    nothing can be taken out: no CSV, no scheduled report, no print layout
    beyond what the browser gives. That is the next honest gap.
-8. **Cost price is per item, not per batch.** Real margin moves with what you
-   last paid a supplier. A single cost is right enough to make the analysis
-   useful and wrong enough that a merchant reconciling to the penny will notice.
-9. **The fixtures ship in the production bundle.** `DevToolbar` imports
-   `@twentyfour/mock` statically, so the store, the seeds and all three tenants
-   are in every application behind a component that renders nothing. MSW itself
-   is correctly excluded. The fix is a dynamic import inside the lazy factory.
-10. **A parked sale keeps one timestamp.** While it is parked, `placedAt` is
+10. **Cost price is per item, not per batch.** Real margin moves with what you
+    last paid a supplier. A single cost is right enough to make the analysis
+    useful and wrong enough that a merchant reconciling to the penny will notice.
+11. **The fixtures ship in the production bundle.** `DevToolbar` imports
+    `@twentyfour/mock` statically, so the store, the seeds and all three tenants
+    are in every application behind a component that renders nothing. MSW itself
+    is correctly excluded. The fix is a dynamic import inside the lazy factory.
+12. **A parked sale keeps one timestamp.** While it is parked, `placedAt` is
     when it was parked, and settling moves it to when it became a sale, so the
     receipt and the day's takings agree about which day it belongs to. Nothing
     then records how long the tab was open, which is a figure a restaurant
     would eventually want for table turn time.
-11. **Roles are built in, not custom.** Four cover the shapes an SMB actually
+13. **Roles are built in, not custom.** Four cover the shapes an SMB actually
     has. Custom permission sets are a real feature of the RBAC service and
     would need a builder screen, an audit trail per grant, and a rule
     preventing a role from granting more than its author holds. Not built until
     someone asks.
+14. **The signup redirect only lands in production.** All four applications sit
+    on one origin behind Traefik, which is what makes the session cookie and
+    these cross-application redirects work. In development they are four dev
+    servers on four ports, so `/onboarding` after signup, and `/auth/` after
+    sign-out, resolve to nothing. A `server.proxy` block in each Vite config
+    would fix the whole family of them at once.
+15. **The MSW worker was missing from every app.** All four declared
+    `msw.workerDirectory` and none of them had the file, so `npm run dev` could
+    not start the mock gateway at all. Generated with `npx msw init` for each.
+16. **The admin gateway does not exist.** The console speaks a full
+    `/admin/api` contract that only the mock answers. Nothing about the
+    application changes when it lands: `adminRequest` already goes over fetch to
+    the right base, and the nginx block that returns a 503 becomes a
+    `proxy_pass`.
+17. **Staff SSO, MFA and the IP allowlist are claims, not code.** The console
+    renders a sign-in that says all three and a session that reports which
+    authenticator and which address, but every one of those is enforced at a
+    gateway that is not built. This is the right split, and it is worth being
+    explicit that the console currently asserts a security posture it does not
+    implement.
+18. **The console cannot create a tenant.** Provisioning is a saga owned by a
+    service, and a specialist-led intake needs a form that starts one. Both
+    routes into a tier converge on the same saga, so the self-serve half is
+    built and the specialist half is not.
+19. **Data subject requests have no screen.** The customer browse was removed
+    deliberately, and the thing that should replace it, finding one record by
+    exact address so it can be exported or erased, is not built either. Until
+    it is, an erasure request has no answer in the console at all.
+20. **A support session cannot actually reach the merchant plane.** The handoff
+    opens the real dashboard, which is correct, but the dashboard has no notion
+    of a support token: it will show whoever is signed in on that browser. Making
+    it real needs the token accepted at the tenant gateway and a banner in the
+    dashboard saying who is really driving.
+21. **The provisioning queue polls rather than subscribes.** Thirty seconds is
+    fine for a saga measured in hours, but the events already exist on the bus
+    and a specialist watching a stuck run wants it to clear when it clears.
+22. **The icon registry costs every application.** It is one object literal, so
+    nothing tree-shakes: the six icons the console needed added about 5 kB to
+    the till, which renders none of them. Splitting per application would break
+    the property that a typo in an icon name is a compile error, so it stands
+    until the number is worth the trade.

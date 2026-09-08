@@ -1,8 +1,11 @@
-// Package httpx is the gateway's HTTP conventions: how a response is shaped,
-// how an error is reported, and how every request is identified in the log.
+// Package httpx is the HTTP conventions both gateways answer with: how a
+// response is shaped, how an error is reported, and how every request is
+// identified in the log.
 //
-// The frontend reads `code` to decide what to do, so these strings are part of
-// the contract and must not drift.
+// Shared rather than written twice. The frontend reads `code` to decide what to
+// do, so these strings are part of the contract; two gateways with their own
+// error envelopes would drift, and the client cannot tell which one it is
+// talking to from the shape of a failure.
 package httpx
 
 import (

@@ -7,7 +7,7 @@ import { usePermission } from '@twentyfour/rbac'
 import {
   Badge, Button, Card, CardHeader, Dialog, Icon, Input, cn, useToast,
 } from '@twentyfour/ui'
-import { BusinessTypeSelector } from '../../components/BusinessTypeSelector'
+import { BusinessTypeSelector } from '@twentyfour/shell'
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const ORDER = [1, 2, 3, 4, 5, 6, 0]

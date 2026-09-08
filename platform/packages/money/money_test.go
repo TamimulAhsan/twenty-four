@@ -1,4 +1,4 @@
-package pricing
+package money
 
 import "testing"
 

@@ -10,25 +10,31 @@
  */
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Ban, Bell, Boxes,
-  Calendar, CalendarDays, Check, CheckCircle2, ChefHat, ChartNoAxesCombined, ChevronDown,
+  Building2, Calendar, CalendarDays, Check, CheckCircle2, ChefHat, ChartNoAxesCombined,
+  ChevronDown,
   ChevronLeft, ChevronRight, ChevronsUpDown, CircleDot, Clock, Contact, CreditCard,
-  Ellipsis, ExternalLink, Eye, EyeOff, FileClock, FileText, Filter, Globe, Grid3x3, Info,
+  Ellipsis, ExternalLink, Eye, EyeOff, FileClock, FileText, Filter, Gauge, Globe, Grid3x3,
+  Info, KeyRound, Layers,
   LayoutDashboard, LayoutGrid, LoaderCircle, LogOut, Megaphone, Menu, Minus, Moon, Package,
   Pencil, Percent,
   Plus, Printer, Receipt, ReceiptText, RefreshCw, RotateCcw, Search, ScanLine, Settings,
-  ShieldCheck, Sparkles, Sun, Trash2, TrendingDown, TrendingUp, TriangleAlert, User, Users,
+  ShieldAlert, ShieldCheck, Sparkles, Sun, Trash2, TrendingDown, TrendingUp, TriangleAlert,
+  User, UserCog, Users,
   Wallet, X, type LucideIcon,
 } from 'lucide-react'
 
 export const icons = {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Ban, Bell, Boxes,
-  Calendar, CalendarDays, Check, CheckCircle2, ChefHat, ChartNoAxesCombined, ChevronDown,
+  Building2, Calendar, CalendarDays, Check, CheckCircle2, ChefHat, ChartNoAxesCombined,
+  ChevronDown,
   ChevronLeft, ChevronRight, ChevronsUpDown, CircleDot, Clock, Contact, CreditCard,
-  Ellipsis, ExternalLink, Eye, EyeOff, FileClock, FileText, Filter, Globe, Grid3x3, Info,
+  Ellipsis, ExternalLink, Eye, EyeOff, FileClock, FileText, Filter, Gauge, Globe, Grid3x3,
+  Info, KeyRound, Layers,
   LayoutDashboard, LayoutGrid, LoaderCircle, LogOut, Megaphone, Menu, Minus, Moon, Package,
   Pencil, Percent,
   Plus, Printer, Receipt, ReceiptText, RefreshCw, RotateCcw, Search, ScanLine, Settings,
-  ShieldCheck, Sparkles, Sun, Trash2, TrendingDown, TrendingUp, TriangleAlert, User, Users,
+  ShieldAlert, ShieldCheck, Sparkles, Sun, Trash2, TrendingDown, TrendingUp, TriangleAlert,
+  User, UserCog, Users,
   Wallet, X,
 } satisfies Record<string, LucideIcon>
 

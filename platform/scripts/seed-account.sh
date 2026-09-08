@@ -6,7 +6,7 @@
 set -euo pipefail
 
 NS=twentyfour
-EMAIL=${1:-admin@example.com}
+EMAIL=${1:-merchant@example.com}
 PASSWORD=${2:-1234}
 NAME=${3:-Admin}
 BUSINESS=${4:-Osteria}
@@ -34,6 +34,10 @@ out=$(grpcurl -plaintext -d "$payload" localhost:$port twentyfour.auth.v1.AuthSe
 
 user=$(printf '%s' "$out" | jq -r .user.id)
 tenant=$(printf '%s' "$out" | jq -r .tenantId)
+code=$(printf '%s' "$out" | jq -r .merchantCode)
 echo "  created $EMAIL"
-echo "    user   $user"
-echo "    tenant $tenant"
+echo "    user     $user"
+echo "    tenant   $tenant"
+# Assigned once at signup and never reissued. It goes on every document this
+# business will ever send.
+echo "    merchant $code"

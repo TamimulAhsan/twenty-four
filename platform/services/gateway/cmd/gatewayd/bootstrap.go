@@ -1,10 +1,14 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 
 	authpb "github.com/twentyfour/platform/gen/go/twentyfour/auth/v1"
-	"github.com/twentyfour/platform/services/gateway/internal/httpx"
+	provpb "github.com/twentyfour/platform/gen/go/twentyfour/provisioning/v1"
+	staffpb "github.com/twentyfour/platform/gen/go/twentyfour/staff/v1"
+	tenantpb "github.com/twentyfour/platform/gen/go/twentyfour/tenant/v1"
+	"github.com/twentyfour/platform/packages/httpx"
 )
 
 // Bootstrap is the single call the dashboard makes at login. Entitlements, the
@@ -46,6 +50,8 @@ type profileBody struct {
 }
 
 type seats struct {
+	// A pointer because null means unlimited, which is what Enterprise
+	// negotiates, and zero would read as "no seats at all".
 	Limit *int `json:"limit"`
 	Used  int  `json:"used"`
 }
@@ -58,6 +64,11 @@ type entitlementBody struct {
 	Pending      []string `json:"pending"`
 }
 
+// bootstrap is the single call the dashboard makes at login.
+//
+// Entitlements, the term set and the profile arrive together because the
+// navigation cannot render without all three, and three round trips is three
+// chances to draw it half-built.
 func (g *gateway) bootstrap(w http.ResponseWriter, r *http.Request, c caller) {
 	user, err := g.auth.GetUser(r.Context(), &authpb.GetUserRequest{
 		TenantId: c.TenantID, UserId: c.UserID,
@@ -67,51 +78,141 @@ func (g *gateway) bootstrap(w http.ResponseWriter, r *http.Request, c caller) {
 		httpx.Fail(w, r, status, code, message)
 		return
 	}
+	ctx := g.downstream(r, c)
 
-	// Seats in use is a real number: it is what the tier limit is checked
-	// against, and showing a stale one is how a merchant discovers the limit by
-	// being refused rather than by reading it.
-	used := 1
-	if list, err := g.auth.ListUsers(r.Context(), &authpb.ListUsersRequest{TenantId: c.TenantID}); err == nil {
-		used = int(list.GetActiveCount())
+	// Seats come from Staff, which is the one place the limit is enforced.
+	// Counting them here as well would mean the number a merchant reads and the
+	// number they are refused by could disagree, and they would find out which
+	// is which by being refused.
+	used, limit := 1, 0
+	if resp, err := g.staff.GetSeats(ctx, &staffpb.GetSeatsRequest{}); err == nil {
+		used = int(resp.GetSeats().GetUsed())
+	} else {
+		slog.Warn("could not read seats", "err", err, "request_id", httpx.RequestID(r))
 	}
 
-	// Tenant & Business Profile and Entitlement do not exist yet, so these are
-	// the defaults a freshly provisioned Hungarian tenant would receive. When
-	// those services land this reads from them and nothing else changes: the
-	// shape on the wire is already the contract.
-	limit := 3
-	httpx.JSON(w, r, http.StatusOK, bootstrapBody{
-		Session: g.sessionOf(r, user.GetUser()),
-		Profile: profileBody{
-			TenantID: c.TenantID,
-			Name:     defaultBusinessName,
-			Industry: "restaurant",
-			Locale:   "hu-HU",
-			Currency: "HUF",
-			Timezone: "Europe/Budapest",
-			TaxRates: []taxRate{
-				{ID: "standard", Label: "Standard", BasisPoints: 2700, IsDefault: true},
-				{ID: "reduced", Label: "Reduced", BasisPoints: 500},
-			},
-			OpeningHours:     defaultOpeningHours(),
-			PricesIncludeTax: true,
-		},
-		Entitlement: entitlementBody{
-			Tier: "starter",
-			// The Starter set from the architecture, with the dependencies it
-			// pulls in. Catalog, inventory and staff are not sold separately;
-			// they arrive because POS and Bookings need them.
-			Modules: []string{
-				"pos", "bookings", "payments", "catalog", "inventory", "staff",
-			},
-			Capabilities: []string{},
-			Seats:        seats{Limit: &limit, Used: used},
-			Pending:      []string{},
-		},
+	body := bootstrapBody{
+		Session:       g.sessionOf(r, user.GetUser()),
 		TermOverrides: map[string]any{},
 		Onboarding:    nil,
-	})
+	}
+
+	profileResp, perr := g.tenant.GetProfile(ctx, &tenantpb.GetProfileRequest{})
+	entResp, eerr := g.tenant.GetEntitlement(ctx, &tenantpb.GetEntitlementRequest{})
+	if perr != nil || eerr != nil {
+		// A tenant created before Provisioning existed has no profile. Serving
+		// the market's defaults keeps them working rather than locking them
+		// out of a dashboard they were using yesterday, and the log says which
+		// tenant needs backfilling.
+		slog.Warn("no provisioned profile; serving market defaults",
+			"tenant", c.TenantID, "profile_err", perr, "entitlement_err", eerr)
+		body.Profile = defaultProfile(c.TenantID)
+		body.Entitlement = defaultEntitlement(used)
+		httpx.JSON(w, r, http.StatusOK, body)
+		return
+	}
+
+	p := profileResp.GetProfile()
+	body.Profile = profileBody{
+		TenantID: p.GetTenantId(), Name: p.GetName(), Industry: p.GetIndustry(),
+		Locale: p.GetLocale(), Currency: p.GetCurrency(), Timezone: p.GetTimezone(),
+		PricesIncludeTax: p.GetPricesIncludeTax(),
+		TaxRates:         taxRatesOf(p), OpeningHours: hoursOf(p),
+	}
+
+	e := entResp.GetEntitlement()
+	limit = int(e.GetSeatLimit())
+	body.Entitlement = entitlementBody{
+		Tier:    e.GetTier(),
+		Modules: nonNil(e.GetModules()),
+		// Trade capabilities. Nobody chose these: the industry profile switched
+		// them on, and they never appear in a picker.
+		Capabilities: nonNil(e.GetCapabilities()),
+		Seats:        seats{Limit: seatLimit(limit), Used: used},
+		// Granted, but a person has to finish provisioning them. The dashboard
+		// shows these differently rather than pretending they work.
+		Pending: nonNil(e.GetPending()),
+	}
+
+	if run, err := g.provisioning.Get(ctx, &provpb.GetRequest{}); err == nil {
+		body.Onboarding = onboardingJSON(run.GetRun())
+	}
+
+	httpx.JSON(w, r, http.StatusOK, body)
+}
+
+func taxRatesOf(p *tenantpb.Profile) []taxRate {
+	out := make([]taxRate, 0, len(p.GetTaxRates()))
+	for _, r := range p.GetTaxRates() {
+		out = append(out, taxRate{
+			ID: r.GetId(), Label: r.GetLabel(),
+			BasisPoints: int(r.GetBasisPoints()), IsDefault: r.GetIsDefault(),
+		})
+	}
+	return out
+}
+
+func hoursOf(p *tenantpb.Profile) []openingHours {
+	out := make([]openingHours, 0, len(p.GetOpeningHours()))
+	for _, h := range p.GetOpeningHours() {
+		entry := openingHours{Day: int(h.GetDay()), Closed: h.GetClosed()}
+		if v := h.GetOpen(); v != "" {
+			entry.Open = &v
+		}
+		if v := h.GetClose(); v != "" {
+			entry.Close = &v
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// nonNil keeps an empty list an empty array rather than null. The dashboard
+// iterates these, and null is a crash where empty is a quiet afternoon.
+func nonNil(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
+// defaultProfile is what a tenant sees when it has no provisioned profile: one
+// created before this service existed. It is the market's defaults, not a
+// guess about the business.
+func defaultProfile(tenantID string) profileBody {
+	return profileBody{
+		TenantID: tenantID, Name: defaultBusinessName, Industry: "restaurant",
+		Locale: "hu-HU", Currency: "HUF", Timezone: "Europe/Budapest",
+		TaxRates: []taxRate{
+			{ID: "standard", Label: "Standard", BasisPoints: 2700, IsDefault: true},
+			{ID: "reduced", Label: "Reduced", BasisPoints: 500},
+		},
+		OpeningHours:     defaultOpeningHours(),
+		PricesIncludeTax: true,
+	}
+}
+
+func defaultEntitlement(used int) entitlementBody {
+	limit := 3
+	return entitlementBody{
+		Tier: "starter",
+		Modules: []string{
+			"identity_tenancy", "notifications", "audit_documents",
+			"catalog", "inventory", "staff_rota", "payments", "pos_orders", "bookings",
+		},
+		Capabilities: []string{},
+		Seats:        seats{Limit: &limit, Used: used},
+		Pending:      []string{},
+	}
+}
+
+// seatLimit renders zero as null: zero means unlimited, which is what
+// Enterprise negotiates, and zero on the wire would read as "no seats at all".
+func seatLimit(n int) *int {
+	if n <= 0 {
+		return nil
+	}
+	return &n
 }
 
 const defaultBusinessName = "Your business"

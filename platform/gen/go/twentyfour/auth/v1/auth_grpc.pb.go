@@ -21,13 +21,21 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AuthService_Signup_FullMethodName               = "/twentyfour.auth.v1.AuthService/Signup"
 	AuthService_InviteUser_FullMethodName           = "/twentyfour.auth.v1.AuthService/InviteUser"
+	AuthService_CreateStaff_FullMethodName          = "/twentyfour.auth.v1.AuthService/CreateStaff"
 	AuthService_AcceptInvite_FullMethodName         = "/twentyfour.auth.v1.AuthService/AcceptInvite"
+	AuthService_ReissueInvite_FullMethodName        = "/twentyfour.auth.v1.AuthService/ReissueInvite"
 	AuthService_Login_FullMethodName                = "/twentyfour.auth.v1.AuthService/Login"
+	AuthService_RedeemHandoff_FullMethodName        = "/twentyfour.auth.v1.AuthService/RedeemHandoff"
 	AuthService_Logout_FullMethodName               = "/twentyfour.auth.v1.AuthService/Logout"
 	AuthService_VerifyToken_FullMethodName          = "/twentyfour.auth.v1.AuthService/VerifyToken"
+	AuthService_GetMerchantCode_FullMethodName      = "/twentyfour.auth.v1.AuthService/GetMerchantCode"
+	AuthService_ListMerchantCodes_FullMethodName    = "/twentyfour.auth.v1.AuthService/ListMerchantCodes"
 	AuthService_GetUser_FullMethodName              = "/twentyfour.auth.v1.AuthService/GetUser"
 	AuthService_ListUsers_FullMethodName            = "/twentyfour.auth.v1.AuthService/ListUsers"
 	AuthService_DeactivateUser_FullMethodName       = "/twentyfour.auth.v1.AuthService/DeactivateUser"
+	AuthService_ReactivateUser_FullMethodName       = "/twentyfour.auth.v1.AuthService/ReactivateUser"
+	AuthService_DeleteUser_FullMethodName           = "/twentyfour.auth.v1.AuthService/DeleteUser"
+	AuthService_GetPasswordPolicy_FullMethodName    = "/twentyfour.auth.v1.AuthService/GetPasswordPolicy"
 	AuthService_ChangePassword_FullMethodName       = "/twentyfour.auth.v1.AuthService/ChangePassword"
 	AuthService_RequestPasswordReset_FullMethodName = "/twentyfour.auth.v1.AuthService/RequestPasswordReset"
 	AuthService_ResetPassword_FullMethodName        = "/twentyfour.auth.v1.AuthService/ResetPassword"
@@ -40,7 +48,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // AuthService owns identity: who someone is, and whether they are still signed
-// in. It owns credentials, sessions and tokens — and nothing else.
+// in. It owns credentials, sessions and tokens, and nothing else.
 //
 // It does NOT decide what anyone may do. That is RBAC's job, and Auth calls it
 // only to bind an initial role at signup. Keeping the two apart means a
@@ -50,20 +58,60 @@ type AuthServiceClient interface {
 	Signup(ctx context.Context, in *SignupRequest, opts ...grpc.CallOption) (*SignupResponse, error)
 	// Adds a staff member to an existing tenant. Consumes a seat.
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*InviteUserResponse, error)
+	// Creates a TwentyFour specialist on the admin plane.
+	//
+	// Not Signup: there is no business, no tenant and no merchant code. An admin
+	// account belongs to the platform, and its tenant id is the nil UUID, which
+	// tenantctx refuses. That is deliberate: an admin token cannot reach a
+	// tenant-scoped call unless the admin gateway names a tenant explicitly.
+	CreateStaff(ctx context.Context, in *CreateStaffRequest, opts ...grpc.CallOption) (*CreateStaffResponse, error)
 	AcceptInvite(ctx context.Context, in *AcceptInviteRequest, opts ...grpc.CallOption) (*AcceptInviteResponse, error)
+	// Issues a fresh invitation token for someone who has not accepted yet. It
+	// does not consume a second seat: they already hold one.
+	ReissueInvite(ctx context.Context, in *ReissueInviteRequest, opts ...grpc.CallOption) (*ReissueInviteResponse, error)
+	// Resolves the account, and answers with a token only if the caller is the
+	// gateway for the plane that account belongs to. Otherwise it answers with a
+	// one-time handoff code, so no gateway ever holds a token for the other
+	// plane.
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	// Exchanges a handoff code for a token. Single use, short lived, and bound
+	// to the address that asked for it.
+	RedeemHandoff(ctx context.Context, in *RedeemHandoffRequest, opts ...grpc.CallOption) (*RedeemHandoffResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	// The gateway's hot path. Verifies the token signature AND that the session
 	// is still live, so a revoked session stops working immediately rather than
 	// when the token happens to expire.
 	VerifyToken(ctx context.Context, in *VerifyTokenRequest, opts ...grpc.CallOption) (*VerifyTokenResponse, error)
+	// The tenant's permanent merchant code, which appears on every document it
+	// ever issues. Auth holds it because Auth mints the tenant ID at signup and
+	// is the only service that knows a tenant exists at the moment one is
+	// created. Tenant & Business Profile will own it eventually; callers go
+	// through this RPC so that move is a change of address and nothing more.
+	GetMerchantCode(ctx context.Context, in *GetMerchantCodeRequest, opts ...grpc.CallOption) (*GetMerchantCodeResponse, error)
+	// The same, for a page of the admin directory.
+	//
+	// A batch rather than a call per tenant: the directory renders the code
+	// against every row, and one round trip per row across a service boundary is
+	// the shape that stops working somewhere between fifty tenants and five
+	// hundred. A tenant with no code is simply absent from the answer.
+	ListMerchantCodes(ctx context.Context, in *ListMerchantCodesRequest, opts ...grpc.CallOption) (*ListMerchantCodesResponse, error)
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 	DeactivateUser(ctx context.Context, in *DeactivateUserRequest, opts ...grpc.CallOption) (*DeactivateUserResponse, error)
+	ReactivateUser(ctx context.Context, in *ReactivateUserRequest, opts ...grpc.CallOption) (*ReactivateUserResponse, error)
+	// Deletes an account outright. Refused for anyone who has ever signed in:
+	// their name is on orders and documents that have to stay resolvable, so
+	// those accounts are deactivated instead. Only an unaccepted invitation can
+	// be deleted, because nothing references it yet.
+	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
+	// The password rule, so a signup form states the number the server will
+	// actually enforce rather than a copy of it that drifts. Auth owns the rule,
+	// so Auth is what answers.
+	GetPasswordPolicy(ctx context.Context, in *GetPasswordPolicyRequest, opts ...grpc.CallOption) (*GetPasswordPolicyResponse, error)
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	RequestPasswordReset(ctx context.Context, in *RequestPasswordResetRequest, opts ...grpc.CallOption) (*RequestPasswordResetResponse, error)
 	ResetPassword(ctx context.Context, in *ResetPasswordRequest, opts ...grpc.CallOption) (*ResetPasswordResponse, error)
-	// Admin plane only — MFA is mandatory there.
+	// Admin plane only. MFA is mandatory there.
 	EnrollTotp(ctx context.Context, in *EnrollTotpRequest, opts ...grpc.CallOption) (*EnrollTotpResponse, error)
 	ConfirmTotp(ctx context.Context, in *ConfirmTotpRequest, opts ...grpc.CallOption) (*ConfirmTotpResponse, error)
 }
@@ -96,6 +144,16 @@ func (c *authServiceClient) InviteUser(ctx context.Context, in *InviteUserReques
 	return out, nil
 }
 
+func (c *authServiceClient) CreateStaff(ctx context.Context, in *CreateStaffRequest, opts ...grpc.CallOption) (*CreateStaffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateStaffResponse)
+	err := c.cc.Invoke(ctx, AuthService_CreateStaff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) AcceptInvite(ctx context.Context, in *AcceptInviteRequest, opts ...grpc.CallOption) (*AcceptInviteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AcceptInviteResponse)
@@ -106,10 +164,30 @@ func (c *authServiceClient) AcceptInvite(ctx context.Context, in *AcceptInviteRe
 	return out, nil
 }
 
+func (c *authServiceClient) ReissueInvite(ctx context.Context, in *ReissueInviteRequest, opts ...grpc.CallOption) (*ReissueInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReissueInviteResponse)
+	err := c.cc.Invoke(ctx, AuthService_ReissueInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LoginResponse)
 	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RedeemHandoff(ctx context.Context, in *RedeemHandoffRequest, opts ...grpc.CallOption) (*RedeemHandoffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RedeemHandoffResponse)
+	err := c.cc.Invoke(ctx, AuthService_RedeemHandoff_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +208,26 @@ func (c *authServiceClient) VerifyToken(ctx context.Context, in *VerifyTokenRequ
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyTokenResponse)
 	err := c.cc.Invoke(ctx, AuthService_VerifyToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetMerchantCode(ctx context.Context, in *GetMerchantCodeRequest, opts ...grpc.CallOption) (*GetMerchantCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMerchantCodeResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetMerchantCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListMerchantCodes(ctx context.Context, in *ListMerchantCodesRequest, opts ...grpc.CallOption) (*ListMerchantCodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMerchantCodesResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListMerchantCodes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +258,36 @@ func (c *authServiceClient) DeactivateUser(ctx context.Context, in *DeactivateUs
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeactivateUserResponse)
 	err := c.cc.Invoke(ctx, AuthService_DeactivateUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ReactivateUser(ctx context.Context, in *ReactivateUserRequest, opts ...grpc.CallOption) (*ReactivateUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReactivateUserResponse)
+	err := c.cc.Invoke(ctx, AuthService_ReactivateUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteUserResponse)
+	err := c.cc.Invoke(ctx, AuthService_DeleteUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetPasswordPolicy(ctx context.Context, in *GetPasswordPolicyRequest, opts ...grpc.CallOption) (*GetPasswordPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPasswordPolicyResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetPasswordPolicy_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +349,7 @@ func (c *authServiceClient) ConfirmTotp(ctx context.Context, in *ConfirmTotpRequ
 // for forward compatibility.
 //
 // AuthService owns identity: who someone is, and whether they are still signed
-// in. It owns credentials, sessions and tokens — and nothing else.
+// in. It owns credentials, sessions and tokens, and nothing else.
 //
 // It does NOT decide what anyone may do. That is RBAC's job, and Auth calls it
 // only to bind an initial role at signup. Keeping the two apart means a
@@ -231,20 +359,60 @@ type AuthServiceServer interface {
 	Signup(context.Context, *SignupRequest) (*SignupResponse, error)
 	// Adds a staff member to an existing tenant. Consumes a seat.
 	InviteUser(context.Context, *InviteUserRequest) (*InviteUserResponse, error)
+	// Creates a TwentyFour specialist on the admin plane.
+	//
+	// Not Signup: there is no business, no tenant and no merchant code. An admin
+	// account belongs to the platform, and its tenant id is the nil UUID, which
+	// tenantctx refuses. That is deliberate: an admin token cannot reach a
+	// tenant-scoped call unless the admin gateway names a tenant explicitly.
+	CreateStaff(context.Context, *CreateStaffRequest) (*CreateStaffResponse, error)
 	AcceptInvite(context.Context, *AcceptInviteRequest) (*AcceptInviteResponse, error)
+	// Issues a fresh invitation token for someone who has not accepted yet. It
+	// does not consume a second seat: they already hold one.
+	ReissueInvite(context.Context, *ReissueInviteRequest) (*ReissueInviteResponse, error)
+	// Resolves the account, and answers with a token only if the caller is the
+	// gateway for the plane that account belongs to. Otherwise it answers with a
+	// one-time handoff code, so no gateway ever holds a token for the other
+	// plane.
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	// Exchanges a handoff code for a token. Single use, short lived, and bound
+	// to the address that asked for it.
+	RedeemHandoff(context.Context, *RedeemHandoffRequest) (*RedeemHandoffResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// The gateway's hot path. Verifies the token signature AND that the session
 	// is still live, so a revoked session stops working immediately rather than
 	// when the token happens to expire.
 	VerifyToken(context.Context, *VerifyTokenRequest) (*VerifyTokenResponse, error)
+	// The tenant's permanent merchant code, which appears on every document it
+	// ever issues. Auth holds it because Auth mints the tenant ID at signup and
+	// is the only service that knows a tenant exists at the moment one is
+	// created. Tenant & Business Profile will own it eventually; callers go
+	// through this RPC so that move is a change of address and nothing more.
+	GetMerchantCode(context.Context, *GetMerchantCodeRequest) (*GetMerchantCodeResponse, error)
+	// The same, for a page of the admin directory.
+	//
+	// A batch rather than a call per tenant: the directory renders the code
+	// against every row, and one round trip per row across a service boundary is
+	// the shape that stops working somewhere between fifty tenants and five
+	// hundred. A tenant with no code is simply absent from the answer.
+	ListMerchantCodes(context.Context, *ListMerchantCodesRequest) (*ListMerchantCodesResponse, error)
 	GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error)
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error)
+	ReactivateUser(context.Context, *ReactivateUserRequest) (*ReactivateUserResponse, error)
+	// Deletes an account outright. Refused for anyone who has ever signed in:
+	// their name is on orders and documents that have to stay resolvable, so
+	// those accounts are deactivated instead. Only an unaccepted invitation can
+	// be deleted, because nothing references it yet.
+	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
+	// The password rule, so a signup form states the number the server will
+	// actually enforce rather than a copy of it that drifts. Auth owns the rule,
+	// so Auth is what answers.
+	GetPasswordPolicy(context.Context, *GetPasswordPolicyRequest) (*GetPasswordPolicyResponse, error)
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	RequestPasswordReset(context.Context, *RequestPasswordResetRequest) (*RequestPasswordResetResponse, error)
 	ResetPassword(context.Context, *ResetPasswordRequest) (*ResetPasswordResponse, error)
-	// Admin plane only — MFA is mandatory there.
+	// Admin plane only. MFA is mandatory there.
 	EnrollTotp(context.Context, *EnrollTotpRequest) (*EnrollTotpResponse, error)
 	ConfirmTotp(context.Context, *ConfirmTotpRequest) (*ConfirmTotpResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
@@ -263,17 +431,32 @@ func (UnimplementedAuthServiceServer) Signup(context.Context, *SignupRequest) (*
 func (UnimplementedAuthServiceServer) InviteUser(context.Context, *InviteUserRequest) (*InviteUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method InviteUser not implemented")
 }
+func (UnimplementedAuthServiceServer) CreateStaff(context.Context, *CreateStaffRequest) (*CreateStaffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateStaff not implemented")
+}
 func (UnimplementedAuthServiceServer) AcceptInvite(context.Context, *AcceptInviteRequest) (*AcceptInviteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcceptInvite not implemented")
 }
+func (UnimplementedAuthServiceServer) ReissueInvite(context.Context, *ReissueInviteRequest) (*ReissueInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReissueInvite not implemented")
+}
 func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedAuthServiceServer) RedeemHandoff(context.Context, *RedeemHandoffRequest) (*RedeemHandoffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RedeemHandoff not implemented")
 }
 func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Logout not implemented")
 }
 func (UnimplementedAuthServiceServer) VerifyToken(context.Context, *VerifyTokenRequest) (*VerifyTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyToken not implemented")
+}
+func (UnimplementedAuthServiceServer) GetMerchantCode(context.Context, *GetMerchantCodeRequest) (*GetMerchantCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMerchantCode not implemented")
+}
+func (UnimplementedAuthServiceServer) ListMerchantCodes(context.Context, *ListMerchantCodesRequest) (*ListMerchantCodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMerchantCodes not implemented")
 }
 func (UnimplementedAuthServiceServer) GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUser not implemented")
@@ -283,6 +466,15 @@ func (UnimplementedAuthServiceServer) ListUsers(context.Context, *ListUsersReque
 }
 func (UnimplementedAuthServiceServer) DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeactivateUser not implemented")
+}
+func (UnimplementedAuthServiceServer) ReactivateUser(context.Context, *ReactivateUserRequest) (*ReactivateUserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReactivateUser not implemented")
+}
+func (UnimplementedAuthServiceServer) DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteUser not implemented")
+}
+func (UnimplementedAuthServiceServer) GetPasswordPolicy(context.Context, *GetPasswordPolicyRequest) (*GetPasswordPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPasswordPolicy not implemented")
 }
 func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
@@ -356,6 +548,24 @@ func _AuthService_InviteUser_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_CreateStaff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateStaffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CreateStaff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CreateStaff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CreateStaff(ctx, req.(*CreateStaffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_AcceptInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AcceptInviteRequest)
 	if err := dec(in); err != nil {
@@ -374,6 +584,24 @@ func _AuthService_AcceptInvite_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_ReissueInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReissueInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ReissueInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ReissueInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ReissueInvite(ctx, req.(*ReissueInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LoginRequest)
 	if err := dec(in); err != nil {
@@ -388,6 +616,24 @@ func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RedeemHandoff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RedeemHandoffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RedeemHandoff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RedeemHandoff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RedeemHandoff(ctx, req.(*RedeemHandoffRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -424,6 +670,42 @@ func _AuthService_VerifyToken_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).VerifyToken(ctx, req.(*VerifyTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_GetMerchantCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMerchantCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetMerchantCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetMerchantCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetMerchantCode(ctx, req.(*GetMerchantCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListMerchantCodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMerchantCodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListMerchantCodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListMerchantCodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListMerchantCodes(ctx, req.(*ListMerchantCodesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -478,6 +760,60 @@ func _AuthService_DeactivateUser_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).DeactivateUser(ctx, req.(*DeactivateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ReactivateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReactivateUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ReactivateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ReactivateUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ReactivateUser(ctx, req.(*ReactivateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_DeleteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).DeleteUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_DeleteUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).DeleteUser(ctx, req.(*DeleteUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_GetPasswordPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPasswordPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetPasswordPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetPasswordPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetPasswordPolicy(ctx, req.(*GetPasswordPolicyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -588,12 +924,24 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuthService_InviteUser_Handler,
 		},
 		{
+			MethodName: "CreateStaff",
+			Handler:    _AuthService_CreateStaff_Handler,
+		},
+		{
 			MethodName: "AcceptInvite",
 			Handler:    _AuthService_AcceptInvite_Handler,
 		},
 		{
+			MethodName: "ReissueInvite",
+			Handler:    _AuthService_ReissueInvite_Handler,
+		},
+		{
 			MethodName: "Login",
 			Handler:    _AuthService_Login_Handler,
+		},
+		{
+			MethodName: "RedeemHandoff",
+			Handler:    _AuthService_RedeemHandoff_Handler,
 		},
 		{
 			MethodName: "Logout",
@@ -602,6 +950,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyToken",
 			Handler:    _AuthService_VerifyToken_Handler,
+		},
+		{
+			MethodName: "GetMerchantCode",
+			Handler:    _AuthService_GetMerchantCode_Handler,
+		},
+		{
+			MethodName: "ListMerchantCodes",
+			Handler:    _AuthService_ListMerchantCodes_Handler,
 		},
 		{
 			MethodName: "GetUser",
@@ -614,6 +970,18 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeactivateUser",
 			Handler:    _AuthService_DeactivateUser_Handler,
+		},
+		{
+			MethodName: "ReactivateUser",
+			Handler:    _AuthService_ReactivateUser_Handler,
+		},
+		{
+			MethodName: "DeleteUser",
+			Handler:    _AuthService_DeleteUser_Handler,
+		},
+		{
+			MethodName: "GetPasswordPolicy",
+			Handler:    _AuthService_GetPasswordPolicy_Handler,
 		},
 		{
 			MethodName: "ChangePassword",

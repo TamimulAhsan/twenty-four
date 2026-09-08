@@ -4,7 +4,7 @@ import { layout, NODE_W as W, NODE_H as H } from './layout'
 
 const ROLE: Record<string, string> = {
   edge: 'var(--ingress)', service: 'var(--svc)', app: 'var(--app)',
-  datastore: 'var(--data)', system: 'var(--sys)',
+  frontend: 'var(--fe)', datastore: 'var(--data)', system: 'var(--sys)',
 }
 const EDGE: Record<string, string> = {
   routes: 'var(--ingress)', selects: '#4a5570', depends: 'var(--app)',
@@ -150,21 +150,31 @@ export function Topology({ g, sel, onSelect, onBackground }: {
           {nodes.map((n) => {
             const c = ROLE[n.role] ?? 'var(--sys)'
             const done = n.phase === 'Succeeded'
-            const bad = !n.ready && !done
+            // Stopped is a choice somebody made, not a fault. Drawing it in
+            // the red of a failing probe would send people looking for a break
+            // that is not there, so it gets its own muted treatment: dashed
+            // outline, grey dot, and the word "stopped" where the ready
+            // fraction goes.
+            const bad = !n.ready && !done && !n.stopped
             const isSel = n.id === sel
             return (
               <g key={n.id} className="nodeBox"
                  transform={`translate(${n.x - W / 2},${n.y - H / 2})`}
                  onClick={() => clickNode(n)} opacity={sel && !isSel ? 0.5 : 1}>
-                <rect width={W} height={H} rx="9" fill="var(--panel2)"
+                <rect width={W} height={H} rx="9"
+                      fill={n.stopped ? 'var(--panel)' : 'var(--panel2)'}
                       stroke={isSel ? c : bad ? 'var(--bad)' : 'var(--line)'}
+                      strokeDasharray={n.stopped && !isSel ? '5 4' : undefined}
                       strokeWidth={isSel ? 2.2 : 1} />
-                <rect width="4" height={H} rx="2" fill={bad ? 'var(--bad)' : done ? 'var(--sys)' : c} />
+                <rect width="4" height={H} rx="2"
+                      fill={bad ? 'var(--bad)' : done || n.stopped ? 'var(--sys)' : c}
+                      opacity={n.stopped ? 0.6 : 1} />
                 <text className="nkind" x="15" y="19" fill={c}>{n.kind.toUpperCase()}</text>
                 <text className="nns" x={W - 26} y="19" textAnchor="end">{n.namespace}</text>
                 <circle cx={W - 14} cy="15" r="4"
-                        fill={bad ? 'var(--bad)' : done ? 'var(--sys)' : 'var(--ok)'} />
-                <text className="nlabel" x="15" y="41">{trunc(n.name, 26)}</text>
+                        fill={bad ? 'var(--bad)' : done || n.stopped ? 'var(--sys)' : 'var(--ok)'} />
+                <text className="nlabel" x="15" y="41"
+                      opacity={n.stopped ? 0.65 : 1}>{trunc(n.name, 26)}</text>
                 <text className="nimg" x="15" y="57">{trunc(subtitle(n), 30)}</text>
                 <line x1="15" y1="66" x2={W - 15} y2="66" stroke="var(--line)" />
                 <text className="nstat" x="15" y="80">{statLine(n)}</text>
@@ -193,6 +203,9 @@ export function Topology({ g, sel, onSelect, onBackground }: {
 }
 
 function subtitle(n: GNode): string {
+  // A paired surface says so on the node itself, so it is visible without
+  // opening the panel that "pos" is two deployments rather than one.
+  if (n.kind === 'pod' && (n.moves?.length ?? 0) > 1) return `${n.workload} surface · ${n.image}`
   if (n.kind === 'pod') return n.image || '—'
   if (n.kind === 'service') return n.podIP || 'headless'
   return n.image || 'ingress'
@@ -200,6 +213,7 @@ function subtitle(n: GNode): string {
 
 function statLine(n: GNode): string {
   if (n.kind === 'pod') {
+    if (n.stopped) return `stopped  ·  0 of ${n.desired || 1}`
     const parts = [n.phase === 'Succeeded' ? 'completed' : n.readyStr]
     if (n.cpu) parts.push(n.cpu)
     if (n.mem) parts.push(n.mem)

@@ -12,6 +12,7 @@
  */
 import { money, type Money } from '@twentyfour/money'
 import { resolveEntitlement, type TierId } from '@twentyfour/entitlement'
+import { buildOnboarding } from './onboarding'
 import type {
   Booking,
   DiningTable,
@@ -280,7 +281,7 @@ const salonCategories = categories(salonId, [
 const salon: TenantSeed = {
   id: salonId,
   label: 'Aranyhíd Szalon',
-  proves: 'Starter tier: a short sidebar, no Grow group, and the seat quota bites at three.',
+  proves: 'Starter tier: a short sidebar, the seat quota biting at three, and a setup still running.',
   profile: profileFor(salonId, 'Aranyhíd Szalon', 'hair_salon'),
   session: {
     userId: 'salon-staff-1',
@@ -311,7 +312,10 @@ const salon: TenantSeed = {
   ]),
   bookings: [],
   tables: [],
-  onboarding: null,
+  // The one fixture still being set up, so the 24-hour checklist, the
+  // sidebar row and the overview banner can all be looked at without
+  // signing up for a new account first.
+  onboarding: buildOnboarding(),
 }
 
 /* -------------------------------------------------------------- boutique */

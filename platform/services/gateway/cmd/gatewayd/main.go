@@ -19,21 +19,40 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	authpb "github.com/twentyfour/platform/gen/go/twentyfour/auth/v1"
+	catalogpb "github.com/twentyfour/platform/gen/go/twentyfour/catalog/v1"
+	inventorypb "github.com/twentyfour/platform/gen/go/twentyfour/inventory/v1"
+	paymentspb "github.com/twentyfour/platform/gen/go/twentyfour/payments/v1"
+	pospb "github.com/twentyfour/platform/gen/go/twentyfour/pos/v1"
+	provpb "github.com/twentyfour/platform/gen/go/twentyfour/provisioning/v1"
 	rbacpb "github.com/twentyfour/platform/gen/go/twentyfour/rbac/v1"
-	"github.com/twentyfour/platform/services/gateway/internal/httpx"
-	"github.com/twentyfour/platform/services/gateway/internal/session"
+	staffpb "github.com/twentyfour/platform/gen/go/twentyfour/staff/v1"
+	tenantpb "github.com/twentyfour/platform/gen/go/twentyfour/tenant/v1"
+	"github.com/twentyfour/platform/packages/httpx"
+	"github.com/twentyfour/platform/packages/tenantctx"
+	"github.com/twentyfour/platform/packages/websession"
 )
 
 type gateway struct {
-	auth    authpb.AuthServiceClient
-	rbac    rbacpb.RBACServiceClient
-	cookies session.Manager
+	auth         authpb.AuthServiceClient
+	rbac         rbacpb.RBACServiceClient
+	catalog      catalogpb.CatalogServiceClient
+	staff        staffpb.StaffServiceClient
+	inventory    inventorypb.InventoryServiceClient
+	payments     paymentspb.PaymentsServiceClient
+	pos          pospb.PosServiceClient
+	tenant       tenantpb.TenantServiceClient
+	provisioning provpb.ProvisioningServiceClient
+	cookies      websession.Manager
+	// Where a specialist is sent when they sign in here. Its own host, because
+	// the admin plane is not inside the merchant cookie's namespace.
+	adminURL string
 	// permissive turns every RBAC denial into an allow, so the whole dashboard
 	// can be walked through before the services behind it exist. It is a
 	// development switch: it must never be set anywhere a real merchant's data
@@ -53,6 +72,15 @@ func main() {
 	addr := flag.String("addr", ":8081", "HTTP listen address")
 	authAddr := flag.String("auth", "auth:9102", "Auth service address")
 	rbacAddr := flag.String("rbac", "rbac:9101", "RBAC service address")
+	catalogAddr := flag.String("catalog", "catalog:9103", "Catalog service address")
+	inventoryAddr := flag.String("inventory", "inventory:9104", "Inventory service address")
+	staffAddr := flag.String("staff", "staff:9105", "Staff service address")
+	paymentsAddr := flag.String("payments", "payments:9106", "Payments service address")
+	posAddr := flag.String("pos", "pos:9108", "POS service address")
+	tenantAddr := flag.String("tenant", "tenant:9109", "Tenant service address")
+	provAddr := flag.String("provisioning", "provisioning:9110", "Provisioning service address")
+	adminURL := flag.String("admin-url", "http://admin.twentyfour.localhost",
+		"origin of the admin console, where a specialist signing in here is sent")
 	cookieDomain := flag.String("cookie-domain", "", "parent domain for the session cookie; empty means host-only")
 	secure := flag.Bool("secure-cookie", false, "set Secure on the session cookie; must be on outside local development")
 	ttl := flag.Duration("session-ttl", 12*time.Hour, "session lifetime")
@@ -74,15 +102,40 @@ func main() {
 	defer authConn.Close()
 	rbacConn := dial(*rbacAddr)
 	defer rbacConn.Close()
+	catalogConn := dial(*catalogAddr)
+	defer catalogConn.Close()
+	inventoryConn := dial(*inventoryAddr)
+	defer inventoryConn.Close()
+	staffConn := dial(*staffAddr)
+	defer staffConn.Close()
+	paymentsConn := dial(*paymentsAddr)
+	defer paymentsConn.Close()
+	posConn := dial(*posAddr)
+	defer posConn.Close()
+	tenantConn := dial(*tenantAddr)
+	defer tenantConn.Close()
+	provConn := dial(*provAddr)
+	defer provConn.Close()
 
 	g := &gateway{
-		auth: authpb.NewAuthServiceClient(authConn),
-		rbac: rbacpb.NewRBACServiceClient(rbacConn),
-		cookies: session.Manager{
+		auth:         authpb.NewAuthServiceClient(authConn),
+		rbac:         rbacpb.NewRBACServiceClient(rbacConn),
+		catalog:      catalogpb.NewCatalogServiceClient(catalogConn),
+		inventory:    inventorypb.NewInventoryServiceClient(inventoryConn),
+		staff:        staffpb.NewStaffServiceClient(staffConn),
+		payments:     paymentspb.NewPaymentsServiceClient(paymentsConn),
+		pos:          pospb.NewPosServiceClient(posConn),
+		tenant:       tenantpb.NewTenantServiceClient(tenantConn),
+		provisioning: provpb.NewProvisioningServiceClient(provConn),
+		cookies: websession.Manager{
+			// The merchant cookie, on the parent domain, so the dashboard, the
+			// till, the calendar and the CRM subdomain share one sign-in.
+			Name:   websession.CookieName,
 			Domain: *cookieDomain,
 			Secure: *secure,
 			TTL:    *ttl,
 		},
+		adminURL:   strings.TrimRight(*adminURL, "/"),
 		permissive: *permissive,
 	}
 	if *permissive {
@@ -96,9 +149,19 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", g.login)
 	mux.HandleFunc("POST /api/auth/logout", g.logout)
 	mux.HandleFunc("GET /api/auth/session", g.currentSession)
+	// Signing up, and resetting a forgotten password. Both are how a session
+	// begins, so neither can require one.
+	g.registerSignup(mux)
 
 	// Authenticated.
 	mux.Handle("GET /api/bootstrap", g.authenticated(g.bootstrap))
+	// Real services first. registerReadStubs must not claim a route a real
+	// service already serves, and ServeMux would panic on the duplicate rather
+	// than silently picking one, which is the failure mode you want here.
+	g.registerCatalog(mux)
+	g.registerTeamAndStock(mux)
+	g.registerPayments(mux)
+	g.registerOrders(mux)
 	g.registerReadStubs(mux)
 
 	// Anything else under /api that is not implemented yet says so plainly,
@@ -114,13 +177,21 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           httpx.WithRequestID(logging(mux)),
+		Addr:    *addr,
+		Handler: httpx.WithRequestID(logging(mux)),
+		// No write timeout on purpose. A card tender holds the request open
+		// while somebody approves the payment on a terminal, which is exactly
+		// what a till does: press Charge, the machine beeps, everybody waits.
+		// POS bounds that wait itself; a timeout here would cut the cashier off
+		// mid-sale with the money already taken.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
 		slog.Info("gateway listening", "addr", *addr, "auth", *authAddr, "rbac", *rbacAddr,
+			"catalog", *catalogAddr, "inventory", *inventoryAddr, "staff", *staffAddr,
+			"payments", *paymentsAddr, "pos", *posAddr,
+			"tenant", *tenantAddr, "provisioning", *provAddr,
 			"cookie_domain", *cookieDomain, "secure_cookie", *secure)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("serve", "err", err)
@@ -174,7 +245,7 @@ func (g *gateway) authenticated(h func(http.ResponseWriter, *http.Request, calle
 }
 
 func (g *gateway) verify(w http.ResponseWriter, r *http.Request) (caller, bool) {
-	token := session.Token(r)
+	token := g.cookies.Token(r)
 	if token == "" {
 		httpx.Fail(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "Sign in to continue.")
 		return caller{}, false
@@ -225,6 +296,44 @@ func (g *gateway) requirePermission(w http.ResponseWriter, r *http.Request, c ca
 	return true
 }
 
+// downstream is how the caller's identity reaches a domain service.
+//
+// Services do not authenticate; they trust these headers because network policy
+// means nothing else can reach them. Every call to a domain service goes
+// through here, so no handler can forget to carry the tenant and none of them
+// can invent one either.
+func (g *gateway) downstream(r *http.Request, c caller) context.Context {
+	id := tenantctx.Identity{Plane: c.Plane}
+	// Parse rather than trust: these came from a verified token, but a
+	// malformed one must fail here rather than reach a WHERE clause.
+	if tid, err := uuid.Parse(c.TenantID); err == nil {
+		id.TenantID = tid
+	}
+	if uid, err := uuid.Parse(c.UserID); err == nil {
+		id.UserID = uid
+	}
+	return tenantctx.Outbound(r.Context(), id)
+}
+
+// logInviteToken is what stands in for the Notification service. An invitation
+// nobody can accept is not worth building, and printing the link is honest
+// about the fact that nothing is being emailed yet.
+func logInviteToken(r *http.Request, email, token string) {
+	slog.Warn("invitation issued but not sent: there is no Notification service yet",
+		"email", email, "accept_token", token, "request_id", httpx.RequestID(r))
+}
+
+// failGRPC writes the HTTP answer for a failed downstream call, and logs the
+// original. The merchant sees a sentence; the internals stay in the log.
+func (g *gateway) failGRPC(w http.ResponseWriter, r *http.Request, err error) {
+	code, kind, message := grpcStatus(err)
+	if code >= 500 {
+		slog.Error("downstream call failed", "err", err, "path", r.URL.Path,
+			"request_id", httpx.RequestID(r))
+	}
+	httpx.Fail(w, r, code, kind, message)
+}
+
 func planePB(plane string) rbacpb.Plane {
 	if plane == "admin" {
 		return rbacpb.Plane_PLANE_ADMIN
@@ -246,9 +355,26 @@ func grpcStatus(err error) (int, string, string) {
 		return http.StatusConflict, httpx.CodeConflict, status.Convert(err).Message()
 	case codes.NotFound:
 		return http.StatusNotFound, httpx.CodeNotFound, "Not found."
-	case codes.Unavailable, codes.DeadlineExceeded:
+	case codes.ResourceExhausted:
+		// A plan limit, not a fault. The frontend branches on the code rather
+		// than the status, and "not_entitled" is what tells it to offer an
+		// upgrade instead of a retry.
+		return http.StatusPaymentRequired, httpx.CodeNotEntitled, status.Convert(err).Message()
+	case codes.FailedPrecondition:
+		// The state is wrong, not the request: the last owner, an invitation
+		// already accepted, an account that has traded. The message is written
+		// for a merchant, so it is passed through.
+		return http.StatusConflict, httpx.CodeConflict, status.Convert(err).Message()
+	case codes.Unavailable:
 		return http.StatusServiceUnavailable, httpx.CodeUnavailable,
 			"That service is unavailable right now. Try again in a moment."
+	case codes.DeadlineExceeded:
+		// Not an outage. Something was waiting on a person and they did not
+		// come: a card payment nobody approved, most often. The message says
+		// where it is still waiting, so it is passed through.
+		return http.StatusRequestTimeout, httpx.CodeConflict, status.Convert(err).Message()
+	case codes.Canceled:
+		return http.StatusRequestTimeout, httpx.CodeConflict, status.Convert(err).Message()
 	default:
 		return http.StatusInternalServerError, httpx.CodeInternal, "Something went wrong."
 	}

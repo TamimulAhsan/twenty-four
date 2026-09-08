@@ -9,5 +9,7 @@
 export { storeFor, resetStore, availableTenants, TenantStore, MockError } from './store'
 export { currentTenantId, setCurrentTenantId, isSignedIn, setSignedIn } from './session'
 export { SEEDS, DEFAULT_TENANT, seedFor, type TenantSeed } from './seed'
-export { buildOnboarding } from './onboarding'
+export { buildOnboarding, freshOnboarding } from './onboarding'
 export { wire } from './wire'
+export { AdminStore, adminStore, resetAdminStore } from './admin/store'
+export { ENVIRONMENT, STAFF as ADMIN_STAFF, NOW as ADMIN_NOW } from './admin/platform'

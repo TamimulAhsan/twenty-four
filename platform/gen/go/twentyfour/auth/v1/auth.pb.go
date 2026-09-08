@@ -410,8 +410,10 @@ type SignupResponse struct {
 	TenantId string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Signup does not sign you in; the email must be verified first.
 	VerificationToken string `protobuf:"bytes,3,opt,name=verification_token,json=verificationToken,proto3" json:"verification_token,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Assigned here and never reissued, including after the tenant leaves.
+	MerchantCode  string `protobuf:"bytes,4,opt,name=merchant_code,json=merchantCode,proto3" json:"merchant_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SignupResponse) Reset() {
@@ -465,6 +467,323 @@ func (x *SignupResponse) GetVerificationToken() string {
 	return ""
 }
 
+func (x *SignupResponse) GetMerchantCode() string {
+	if x != nil {
+		return x.MerchantCode
+	}
+	return ""
+}
+
+type GetMerchantCodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMerchantCodeRequest) Reset() {
+	*x = GetMerchantCodeRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMerchantCodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMerchantCodeRequest) ProtoMessage() {}
+
+func (x *GetMerchantCodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMerchantCodeRequest.ProtoReflect.Descriptor instead.
+func (*GetMerchantCodeRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetMerchantCodeRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+type GetMerchantCodeResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	TenantId string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// Six characters of Crockford base32, e.g. "7QK3M9". I, L, O and U are not
+	// in the alphabet: the first three are misread off a printed invoice, and
+	// the fourth is dropped so a random string does not spell something the
+	// merchant has to look at every day.
+	MerchantCode  string                 `protobuf:"bytes,2,opt,name=merchant_code,json=merchantCode,proto3" json:"merchant_code,omitempty"`
+	AssignedAt    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=assigned_at,json=assignedAt,proto3" json:"assigned_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMerchantCodeResponse) Reset() {
+	*x = GetMerchantCodeResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMerchantCodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMerchantCodeResponse) ProtoMessage() {}
+
+func (x *GetMerchantCodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMerchantCodeResponse.ProtoReflect.Descriptor instead.
+func (*GetMerchantCodeResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetMerchantCodeResponse) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *GetMerchantCodeResponse) GetMerchantCode() string {
+	if x != nil {
+		return x.MerchantCode
+	}
+	return ""
+}
+
+func (x *GetMerchantCodeResponse) GetAssignedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AssignedAt
+	}
+	return nil
+}
+
+type CreateStaffRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Email       string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	Password    string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	DisplayName string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// An admin-plane role key from RBAC: platform_admin, specialist or support.
+	RoleKey       string `protobuf:"bytes,4,opt,name=role_key,json=roleKey,proto3" json:"role_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateStaffRequest) Reset() {
+	*x = CreateStaffRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateStaffRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateStaffRequest) ProtoMessage() {}
+
+func (x *CreateStaffRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateStaffRequest.ProtoReflect.Descriptor instead.
+func (*CreateStaffRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateStaffRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateStaffRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *CreateStaffRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateStaffRequest) GetRoleKey() string {
+	if x != nil {
+		return x.RoleKey
+	}
+	return ""
+}
+
+type CreateStaffResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateStaffResponse) Reset() {
+	*x = CreateStaffResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateStaffResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateStaffResponse) ProtoMessage() {}
+
+func (x *CreateStaffResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateStaffResponse.ProtoReflect.Descriptor instead.
+func (*CreateStaffResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CreateStaffResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type ListMerchantCodesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantIds     []string               `protobuf:"bytes,1,rep,name=tenant_ids,json=tenantIds,proto3" json:"tenant_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMerchantCodesRequest) Reset() {
+	*x = ListMerchantCodesRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMerchantCodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMerchantCodesRequest) ProtoMessage() {}
+
+func (x *ListMerchantCodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMerchantCodesRequest.ProtoReflect.Descriptor instead.
+func (*ListMerchantCodesRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListMerchantCodesRequest) GetTenantIds() []string {
+	if x != nil {
+		return x.TenantIds
+	}
+	return nil
+}
+
+type ListMerchantCodesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Keyed by tenant id. A tenant with no code assigned is not in the map.
+	MerchantCodes map[string]string `protobuf:"bytes,1,rep,name=merchant_codes,json=merchantCodes,proto3" json:"merchant_codes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMerchantCodesResponse) Reset() {
+	*x = ListMerchantCodesResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMerchantCodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMerchantCodesResponse) ProtoMessage() {}
+
+func (x *ListMerchantCodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMerchantCodesResponse.ProtoReflect.Descriptor instead.
+func (*ListMerchantCodesResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListMerchantCodesResponse) GetMerchantCodes() map[string]string {
+	if x != nil {
+		return x.MerchantCodes
+	}
+	return nil
+}
+
 type InviteUserRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	TenantId    string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -479,7 +798,7 @@ type InviteUserRequest struct {
 
 func (x *InviteUserRequest) Reset() {
 	*x = InviteUserRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[4]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +810,7 @@ func (x *InviteUserRequest) String() string {
 func (*InviteUserRequest) ProtoMessage() {}
 
 func (x *InviteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[4]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +823,7 @@ func (x *InviteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteUserRequest.ProtoReflect.Descriptor instead.
 func (*InviteUserRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{4}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *InviteUserRequest) GetTenantId() string {
@@ -552,7 +871,7 @@ type InviteUserResponse struct {
 
 func (x *InviteUserResponse) Reset() {
 	*x = InviteUserResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[5]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -564,7 +883,7 @@ func (x *InviteUserResponse) String() string {
 func (*InviteUserResponse) ProtoMessage() {}
 
 func (x *InviteUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[5]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -577,7 +896,7 @@ func (x *InviteUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteUserResponse.ProtoReflect.Descriptor instead.
 func (*InviteUserResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{5}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *InviteUserResponse) GetUser() *User {
@@ -604,7 +923,7 @@ type AcceptInviteRequest struct {
 
 func (x *AcceptInviteRequest) Reset() {
 	*x = AcceptInviteRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[6]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -616,7 +935,7 @@ func (x *AcceptInviteRequest) String() string {
 func (*AcceptInviteRequest) ProtoMessage() {}
 
 func (x *AcceptInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[6]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -629,7 +948,7 @@ func (x *AcceptInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInviteRequest.ProtoReflect.Descriptor instead.
 func (*AcceptInviteRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AcceptInviteRequest) GetInviteToken() string {
@@ -655,7 +974,7 @@ type AcceptInviteResponse struct {
 
 func (x *AcceptInviteResponse) Reset() {
 	*x = AcceptInviteResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[7]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -667,7 +986,7 @@ func (x *AcceptInviteResponse) String() string {
 func (*AcceptInviteResponse) ProtoMessage() {}
 
 func (x *AcceptInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[7]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -680,7 +999,7 @@ func (x *AcceptInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInviteResponse.ProtoReflect.Descriptor instead.
 func (*AcceptInviteResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AcceptInviteResponse) GetUser() *User {
@@ -691,21 +1010,23 @@ func (x *AcceptInviteResponse) GetUser() *User {
 }
 
 type LoginRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Email    string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Password string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	Plane    Plane                  `protobuf:"varint,3,opt,name=plane,proto3,enum=twentyfour.auth.v1.Plane" json:"plane,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// An address exists on one plane only, so it identifies an account outright
+	// and the caller does not say which plane to look in.
+	Email    string `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	Password string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
 	// Required when the account has TOTP enrolled.
 	TotpCode      string `protobuf:"bytes,4,opt,name=totp_code,json=totpCode,proto3" json:"totp_code,omitempty"`
 	UserAgent     string `protobuf:"bytes,5,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
 	Ip            string `protobuf:"bytes,6,opt,name=ip,proto3" json:"ip,omitempty"`
+	CallerPlane   Plane  `protobuf:"varint,7,opt,name=caller_plane,json=callerPlane,proto3,enum=twentyfour.auth.v1.Plane" json:"caller_plane,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[8]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -717,7 +1038,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[8]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -730,7 +1051,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *LoginRequest) GetEmail() string {
@@ -745,13 +1066,6 @@ func (x *LoginRequest) GetPassword() string {
 		return x.Password
 	}
 	return ""
-}
-
-func (x *LoginRequest) GetPlane() Plane {
-	if x != nil {
-		return x.Plane
-	}
-	return Plane_PLANE_UNSPECIFIED
 }
 
 func (x *LoginRequest) GetTotpCode() string {
@@ -775,21 +1089,32 @@ func (x *LoginRequest) GetIp() string {
 	return ""
 }
 
+func (x *LoginRequest) GetCallerPlane() Plane {
+	if x != nil {
+		return x.CallerPlane
+	}
+	return Plane_PLANE_UNSPECIFIED
+}
+
 type LoginResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	User  *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	// Opaque to every caller. Only VerifyToken interprets it.
+	// Opaque to every caller. Only VerifyToken interprets it. Empty when the
+	// account belongs to a plane this caller does not serve.
 	Token   string   `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
 	Session *Session `protobuf:"bytes,3,opt,name=session,proto3" json:"session,omitempty"`
 	// True when credentials were right but a TOTP code is still needed.
-	TotpRequired  bool `protobuf:"varint,4,opt,name=totp_required,json=totpRequired,proto3" json:"totp_required,omitempty"`
+	TotpRequired bool `protobuf:"varint,4,opt,name=totp_required,json=totpRequired,proto3" json:"totp_required,omitempty"`
+	// Set instead of a token when the account belongs to the other plane. The
+	// caller redirects the browser to that plane's gateway, which redeems it.
+	HandoffCode   string `protobuf:"bytes,5,opt,name=handoff_code,json=handoffCode,proto3" json:"handoff_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LoginResponse) Reset() {
 	*x = LoginResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[9]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -801,7 +1126,7 @@ func (x *LoginResponse) String() string {
 func (*LoginResponse) ProtoMessage() {}
 
 func (x *LoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[9]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -814,7 +1139,7 @@ func (x *LoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
 func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LoginResponse) GetUser() *User {
@@ -845,6 +1170,135 @@ func (x *LoginResponse) GetTotpRequired() bool {
 	return false
 }
 
+func (x *LoginResponse) GetHandoffCode() string {
+	if x != nil {
+		return x.HandoffCode
+	}
+	return ""
+}
+
+type RedeemHandoffRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Code  string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	// The address redeeming. Checked against the one that was issued the code:
+	// a code that travels to another machine is a code that was intercepted.
+	Ip            string `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	UserAgent     string `protobuf:"bytes,3,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RedeemHandoffRequest) Reset() {
+	*x = RedeemHandoffRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedeemHandoffRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedeemHandoffRequest) ProtoMessage() {}
+
+func (x *RedeemHandoffRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedeemHandoffRequest.ProtoReflect.Descriptor instead.
+func (*RedeemHandoffRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RedeemHandoffRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *RedeemHandoffRequest) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *RedeemHandoffRequest) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+type RedeemHandoffResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	Session       *Session               `protobuf:"bytes,3,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RedeemHandoffResponse) Reset() {
+	*x = RedeemHandoffResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedeemHandoffResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedeemHandoffResponse) ProtoMessage() {}
+
+func (x *RedeemHandoffResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedeemHandoffResponse.ProtoReflect.Descriptor instead.
+func (*RedeemHandoffResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RedeemHandoffResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *RedeemHandoffResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *RedeemHandoffResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
 type LogoutRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
@@ -854,7 +1308,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[10]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -866,7 +1320,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[10]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -879,7 +1333,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{10}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *LogoutRequest) GetToken() string {
@@ -898,7 +1352,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[11]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -910,7 +1364,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[11]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +1377,7 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{11}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *LogoutResponse) GetEnded() bool {
@@ -943,7 +1397,7 @@ type VerifyTokenRequest struct {
 
 func (x *VerifyTokenRequest) Reset() {
 	*x = VerifyTokenRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[12]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -955,7 +1409,7 @@ func (x *VerifyTokenRequest) String() string {
 func (*VerifyTokenRequest) ProtoMessage() {}
 
 func (x *VerifyTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[12]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -968,7 +1422,7 @@ func (x *VerifyTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyTokenRequest.ProtoReflect.Descriptor instead.
 func (*VerifyTokenRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{12}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *VerifyTokenRequest) GetToken() string {
@@ -1001,7 +1455,7 @@ type VerifyTokenResponse struct {
 
 func (x *VerifyTokenResponse) Reset() {
 	*x = VerifyTokenResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[13]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1013,7 +1467,7 @@ func (x *VerifyTokenResponse) String() string {
 func (*VerifyTokenResponse) ProtoMessage() {}
 
 func (x *VerifyTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[13]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1026,7 +1480,7 @@ func (x *VerifyTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyTokenResponse.ProtoReflect.Descriptor instead.
 func (*VerifyTokenResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{13}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *VerifyTokenResponse) GetValid() bool {
@@ -1088,7 +1542,7 @@ type GetUserRequest struct {
 
 func (x *GetUserRequest) Reset() {
 	*x = GetUserRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[14]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1100,7 +1554,7 @@ func (x *GetUserRequest) String() string {
 func (*GetUserRequest) ProtoMessage() {}
 
 func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[14]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1113,7 +1567,7 @@ func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserRequest.ProtoReflect.Descriptor instead.
 func (*GetUserRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{14}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetUserRequest) GetTenantId() string {
@@ -1139,7 +1593,7 @@ type GetUserResponse struct {
 
 func (x *GetUserResponse) Reset() {
 	*x = GetUserResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[15]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1151,7 +1605,7 @@ func (x *GetUserResponse) String() string {
 func (*GetUserResponse) ProtoMessage() {}
 
 func (x *GetUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[15]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1164,7 +1618,7 @@ func (x *GetUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserResponse.ProtoReflect.Descriptor instead.
 func (*GetUserResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{15}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetUserResponse) GetUser() *User {
@@ -1184,7 +1638,7 @@ type ListUsersRequest struct {
 
 func (x *ListUsersRequest) Reset() {
 	*x = ListUsersRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[16]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1650,7 @@ func (x *ListUsersRequest) String() string {
 func (*ListUsersRequest) ProtoMessage() {}
 
 func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[16]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1663,7 @@ func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
 func (*ListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{16}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListUsersRequest) GetTenantId() string {
@@ -1237,7 +1691,7 @@ type ListUsersResponse struct {
 
 func (x *ListUsersResponse) Reset() {
 	*x = ListUsersResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[17]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1249,7 +1703,7 @@ func (x *ListUsersResponse) String() string {
 func (*ListUsersResponse) ProtoMessage() {}
 
 func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[17]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1262,7 +1716,7 @@ func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListUsersResponse) GetUsers() []*User {
@@ -1279,6 +1733,310 @@ func (x *ListUsersResponse) GetActiveCount() int32 {
 	return 0
 }
 
+type ReissueInviteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReissueInviteRequest) Reset() {
+	*x = ReissueInviteRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReissueInviteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReissueInviteRequest) ProtoMessage() {}
+
+func (x *ReissueInviteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReissueInviteRequest.ProtoReflect.Descriptor instead.
+func (*ReissueInviteRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ReissueInviteRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *ReissueInviteRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type ReissueInviteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InviteToken   string                 `protobuf:"bytes,1,opt,name=invite_token,json=inviteToken,proto3" json:"invite_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReissueInviteResponse) Reset() {
+	*x = ReissueInviteResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReissueInviteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReissueInviteResponse) ProtoMessage() {}
+
+func (x *ReissueInviteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReissueInviteResponse.ProtoReflect.Descriptor instead.
+func (*ReissueInviteResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ReissueInviteResponse) GetInviteToken() string {
+	if x != nil {
+		return x.InviteToken
+	}
+	return ""
+}
+
+type ReactivateUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ActorId       string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReactivateUserRequest) Reset() {
+	*x = ReactivateUserRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReactivateUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReactivateUserRequest) ProtoMessage() {}
+
+func (x *ReactivateUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReactivateUserRequest.ProtoReflect.Descriptor instead.
+func (*ReactivateUserRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ReactivateUserRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *ReactivateUserRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ReactivateUserRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+type ReactivateUserResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReactivateUserResponse) Reset() {
+	*x = ReactivateUserResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReactivateUserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReactivateUserResponse) ProtoMessage() {}
+
+func (x *ReactivateUserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReactivateUserResponse.ProtoReflect.Descriptor instead.
+func (*ReactivateUserResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ReactivateUserResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type DeleteUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ActorId       string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserRequest) Reset() {
+	*x = DeleteUserRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserRequest) ProtoMessage() {}
+
+func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
+func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DeleteUserRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DeleteUserRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *DeleteUserRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+type DeleteUserResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserResponse) Reset() {
+	*x = DeleteUserResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserResponse) ProtoMessage() {}
+
+func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserResponse.ProtoReflect.Descriptor instead.
+func (*DeleteUserResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DeleteUserResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
 type DeactivateUserRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1290,7 +2048,7 @@ type DeactivateUserRequest struct {
 
 func (x *DeactivateUserRequest) Reset() {
 	*x = DeactivateUserRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[18]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +2060,7 @@ func (x *DeactivateUserRequest) String() string {
 func (*DeactivateUserRequest) ProtoMessage() {}
 
 func (x *DeactivateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[18]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +2073,7 @@ func (x *DeactivateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeactivateUserRequest.ProtoReflect.Descriptor instead.
 func (*DeactivateUserRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{18}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeactivateUserRequest) GetTenantId() string {
@@ -1348,7 +2106,7 @@ type DeactivateUserResponse struct {
 
 func (x *DeactivateUserResponse) Reset() {
 	*x = DeactivateUserResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[19]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1360,7 +2118,7 @@ func (x *DeactivateUserResponse) String() string {
 func (*DeactivateUserResponse) ProtoMessage() {}
 
 func (x *DeactivateUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[19]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1373,7 +2131,7 @@ func (x *DeactivateUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeactivateUserResponse.ProtoReflect.Descriptor instead.
 func (*DeactivateUserResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{19}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DeactivateUserResponse) GetDeactivated() bool {
@@ -1381,6 +2139,86 @@ func (x *DeactivateUserResponse) GetDeactivated() bool {
 		return x.Deactivated
 	}
 	return false
+}
+
+type GetPasswordPolicyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPasswordPolicyRequest) Reset() {
+	*x = GetPasswordPolicyRequest{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPasswordPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPasswordPolicyRequest) ProtoMessage() {}
+
+func (x *GetPasswordPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPasswordPolicyRequest.ProtoReflect.Descriptor instead.
+func (*GetPasswordPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{34}
+}
+
+type GetPasswordPolicyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MinLength     int32                  `protobuf:"varint,1,opt,name=min_length,json=minLength,proto3" json:"min_length,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPasswordPolicyResponse) Reset() {
+	*x = GetPasswordPolicyResponse{}
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPasswordPolicyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPasswordPolicyResponse) ProtoMessage() {}
+
+func (x *GetPasswordPolicyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPasswordPolicyResponse.ProtoReflect.Descriptor instead.
+func (*GetPasswordPolicyResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *GetPasswordPolicyResponse) GetMinLength() int32 {
+	if x != nil {
+		return x.MinLength
+	}
+	return 0
 }
 
 type ChangePasswordRequest struct {
@@ -1394,7 +2232,7 @@ type ChangePasswordRequest struct {
 
 func (x *ChangePasswordRequest) Reset() {
 	*x = ChangePasswordRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[20]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1406,7 +2244,7 @@ func (x *ChangePasswordRequest) String() string {
 func (*ChangePasswordRequest) ProtoMessage() {}
 
 func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[20]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1419,7 +2257,7 @@ func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePasswordRequest.ProtoReflect.Descriptor instead.
 func (*ChangePasswordRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ChangePasswordRequest) GetUserId() string {
@@ -1452,7 +2290,7 @@ type ChangePasswordResponse struct {
 
 func (x *ChangePasswordResponse) Reset() {
 	*x = ChangePasswordResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[21]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1464,7 +2302,7 @@ func (x *ChangePasswordResponse) String() string {
 func (*ChangePasswordResponse) ProtoMessage() {}
 
 func (x *ChangePasswordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[21]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1477,7 +2315,7 @@ func (x *ChangePasswordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePasswordResponse.ProtoReflect.Descriptor instead.
 func (*ChangePasswordResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{21}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ChangePasswordResponse) GetChanged() bool {
@@ -1490,14 +2328,13 @@ func (x *ChangePasswordResponse) GetChanged() bool {
 type RequestPasswordResetRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Plane         Plane                  `protobuf:"varint,2,opt,name=plane,proto3,enum=twentyfour.auth.v1.Plane" json:"plane,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RequestPasswordResetRequest) Reset() {
 	*x = RequestPasswordResetRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[22]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1509,7 +2346,7 @@ func (x *RequestPasswordResetRequest) String() string {
 func (*RequestPasswordResetRequest) ProtoMessage() {}
 
 func (x *RequestPasswordResetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[22]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1522,7 +2359,7 @@ func (x *RequestPasswordResetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestPasswordResetRequest.ProtoReflect.Descriptor instead.
 func (*RequestPasswordResetRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{22}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RequestPasswordResetRequest) GetEmail() string {
@@ -1532,14 +2369,7 @@ func (x *RequestPasswordResetRequest) GetEmail() string {
 	return ""
 }
 
-func (x *RequestPasswordResetRequest) GetPlane() Plane {
-	if x != nil {
-		return x.Plane
-	}
-	return Plane_PLANE_UNSPECIFIED
-}
-
-// Always reports success, whether or not the address exists — otherwise this
+// Always reports success, whether or not the address exists. Otherwise this
 // endpoint becomes an account-enumeration oracle.
 type RequestPasswordResetResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1550,7 +2380,7 @@ type RequestPasswordResetResponse struct {
 
 func (x *RequestPasswordResetResponse) Reset() {
 	*x = RequestPasswordResetResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[23]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1562,7 +2392,7 @@ func (x *RequestPasswordResetResponse) String() string {
 func (*RequestPasswordResetResponse) ProtoMessage() {}
 
 func (x *RequestPasswordResetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[23]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1575,7 +2405,7 @@ func (x *RequestPasswordResetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestPasswordResetResponse.ProtoReflect.Descriptor instead.
 func (*RequestPasswordResetResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{23}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RequestPasswordResetResponse) GetAccepted() bool {
@@ -1595,7 +2425,7 @@ type ResetPasswordRequest struct {
 
 func (x *ResetPasswordRequest) Reset() {
 	*x = ResetPasswordRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[24]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1607,7 +2437,7 @@ func (x *ResetPasswordRequest) String() string {
 func (*ResetPasswordRequest) ProtoMessage() {}
 
 func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[24]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1620,7 +2450,7 @@ func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{24}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ResetPasswordRequest) GetResetToken() string {
@@ -1646,7 +2476,7 @@ type ResetPasswordResponse struct {
 
 func (x *ResetPasswordResponse) Reset() {
 	*x = ResetPasswordResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[25]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1658,7 +2488,7 @@ func (x *ResetPasswordResponse) String() string {
 func (*ResetPasswordResponse) ProtoMessage() {}
 
 func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[25]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1671,7 +2501,7 @@ func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPasswordResponse.ProtoReflect.Descriptor instead.
 func (*ResetPasswordResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{25}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ResetPasswordResponse) GetReset_() bool {
@@ -1690,7 +2520,7 @@ type EnrollTotpRequest struct {
 
 func (x *EnrollTotpRequest) Reset() {
 	*x = EnrollTotpRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[26]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1702,7 +2532,7 @@ func (x *EnrollTotpRequest) String() string {
 func (*EnrollTotpRequest) ProtoMessage() {}
 
 func (x *EnrollTotpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[26]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1715,7 +2545,7 @@ func (x *EnrollTotpRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollTotpRequest.ProtoReflect.Descriptor instead.
 func (*EnrollTotpRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{26}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *EnrollTotpRequest) GetUserId() string {
@@ -1736,7 +2566,7 @@ type EnrollTotpResponse struct {
 
 func (x *EnrollTotpResponse) Reset() {
 	*x = EnrollTotpResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[27]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +2578,7 @@ func (x *EnrollTotpResponse) String() string {
 func (*EnrollTotpResponse) ProtoMessage() {}
 
 func (x *EnrollTotpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[27]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +2591,7 @@ func (x *EnrollTotpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollTotpResponse.ProtoReflect.Descriptor instead.
 func (*EnrollTotpResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{27}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *EnrollTotpResponse) GetSecret() string {
@@ -1795,7 +2625,7 @@ type ConfirmTotpRequest struct {
 
 func (x *ConfirmTotpRequest) Reset() {
 	*x = ConfirmTotpRequest{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[28]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1807,7 +2637,7 @@ func (x *ConfirmTotpRequest) String() string {
 func (*ConfirmTotpRequest) ProtoMessage() {}
 
 func (x *ConfirmTotpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[28]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1820,7 +2650,7 @@ func (x *ConfirmTotpRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmTotpRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmTotpRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{28}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ConfirmTotpRequest) GetUserId() string {
@@ -1846,7 +2676,7 @@ type ConfirmTotpResponse struct {
 
 func (x *ConfirmTotpResponse) Reset() {
 	*x = ConfirmTotpResponse{}
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[29]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1858,7 +2688,7 @@ func (x *ConfirmTotpResponse) String() string {
 func (*ConfirmTotpResponse) ProtoMessage() {}
 
 func (x *ConfirmTotpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[29]
+	mi := &file_twentyfour_auth_v1_auth_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1871,7 +2701,7 @@ func (x *ConfirmTotpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmTotpResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmTotpResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{29}
+	return file_twentyfour_auth_v1_auth_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ConfirmTotpResponse) GetEnrolled() bool {
@@ -1913,11 +2743,34 @@ const file_twentyfour_auth_v1_auth_proto_rawDesc = "" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12#\n" +
-	"\rbusiness_name\x18\x04 \x01(\tR\fbusinessName\"\x8a\x01\n" +
+	"\rbusiness_name\x18\x04 \x01(\tR\fbusinessName\"\xaf\x01\n" +
 	"\x0eSignupResponse\x12,\n" +
 	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12-\n" +
-	"\x12verification_token\x18\x03 \x01(\tR\x11verificationToken\"\x9f\x01\n" +
+	"\x12verification_token\x18\x03 \x01(\tR\x11verificationToken\x12#\n" +
+	"\rmerchant_code\x18\x04 \x01(\tR\fmerchantCode\"5\n" +
+	"\x16GetMerchantCodeRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"\x98\x01\n" +
+	"\x17GetMerchantCodeResponse\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12#\n" +
+	"\rmerchant_code\x18\x02 \x01(\tR\fmerchantCode\x12;\n" +
+	"\vassigned_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"assignedAt\"\x84\x01\n" +
+	"\x12CreateStaffRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x19\n" +
+	"\brole_key\x18\x04 \x01(\tR\aroleKey\"C\n" +
+	"\x13CreateStaffResponse\x12,\n" +
+	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\"9\n" +
+	"\x18ListMerchantCodesRequest\x12\x1d\n" +
+	"\n" +
+	"tenant_ids\x18\x01 \x03(\tR\ttenantIds\"\xc6\x01\n" +
+	"\x19ListMerchantCodesResponse\x12g\n" +
+	"\x0emerchant_codes\x18\x01 \x03(\v2@.twentyfour.auth.v1.ListMerchantCodesResponse.MerchantCodesEntryR\rmerchantCodes\x1a@\n" +
+	"\x12MerchantCodesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9f\x01\n" +
 	"\x11InviteUserRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -1931,20 +2784,30 @@ const file_twentyfour_auth_v1_auth_proto_rawDesc = "" +
 	"\finvite_token\x18\x01 \x01(\tR\vinviteToken\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"D\n" +
 	"\x14AcceptInviteResponse\x12,\n" +
-	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\"\xbd\x01\n" +
+	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\"\xd7\x01\n" +
 	"\fLoginRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\x12/\n" +
-	"\x05plane\x18\x03 \x01(\x0e2\x19.twentyfour.auth.v1.PlaneR\x05plane\x12\x1b\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n" +
 	"\ttotp_code\x18\x04 \x01(\tR\btotpCode\x12\x1d\n" +
 	"\n" +
 	"user_agent\x18\x05 \x01(\tR\tuserAgent\x12\x0e\n" +
-	"\x02ip\x18\x06 \x01(\tR\x02ip\"\xaf\x01\n" +
+	"\x02ip\x18\x06 \x01(\tR\x02ip\x12<\n" +
+	"\fcaller_plane\x18\a \x01(\x0e2\x19.twentyfour.auth.v1.PlaneR\vcallerPlaneJ\x04\b\x03\x10\x04R\x05plane\"\xd2\x01\n" +
 	"\rLoginResponse\x12,\n" +
 	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x125\n" +
 	"\asession\x18\x03 \x01(\v2\x1b.twentyfour.auth.v1.SessionR\asession\x12#\n" +
-	"\rtotp_required\x18\x04 \x01(\bR\ftotpRequired\"%\n" +
+	"\rtotp_required\x18\x04 \x01(\bR\ftotpRequired\x12!\n" +
+	"\fhandoff_code\x18\x05 \x01(\tR\vhandoffCode\"Y\n" +
+	"\x14RedeemHandoffRequest\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x0e\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x03 \x01(\tR\tuserAgent\"\x92\x01\n" +
+	"\x15RedeemHandoffResponse\x12,\n" +
+	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x125\n" +
+	"\asession\x18\x03 \x01(\v2\x1b.twentyfour.auth.v1.SessionR\asession\"%\n" +
 	"\rLogoutRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"&\n" +
 	"\x0eLogoutResponse\x12\x14\n" +
@@ -1972,22 +2835,42 @@ const file_twentyfour_auth_v1_auth_proto_rawDesc = "" +
 	"\x13include_deactivated\x18\x02 \x01(\bR\x12includeDeactivated\"f\n" +
 	"\x11ListUsersResponse\x12.\n" +
 	"\x05users\x18\x01 \x03(\v2\x18.twentyfour.auth.v1.UserR\x05users\x12!\n" +
-	"\factive_count\x18\x02 \x01(\x05R\vactiveCount\"h\n" +
+	"\factive_count\x18\x02 \x01(\x05R\vactiveCount\"L\n" +
+	"\x14ReissueInviteRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\":\n" +
+	"\x15ReissueInviteResponse\x12!\n" +
+	"\finvite_token\x18\x01 \x01(\tR\vinviteToken\"h\n" +
+	"\x15ReactivateUserRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\"F\n" +
+	"\x16ReactivateUserResponse\x12,\n" +
+	"\x04user\x18\x01 \x01(\v2\x18.twentyfour.auth.v1.UserR\x04user\"d\n" +
+	"\x11DeleteUserRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\".\n" +
+	"\x12DeleteUserResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"h\n" +
 	"\x15DeactivateUserRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
 	"\bactor_id\x18\x03 \x01(\tR\aactorId\":\n" +
 	"\x16DeactivateUserResponse\x12 \n" +
-	"\vdeactivated\x18\x01 \x01(\bR\vdeactivated\"~\n" +
+	"\vdeactivated\x18\x01 \x01(\bR\vdeactivated\"\x1a\n" +
+	"\x18GetPasswordPolicyRequest\":\n" +
+	"\x19GetPasswordPolicyResponse\x12\x1d\n" +
+	"\n" +
+	"min_length\x18\x01 \x01(\x05R\tminLength\"~\n" +
 	"\x15ChangePasswordRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12)\n" +
 	"\x10current_password\x18\x02 \x01(\tR\x0fcurrentPassword\x12!\n" +
 	"\fnew_password\x18\x03 \x01(\tR\vnewPassword\"2\n" +
 	"\x16ChangePasswordResponse\x12\x18\n" +
-	"\achanged\x18\x01 \x01(\bR\achanged\"d\n" +
+	"\achanged\x18\x01 \x01(\bR\achanged\"@\n" +
 	"\x1bRequestPasswordResetRequest\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12/\n" +
-	"\x05plane\x18\x02 \x01(\x0e2\x19.twentyfour.auth.v1.PlaneR\x05plane\":\n" +
+	"\x05email\x18\x01 \x01(\tR\x05emailJ\x04\b\x02\x10\x03R\x05plane\":\n" +
 	"\x1cRequestPasswordResetResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\"Z\n" +
 	"\x14ResetPasswordRequest\x12\x1f\n" +
@@ -2018,19 +2901,27 @@ const file_twentyfour_auth_v1_auth_proto_rawDesc = "" +
 	"\x13USER_STATUS_INVITED\x10\x01\x12\x16\n" +
 	"\x12USER_STATUS_ACTIVE\x10\x02\x12\x1b\n" +
 	"\x17USER_STATUS_DEACTIVATED\x10\x03\x12\x16\n" +
-	"\x12USER_STATUS_LOCKED\x10\x042\xbb\n" +
-	"\n" +
+	"\x12USER_STATUS_LOCKED\x10\x042\xfd\x10\n" +
 	"\vAuthService\x12O\n" +
 	"\x06Signup\x12!.twentyfour.auth.v1.SignupRequest\x1a\".twentyfour.auth.v1.SignupResponse\x12[\n" +
 	"\n" +
-	"InviteUser\x12%.twentyfour.auth.v1.InviteUserRequest\x1a&.twentyfour.auth.v1.InviteUserResponse\x12a\n" +
-	"\fAcceptInvite\x12'.twentyfour.auth.v1.AcceptInviteRequest\x1a(.twentyfour.auth.v1.AcceptInviteResponse\x12L\n" +
-	"\x05Login\x12 .twentyfour.auth.v1.LoginRequest\x1a!.twentyfour.auth.v1.LoginResponse\x12O\n" +
+	"InviteUser\x12%.twentyfour.auth.v1.InviteUserRequest\x1a&.twentyfour.auth.v1.InviteUserResponse\x12^\n" +
+	"\vCreateStaff\x12&.twentyfour.auth.v1.CreateStaffRequest\x1a'.twentyfour.auth.v1.CreateStaffResponse\x12a\n" +
+	"\fAcceptInvite\x12'.twentyfour.auth.v1.AcceptInviteRequest\x1a(.twentyfour.auth.v1.AcceptInviteResponse\x12d\n" +
+	"\rReissueInvite\x12(.twentyfour.auth.v1.ReissueInviteRequest\x1a).twentyfour.auth.v1.ReissueInviteResponse\x12L\n" +
+	"\x05Login\x12 .twentyfour.auth.v1.LoginRequest\x1a!.twentyfour.auth.v1.LoginResponse\x12d\n" +
+	"\rRedeemHandoff\x12(.twentyfour.auth.v1.RedeemHandoffRequest\x1a).twentyfour.auth.v1.RedeemHandoffResponse\x12O\n" +
 	"\x06Logout\x12!.twentyfour.auth.v1.LogoutRequest\x1a\".twentyfour.auth.v1.LogoutResponse\x12^\n" +
-	"\vVerifyToken\x12&.twentyfour.auth.v1.VerifyTokenRequest\x1a'.twentyfour.auth.v1.VerifyTokenResponse\x12R\n" +
+	"\vVerifyToken\x12&.twentyfour.auth.v1.VerifyTokenRequest\x1a'.twentyfour.auth.v1.VerifyTokenResponse\x12j\n" +
+	"\x0fGetMerchantCode\x12*.twentyfour.auth.v1.GetMerchantCodeRequest\x1a+.twentyfour.auth.v1.GetMerchantCodeResponse\x12p\n" +
+	"\x11ListMerchantCodes\x12,.twentyfour.auth.v1.ListMerchantCodesRequest\x1a-.twentyfour.auth.v1.ListMerchantCodesResponse\x12R\n" +
 	"\aGetUser\x12\".twentyfour.auth.v1.GetUserRequest\x1a#.twentyfour.auth.v1.GetUserResponse\x12X\n" +
 	"\tListUsers\x12$.twentyfour.auth.v1.ListUsersRequest\x1a%.twentyfour.auth.v1.ListUsersResponse\x12g\n" +
 	"\x0eDeactivateUser\x12).twentyfour.auth.v1.DeactivateUserRequest\x1a*.twentyfour.auth.v1.DeactivateUserResponse\x12g\n" +
+	"\x0eReactivateUser\x12).twentyfour.auth.v1.ReactivateUserRequest\x1a*.twentyfour.auth.v1.ReactivateUserResponse\x12[\n" +
+	"\n" +
+	"DeleteUser\x12%.twentyfour.auth.v1.DeleteUserRequest\x1a&.twentyfour.auth.v1.DeleteUserResponse\x12p\n" +
+	"\x11GetPasswordPolicy\x12,.twentyfour.auth.v1.GetPasswordPolicyRequest\x1a-.twentyfour.auth.v1.GetPasswordPolicyResponse\x12g\n" +
 	"\x0eChangePassword\x12).twentyfour.auth.v1.ChangePasswordRequest\x1a*.twentyfour.auth.v1.ChangePasswordResponse\x12y\n" +
 	"\x14RequestPasswordReset\x12/.twentyfour.auth.v1.RequestPasswordResetRequest\x1a0.twentyfour.auth.v1.RequestPasswordResetResponse\x12d\n" +
 	"\rResetPassword\x12(.twentyfour.auth.v1.ResetPasswordRequest\x1a).twentyfour.auth.v1.ResetPasswordResponse\x12[\n" +
@@ -2052,7 +2943,7 @@ func file_twentyfour_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_twentyfour_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_twentyfour_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_twentyfour_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_twentyfour_auth_v1_auth_proto_goTypes = []any{
 	(Plane)(0),                           // 0: twentyfour.auth.v1.Plane
 	(UserStatus)(0),                      // 1: twentyfour.auth.v1.UserStatus
@@ -2060,86 +2951,124 @@ var file_twentyfour_auth_v1_auth_proto_goTypes = []any{
 	(*Session)(nil),                      // 3: twentyfour.auth.v1.Session
 	(*SignupRequest)(nil),                // 4: twentyfour.auth.v1.SignupRequest
 	(*SignupResponse)(nil),               // 5: twentyfour.auth.v1.SignupResponse
-	(*InviteUserRequest)(nil),            // 6: twentyfour.auth.v1.InviteUserRequest
-	(*InviteUserResponse)(nil),           // 7: twentyfour.auth.v1.InviteUserResponse
-	(*AcceptInviteRequest)(nil),          // 8: twentyfour.auth.v1.AcceptInviteRequest
-	(*AcceptInviteResponse)(nil),         // 9: twentyfour.auth.v1.AcceptInviteResponse
-	(*LoginRequest)(nil),                 // 10: twentyfour.auth.v1.LoginRequest
-	(*LoginResponse)(nil),                // 11: twentyfour.auth.v1.LoginResponse
-	(*LogoutRequest)(nil),                // 12: twentyfour.auth.v1.LogoutRequest
-	(*LogoutResponse)(nil),               // 13: twentyfour.auth.v1.LogoutResponse
-	(*VerifyTokenRequest)(nil),           // 14: twentyfour.auth.v1.VerifyTokenRequest
-	(*VerifyTokenResponse)(nil),          // 15: twentyfour.auth.v1.VerifyTokenResponse
-	(*GetUserRequest)(nil),               // 16: twentyfour.auth.v1.GetUserRequest
-	(*GetUserResponse)(nil),              // 17: twentyfour.auth.v1.GetUserResponse
-	(*ListUsersRequest)(nil),             // 18: twentyfour.auth.v1.ListUsersRequest
-	(*ListUsersResponse)(nil),            // 19: twentyfour.auth.v1.ListUsersResponse
-	(*DeactivateUserRequest)(nil),        // 20: twentyfour.auth.v1.DeactivateUserRequest
-	(*DeactivateUserResponse)(nil),       // 21: twentyfour.auth.v1.DeactivateUserResponse
-	(*ChangePasswordRequest)(nil),        // 22: twentyfour.auth.v1.ChangePasswordRequest
-	(*ChangePasswordResponse)(nil),       // 23: twentyfour.auth.v1.ChangePasswordResponse
-	(*RequestPasswordResetRequest)(nil),  // 24: twentyfour.auth.v1.RequestPasswordResetRequest
-	(*RequestPasswordResetResponse)(nil), // 25: twentyfour.auth.v1.RequestPasswordResetResponse
-	(*ResetPasswordRequest)(nil),         // 26: twentyfour.auth.v1.ResetPasswordRequest
-	(*ResetPasswordResponse)(nil),        // 27: twentyfour.auth.v1.ResetPasswordResponse
-	(*EnrollTotpRequest)(nil),            // 28: twentyfour.auth.v1.EnrollTotpRequest
-	(*EnrollTotpResponse)(nil),           // 29: twentyfour.auth.v1.EnrollTotpResponse
-	(*ConfirmTotpRequest)(nil),           // 30: twentyfour.auth.v1.ConfirmTotpRequest
-	(*ConfirmTotpResponse)(nil),          // 31: twentyfour.auth.v1.ConfirmTotpResponse
-	(*timestamppb.Timestamp)(nil),        // 32: google.protobuf.Timestamp
+	(*GetMerchantCodeRequest)(nil),       // 6: twentyfour.auth.v1.GetMerchantCodeRequest
+	(*GetMerchantCodeResponse)(nil),      // 7: twentyfour.auth.v1.GetMerchantCodeResponse
+	(*CreateStaffRequest)(nil),           // 8: twentyfour.auth.v1.CreateStaffRequest
+	(*CreateStaffResponse)(nil),          // 9: twentyfour.auth.v1.CreateStaffResponse
+	(*ListMerchantCodesRequest)(nil),     // 10: twentyfour.auth.v1.ListMerchantCodesRequest
+	(*ListMerchantCodesResponse)(nil),    // 11: twentyfour.auth.v1.ListMerchantCodesResponse
+	(*InviteUserRequest)(nil),            // 12: twentyfour.auth.v1.InviteUserRequest
+	(*InviteUserResponse)(nil),           // 13: twentyfour.auth.v1.InviteUserResponse
+	(*AcceptInviteRequest)(nil),          // 14: twentyfour.auth.v1.AcceptInviteRequest
+	(*AcceptInviteResponse)(nil),         // 15: twentyfour.auth.v1.AcceptInviteResponse
+	(*LoginRequest)(nil),                 // 16: twentyfour.auth.v1.LoginRequest
+	(*LoginResponse)(nil),                // 17: twentyfour.auth.v1.LoginResponse
+	(*RedeemHandoffRequest)(nil),         // 18: twentyfour.auth.v1.RedeemHandoffRequest
+	(*RedeemHandoffResponse)(nil),        // 19: twentyfour.auth.v1.RedeemHandoffResponse
+	(*LogoutRequest)(nil),                // 20: twentyfour.auth.v1.LogoutRequest
+	(*LogoutResponse)(nil),               // 21: twentyfour.auth.v1.LogoutResponse
+	(*VerifyTokenRequest)(nil),           // 22: twentyfour.auth.v1.VerifyTokenRequest
+	(*VerifyTokenResponse)(nil),          // 23: twentyfour.auth.v1.VerifyTokenResponse
+	(*GetUserRequest)(nil),               // 24: twentyfour.auth.v1.GetUserRequest
+	(*GetUserResponse)(nil),              // 25: twentyfour.auth.v1.GetUserResponse
+	(*ListUsersRequest)(nil),             // 26: twentyfour.auth.v1.ListUsersRequest
+	(*ListUsersResponse)(nil),            // 27: twentyfour.auth.v1.ListUsersResponse
+	(*ReissueInviteRequest)(nil),         // 28: twentyfour.auth.v1.ReissueInviteRequest
+	(*ReissueInviteResponse)(nil),        // 29: twentyfour.auth.v1.ReissueInviteResponse
+	(*ReactivateUserRequest)(nil),        // 30: twentyfour.auth.v1.ReactivateUserRequest
+	(*ReactivateUserResponse)(nil),       // 31: twentyfour.auth.v1.ReactivateUserResponse
+	(*DeleteUserRequest)(nil),            // 32: twentyfour.auth.v1.DeleteUserRequest
+	(*DeleteUserResponse)(nil),           // 33: twentyfour.auth.v1.DeleteUserResponse
+	(*DeactivateUserRequest)(nil),        // 34: twentyfour.auth.v1.DeactivateUserRequest
+	(*DeactivateUserResponse)(nil),       // 35: twentyfour.auth.v1.DeactivateUserResponse
+	(*GetPasswordPolicyRequest)(nil),     // 36: twentyfour.auth.v1.GetPasswordPolicyRequest
+	(*GetPasswordPolicyResponse)(nil),    // 37: twentyfour.auth.v1.GetPasswordPolicyResponse
+	(*ChangePasswordRequest)(nil),        // 38: twentyfour.auth.v1.ChangePasswordRequest
+	(*ChangePasswordResponse)(nil),       // 39: twentyfour.auth.v1.ChangePasswordResponse
+	(*RequestPasswordResetRequest)(nil),  // 40: twentyfour.auth.v1.RequestPasswordResetRequest
+	(*RequestPasswordResetResponse)(nil), // 41: twentyfour.auth.v1.RequestPasswordResetResponse
+	(*ResetPasswordRequest)(nil),         // 42: twentyfour.auth.v1.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil),        // 43: twentyfour.auth.v1.ResetPasswordResponse
+	(*EnrollTotpRequest)(nil),            // 44: twentyfour.auth.v1.EnrollTotpRequest
+	(*EnrollTotpResponse)(nil),           // 45: twentyfour.auth.v1.EnrollTotpResponse
+	(*ConfirmTotpRequest)(nil),           // 46: twentyfour.auth.v1.ConfirmTotpRequest
+	(*ConfirmTotpResponse)(nil),          // 47: twentyfour.auth.v1.ConfirmTotpResponse
+	nil,                                  // 48: twentyfour.auth.v1.ListMerchantCodesResponse.MerchantCodesEntry
+	(*timestamppb.Timestamp)(nil),        // 49: google.protobuf.Timestamp
 }
 var file_twentyfour_auth_v1_auth_proto_depIdxs = []int32{
 	1,  // 0: twentyfour.auth.v1.User.status:type_name -> twentyfour.auth.v1.UserStatus
 	0,  // 1: twentyfour.auth.v1.User.plane:type_name -> twentyfour.auth.v1.Plane
-	32, // 2: twentyfour.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	32, // 3: twentyfour.auth.v1.User.last_login_at:type_name -> google.protobuf.Timestamp
-	32, // 4: twentyfour.auth.v1.Session.issued_at:type_name -> google.protobuf.Timestamp
-	32, // 5: twentyfour.auth.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
+	49, // 2: twentyfour.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	49, // 3: twentyfour.auth.v1.User.last_login_at:type_name -> google.protobuf.Timestamp
+	49, // 4: twentyfour.auth.v1.Session.issued_at:type_name -> google.protobuf.Timestamp
+	49, // 5: twentyfour.auth.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
 	2,  // 6: twentyfour.auth.v1.SignupResponse.user:type_name -> twentyfour.auth.v1.User
-	2,  // 7: twentyfour.auth.v1.InviteUserResponse.user:type_name -> twentyfour.auth.v1.User
-	2,  // 8: twentyfour.auth.v1.AcceptInviteResponse.user:type_name -> twentyfour.auth.v1.User
-	0,  // 9: twentyfour.auth.v1.LoginRequest.plane:type_name -> twentyfour.auth.v1.Plane
-	2,  // 10: twentyfour.auth.v1.LoginResponse.user:type_name -> twentyfour.auth.v1.User
-	3,  // 11: twentyfour.auth.v1.LoginResponse.session:type_name -> twentyfour.auth.v1.Session
-	0,  // 12: twentyfour.auth.v1.VerifyTokenRequest.expected_plane:type_name -> twentyfour.auth.v1.Plane
-	0,  // 13: twentyfour.auth.v1.VerifyTokenResponse.plane:type_name -> twentyfour.auth.v1.Plane
-	32, // 14: twentyfour.auth.v1.VerifyTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	2,  // 15: twentyfour.auth.v1.GetUserResponse.user:type_name -> twentyfour.auth.v1.User
-	2,  // 16: twentyfour.auth.v1.ListUsersResponse.users:type_name -> twentyfour.auth.v1.User
-	0,  // 17: twentyfour.auth.v1.RequestPasswordResetRequest.plane:type_name -> twentyfour.auth.v1.Plane
-	4,  // 18: twentyfour.auth.v1.AuthService.Signup:input_type -> twentyfour.auth.v1.SignupRequest
-	6,  // 19: twentyfour.auth.v1.AuthService.InviteUser:input_type -> twentyfour.auth.v1.InviteUserRequest
-	8,  // 20: twentyfour.auth.v1.AuthService.AcceptInvite:input_type -> twentyfour.auth.v1.AcceptInviteRequest
-	10, // 21: twentyfour.auth.v1.AuthService.Login:input_type -> twentyfour.auth.v1.LoginRequest
-	12, // 22: twentyfour.auth.v1.AuthService.Logout:input_type -> twentyfour.auth.v1.LogoutRequest
-	14, // 23: twentyfour.auth.v1.AuthService.VerifyToken:input_type -> twentyfour.auth.v1.VerifyTokenRequest
-	16, // 24: twentyfour.auth.v1.AuthService.GetUser:input_type -> twentyfour.auth.v1.GetUserRequest
-	18, // 25: twentyfour.auth.v1.AuthService.ListUsers:input_type -> twentyfour.auth.v1.ListUsersRequest
-	20, // 26: twentyfour.auth.v1.AuthService.DeactivateUser:input_type -> twentyfour.auth.v1.DeactivateUserRequest
-	22, // 27: twentyfour.auth.v1.AuthService.ChangePassword:input_type -> twentyfour.auth.v1.ChangePasswordRequest
-	24, // 28: twentyfour.auth.v1.AuthService.RequestPasswordReset:input_type -> twentyfour.auth.v1.RequestPasswordResetRequest
-	26, // 29: twentyfour.auth.v1.AuthService.ResetPassword:input_type -> twentyfour.auth.v1.ResetPasswordRequest
-	28, // 30: twentyfour.auth.v1.AuthService.EnrollTotp:input_type -> twentyfour.auth.v1.EnrollTotpRequest
-	30, // 31: twentyfour.auth.v1.AuthService.ConfirmTotp:input_type -> twentyfour.auth.v1.ConfirmTotpRequest
-	5,  // 32: twentyfour.auth.v1.AuthService.Signup:output_type -> twentyfour.auth.v1.SignupResponse
-	7,  // 33: twentyfour.auth.v1.AuthService.InviteUser:output_type -> twentyfour.auth.v1.InviteUserResponse
-	9,  // 34: twentyfour.auth.v1.AuthService.AcceptInvite:output_type -> twentyfour.auth.v1.AcceptInviteResponse
-	11, // 35: twentyfour.auth.v1.AuthService.Login:output_type -> twentyfour.auth.v1.LoginResponse
-	13, // 36: twentyfour.auth.v1.AuthService.Logout:output_type -> twentyfour.auth.v1.LogoutResponse
-	15, // 37: twentyfour.auth.v1.AuthService.VerifyToken:output_type -> twentyfour.auth.v1.VerifyTokenResponse
-	17, // 38: twentyfour.auth.v1.AuthService.GetUser:output_type -> twentyfour.auth.v1.GetUserResponse
-	19, // 39: twentyfour.auth.v1.AuthService.ListUsers:output_type -> twentyfour.auth.v1.ListUsersResponse
-	21, // 40: twentyfour.auth.v1.AuthService.DeactivateUser:output_type -> twentyfour.auth.v1.DeactivateUserResponse
-	23, // 41: twentyfour.auth.v1.AuthService.ChangePassword:output_type -> twentyfour.auth.v1.ChangePasswordResponse
-	25, // 42: twentyfour.auth.v1.AuthService.RequestPasswordReset:output_type -> twentyfour.auth.v1.RequestPasswordResetResponse
-	27, // 43: twentyfour.auth.v1.AuthService.ResetPassword:output_type -> twentyfour.auth.v1.ResetPasswordResponse
-	29, // 44: twentyfour.auth.v1.AuthService.EnrollTotp:output_type -> twentyfour.auth.v1.EnrollTotpResponse
-	31, // 45: twentyfour.auth.v1.AuthService.ConfirmTotp:output_type -> twentyfour.auth.v1.ConfirmTotpResponse
-	32, // [32:46] is the sub-list for method output_type
-	18, // [18:32] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	49, // 7: twentyfour.auth.v1.GetMerchantCodeResponse.assigned_at:type_name -> google.protobuf.Timestamp
+	2,  // 8: twentyfour.auth.v1.CreateStaffResponse.user:type_name -> twentyfour.auth.v1.User
+	48, // 9: twentyfour.auth.v1.ListMerchantCodesResponse.merchant_codes:type_name -> twentyfour.auth.v1.ListMerchantCodesResponse.MerchantCodesEntry
+	2,  // 10: twentyfour.auth.v1.InviteUserResponse.user:type_name -> twentyfour.auth.v1.User
+	2,  // 11: twentyfour.auth.v1.AcceptInviteResponse.user:type_name -> twentyfour.auth.v1.User
+	0,  // 12: twentyfour.auth.v1.LoginRequest.caller_plane:type_name -> twentyfour.auth.v1.Plane
+	2,  // 13: twentyfour.auth.v1.LoginResponse.user:type_name -> twentyfour.auth.v1.User
+	3,  // 14: twentyfour.auth.v1.LoginResponse.session:type_name -> twentyfour.auth.v1.Session
+	2,  // 15: twentyfour.auth.v1.RedeemHandoffResponse.user:type_name -> twentyfour.auth.v1.User
+	3,  // 16: twentyfour.auth.v1.RedeemHandoffResponse.session:type_name -> twentyfour.auth.v1.Session
+	0,  // 17: twentyfour.auth.v1.VerifyTokenRequest.expected_plane:type_name -> twentyfour.auth.v1.Plane
+	0,  // 18: twentyfour.auth.v1.VerifyTokenResponse.plane:type_name -> twentyfour.auth.v1.Plane
+	49, // 19: twentyfour.auth.v1.VerifyTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	2,  // 20: twentyfour.auth.v1.GetUserResponse.user:type_name -> twentyfour.auth.v1.User
+	2,  // 21: twentyfour.auth.v1.ListUsersResponse.users:type_name -> twentyfour.auth.v1.User
+	2,  // 22: twentyfour.auth.v1.ReactivateUserResponse.user:type_name -> twentyfour.auth.v1.User
+	4,  // 23: twentyfour.auth.v1.AuthService.Signup:input_type -> twentyfour.auth.v1.SignupRequest
+	12, // 24: twentyfour.auth.v1.AuthService.InviteUser:input_type -> twentyfour.auth.v1.InviteUserRequest
+	8,  // 25: twentyfour.auth.v1.AuthService.CreateStaff:input_type -> twentyfour.auth.v1.CreateStaffRequest
+	14, // 26: twentyfour.auth.v1.AuthService.AcceptInvite:input_type -> twentyfour.auth.v1.AcceptInviteRequest
+	28, // 27: twentyfour.auth.v1.AuthService.ReissueInvite:input_type -> twentyfour.auth.v1.ReissueInviteRequest
+	16, // 28: twentyfour.auth.v1.AuthService.Login:input_type -> twentyfour.auth.v1.LoginRequest
+	18, // 29: twentyfour.auth.v1.AuthService.RedeemHandoff:input_type -> twentyfour.auth.v1.RedeemHandoffRequest
+	20, // 30: twentyfour.auth.v1.AuthService.Logout:input_type -> twentyfour.auth.v1.LogoutRequest
+	22, // 31: twentyfour.auth.v1.AuthService.VerifyToken:input_type -> twentyfour.auth.v1.VerifyTokenRequest
+	6,  // 32: twentyfour.auth.v1.AuthService.GetMerchantCode:input_type -> twentyfour.auth.v1.GetMerchantCodeRequest
+	10, // 33: twentyfour.auth.v1.AuthService.ListMerchantCodes:input_type -> twentyfour.auth.v1.ListMerchantCodesRequest
+	24, // 34: twentyfour.auth.v1.AuthService.GetUser:input_type -> twentyfour.auth.v1.GetUserRequest
+	26, // 35: twentyfour.auth.v1.AuthService.ListUsers:input_type -> twentyfour.auth.v1.ListUsersRequest
+	34, // 36: twentyfour.auth.v1.AuthService.DeactivateUser:input_type -> twentyfour.auth.v1.DeactivateUserRequest
+	30, // 37: twentyfour.auth.v1.AuthService.ReactivateUser:input_type -> twentyfour.auth.v1.ReactivateUserRequest
+	32, // 38: twentyfour.auth.v1.AuthService.DeleteUser:input_type -> twentyfour.auth.v1.DeleteUserRequest
+	36, // 39: twentyfour.auth.v1.AuthService.GetPasswordPolicy:input_type -> twentyfour.auth.v1.GetPasswordPolicyRequest
+	38, // 40: twentyfour.auth.v1.AuthService.ChangePassword:input_type -> twentyfour.auth.v1.ChangePasswordRequest
+	40, // 41: twentyfour.auth.v1.AuthService.RequestPasswordReset:input_type -> twentyfour.auth.v1.RequestPasswordResetRequest
+	42, // 42: twentyfour.auth.v1.AuthService.ResetPassword:input_type -> twentyfour.auth.v1.ResetPasswordRequest
+	44, // 43: twentyfour.auth.v1.AuthService.EnrollTotp:input_type -> twentyfour.auth.v1.EnrollTotpRequest
+	46, // 44: twentyfour.auth.v1.AuthService.ConfirmTotp:input_type -> twentyfour.auth.v1.ConfirmTotpRequest
+	5,  // 45: twentyfour.auth.v1.AuthService.Signup:output_type -> twentyfour.auth.v1.SignupResponse
+	13, // 46: twentyfour.auth.v1.AuthService.InviteUser:output_type -> twentyfour.auth.v1.InviteUserResponse
+	9,  // 47: twentyfour.auth.v1.AuthService.CreateStaff:output_type -> twentyfour.auth.v1.CreateStaffResponse
+	15, // 48: twentyfour.auth.v1.AuthService.AcceptInvite:output_type -> twentyfour.auth.v1.AcceptInviteResponse
+	29, // 49: twentyfour.auth.v1.AuthService.ReissueInvite:output_type -> twentyfour.auth.v1.ReissueInviteResponse
+	17, // 50: twentyfour.auth.v1.AuthService.Login:output_type -> twentyfour.auth.v1.LoginResponse
+	19, // 51: twentyfour.auth.v1.AuthService.RedeemHandoff:output_type -> twentyfour.auth.v1.RedeemHandoffResponse
+	21, // 52: twentyfour.auth.v1.AuthService.Logout:output_type -> twentyfour.auth.v1.LogoutResponse
+	23, // 53: twentyfour.auth.v1.AuthService.VerifyToken:output_type -> twentyfour.auth.v1.VerifyTokenResponse
+	7,  // 54: twentyfour.auth.v1.AuthService.GetMerchantCode:output_type -> twentyfour.auth.v1.GetMerchantCodeResponse
+	11, // 55: twentyfour.auth.v1.AuthService.ListMerchantCodes:output_type -> twentyfour.auth.v1.ListMerchantCodesResponse
+	25, // 56: twentyfour.auth.v1.AuthService.GetUser:output_type -> twentyfour.auth.v1.GetUserResponse
+	27, // 57: twentyfour.auth.v1.AuthService.ListUsers:output_type -> twentyfour.auth.v1.ListUsersResponse
+	35, // 58: twentyfour.auth.v1.AuthService.DeactivateUser:output_type -> twentyfour.auth.v1.DeactivateUserResponse
+	31, // 59: twentyfour.auth.v1.AuthService.ReactivateUser:output_type -> twentyfour.auth.v1.ReactivateUserResponse
+	33, // 60: twentyfour.auth.v1.AuthService.DeleteUser:output_type -> twentyfour.auth.v1.DeleteUserResponse
+	37, // 61: twentyfour.auth.v1.AuthService.GetPasswordPolicy:output_type -> twentyfour.auth.v1.GetPasswordPolicyResponse
+	39, // 62: twentyfour.auth.v1.AuthService.ChangePassword:output_type -> twentyfour.auth.v1.ChangePasswordResponse
+	41, // 63: twentyfour.auth.v1.AuthService.RequestPasswordReset:output_type -> twentyfour.auth.v1.RequestPasswordResetResponse
+	43, // 64: twentyfour.auth.v1.AuthService.ResetPassword:output_type -> twentyfour.auth.v1.ResetPasswordResponse
+	45, // 65: twentyfour.auth.v1.AuthService.EnrollTotp:output_type -> twentyfour.auth.v1.EnrollTotpResponse
+	47, // 66: twentyfour.auth.v1.AuthService.ConfirmTotp:output_type -> twentyfour.auth.v1.ConfirmTotpResponse
+	45, // [45:67] is the sub-list for method output_type
+	23, // [23:45] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_twentyfour_auth_v1_auth_proto_init() }
@@ -2153,7 +3082,7 @@ func file_twentyfour_auth_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_twentyfour_auth_v1_auth_proto_rawDesc), len(file_twentyfour_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   30,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

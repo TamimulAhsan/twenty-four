@@ -2,7 +2,9 @@ import { NavLink } from 'react-router'
 import { FOOTER_NAV, useEntitlement, type NavItem, type NavLabel } from '@twentyfour/entitlement'
 import { useTerms } from '@twentyfour/terms'
 import { BrandMark, useBootstrap, Wordmark } from '@twentyfour/runtime'
+import { useSignOut } from '@twentyfour/shell'
 import { Avatar, Badge, Icon, IconButton, cn, isIconName } from '@twentyfour/ui'
+import { formatRemaining, useOnboarding } from '../onboarding/useOnboarding'
 
 function useLabel() {
   const terms = useTerms()
@@ -113,6 +115,82 @@ function NavRow({
   )
 }
 
+/**
+ * Signing out.
+ *
+ * Rendered as a navigation row rather than tucked into the account card,
+ * because it is looked for in the same place as Settings, and a control nobody
+ * can find is a control that does not exist. It is a button, not a link: it
+ * ends a session, it does not go to a page.
+ */
+function SignOutRow({ collapsed }: { collapsed?: boolean }) {
+  const { signOut, pending } = useSignOut()
+
+  return (
+    <button
+      type="button"
+      onClick={signOut}
+      disabled={pending}
+      className={cn(
+        ROW,
+        collapsed ? 'justify-center px-0' : 'px-2.5',
+        'w-full text-text-muted hover:bg-surface-hover hover:text-text',
+        'disabled:cursor-default disabled:opacity-60',
+      )}
+      {...(collapsed ? { title: 'Sign out', 'aria-label': 'Sign out' } : {})}
+    >
+      <Icon name={pending ? 'LoaderCircle' : 'LogOut'} size="lg" className={cn('shrink-0', pending && 'animate-spin')} />
+      {!collapsed && <span className="truncate">Sign out</span>}
+    </button>
+  )
+}
+
+/**
+ * Getting live, at the top of the navigation, while it is still happening.
+ *
+ * Not part of buildNav, because that is derived from the entitlement record
+ * and this is not a module: nobody buys it and every tenant passes through it
+ * once. It is first in the list for the day or so it exists, and then it is
+ * gone, which is the only placement that matches how much it matters on that
+ * day and how little it matters afterwards.
+ */
+function GettingLiveRow({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+  const { running, done, total, remainingMs, overdue } = useOnboarding()
+  if (!running) return null
+
+  const summary = overdue ? 'past due' : formatRemaining(remainingMs)
+
+  return (
+    <div className="mb-1">
+      <NavLink
+        to="/onboarding"
+        onClick={onNavigate}
+        title={collapsed ? `Getting live: ${done} of ${total} done, ${summary}` : undefined}
+        aria-label={collapsed ? 'Getting live' : undefined}
+        className={({ isActive }) =>
+          cn(
+            ROW,
+            collapsed ? 'justify-center px-0' : 'px-2.5',
+            isActive
+              ? 'bg-accent-subtle font-medium text-accent-text'
+              : 'text-text-muted hover:bg-surface-hover hover:text-text',
+          )
+        }
+      >
+        <Icon name={overdue ? 'AlertCircle' : 'Clock'} size="lg" className="shrink-0" />
+        {!collapsed && (
+          <>
+            <span className="truncate">Getting live</span>
+            <Badge tone={overdue ? 'danger' : 'accent'} className="ml-auto">
+              {done}/{total}
+            </Badge>
+          </>
+        )}
+      </NavLink>
+    </div>
+  )
+}
+
 export function SidebarContent({
   collapsed = false,
   onToggle,
@@ -149,6 +227,7 @@ export function SidebarContent({
       </div>
 
       <nav aria-label="Main" className={cn('flex-1 overflow-y-auto pb-4', collapsed ? 'px-2' : 'px-2.5')}>
+        <GettingLiveRow collapsed={collapsed} onNavigate={onNavigate} />
         {nav.map((group) => (
           <div key={group.id} className="mb-1">
             {group.label &&
@@ -176,6 +255,7 @@ export function SidebarContent({
           {FOOTER_NAV.map((item) => (
             <NavRow key={item.id} item={item} collapsed={collapsed} onNavigate={onNavigate} />
           ))}
+          <SignOutRow collapsed={collapsed} />
         </div>
 
         <div

@@ -97,7 +97,7 @@ type PaymentMethod struct {
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// Human label for the till, already in the tenant's language.
 	Label string `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	// Whether completing this method needs something outside the software —
+	// Whether completing this method needs something outside the software:
 	// a terminal to be tapped, an app to confirm. The till waits differently.
 	RequiresExternalAction bool `protobuf:"varint,3,opt,name=requires_external_action,json=requiresExternalAction,proto3" json:"requires_external_action,omitempty"`
 	// Whether the platform ever holds the funds. Cash never does.
@@ -165,8 +165,7 @@ func (x *PaymentMethod) GetElectronic() bool {
 }
 
 type CreateIntentRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	TenantId string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
 	// Caller-supplied and stable across retries. Required.
 	IdempotencyKey string    `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	Amount         *v1.Money `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
@@ -209,13 +208,6 @@ func (x *CreateIntentRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CreateIntentRequest.ProtoReflect.Descriptor instead.
 func (*CreateIntentRequest) Descriptor() ([]byte, []int) {
 	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *CreateIntentRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
 }
 
 func (x *CreateIntentRequest) GetIdempotencyKey() string {
@@ -317,7 +309,6 @@ func (x *CreateIntentResponse) GetExternalActionUrl() string {
 type Payment struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TenantId       string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	Amount         *v1.Money              `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	RefundedAmount *v1.Money              `protobuf:"bytes,5,opt,name=refunded_amount,json=refundedAmount,proto3" json:"refunded_amount,omitempty"`
@@ -326,7 +317,7 @@ type Payment struct {
 	ReferenceType  string                 `protobuf:"bytes,8,opt,name=reference_type,json=referenceType,proto3" json:"reference_type,omitempty"`
 	ReferenceId    string                 `protobuf:"bytes,9,opt,name=reference_id,json=referenceId,proto3" json:"reference_id,omitempty"`
 	// This market's provider reference, for support and reconciliation.
-	// Opaque upstream — never parsed by a caller.
+	// Opaque upstream, never parsed by a caller.
 	ProviderReference string                 `protobuf:"bytes,10,opt,name=provider_reference,json=providerReference,proto3" json:"provider_reference,omitempty"`
 	FailureReason     string                 `protobuf:"bytes,11,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
 	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
@@ -368,13 +359,6 @@ func (*Payment) Descriptor() ([]byte, []int) {
 func (x *Payment) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *Payment) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
 	}
 	return ""
 }
@@ -458,7 +442,6 @@ func (x *Payment) GetCapturedAt() *timestamppb.Timestamp {
 
 type CaptureRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
-	TenantId  string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	PaymentId string                 `protobuf:"bytes,2,opt,name=payment_id,json=paymentId,proto3" json:"payment_id,omitempty"`
 	// Omit to capture the full authorised amount.
 	Amount        *v1.Money `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
@@ -494,13 +477,6 @@ func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
 func (*CaptureRequest) Descriptor() ([]byte, []int) {
 	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *CaptureRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
 }
 
 func (x *CaptureRequest) GetPaymentId() string {
@@ -561,9 +537,105 @@ func (x *CaptureResponse) GetPayment() *Payment {
 	return nil
 }
 
+type CancelRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PaymentId string                 `protobuf:"bytes,1,opt,name=payment_id,json=paymentId,proto3" json:"payment_id,omitempty"`
+	// Kept on the payment so support can see why it never completed.
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelRequest) Reset() {
+	*x = CancelRequest{}
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelRequest) ProtoMessage() {}
+
+func (x *CancelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelRequest.ProtoReflect.Descriptor instead.
+func (*CancelRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CancelRequest) GetPaymentId() string {
+	if x != nil {
+		return x.PaymentId
+	}
+	return ""
+}
+
+func (x *CancelRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type CancelResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payment       *Payment               `protobuf:"bytes,1,opt,name=payment,proto3" json:"payment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelResponse) Reset() {
+	*x = CancelResponse{}
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelResponse) ProtoMessage() {}
+
+func (x *CancelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelResponse.ProtoReflect.Descriptor instead.
+func (*CancelResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CancelResponse) GetPayment() *Payment {
+	if x != nil {
+		return x.Payment
+	}
+	return nil
+}
+
 type RefundRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	TenantId       string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	PaymentId      string                 `protobuf:"bytes,2,opt,name=payment_id,json=paymentId,proto3" json:"payment_id,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	// Omit to refund everything still refundable.
@@ -575,7 +647,7 @@ type RefundRequest struct {
 
 func (x *RefundRequest) Reset() {
 	*x = RefundRequest{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[6]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -587,7 +659,7 @@ func (x *RefundRequest) String() string {
 func (*RefundRequest) ProtoMessage() {}
 
 func (x *RefundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[6]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -600,14 +672,7 @@ func (x *RefundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundRequest.ProtoReflect.Descriptor instead.
 func (*RefundRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *RefundRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RefundRequest) GetPaymentId() string {
@@ -647,7 +712,7 @@ type RefundResponse struct {
 
 func (x *RefundResponse) Reset() {
 	*x = RefundResponse{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[7]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +724,7 @@ func (x *RefundResponse) String() string {
 func (*RefundResponse) ProtoMessage() {}
 
 func (x *RefundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[7]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +737,7 @@ func (x *RefundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundResponse.ProtoReflect.Descriptor instead.
 func (*RefundResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{7}
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RefundResponse) GetPayment() *Payment {
@@ -683,8 +748,7 @@ func (x *RefundResponse) GetPayment() *Payment {
 }
 
 type GetPaymentRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	TenantId string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
 	// Look up by either. Supplying the idempotency key is how a caller recovers
 	// after a crash without knowing whether its request landed.
 	PaymentId      string `protobuf:"bytes,2,opt,name=payment_id,json=paymentId,proto3" json:"payment_id,omitempty"`
@@ -695,7 +759,7 @@ type GetPaymentRequest struct {
 
 func (x *GetPaymentRequest) Reset() {
 	*x = GetPaymentRequest{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[8]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -707,7 +771,7 @@ func (x *GetPaymentRequest) String() string {
 func (*GetPaymentRequest) ProtoMessage() {}
 
 func (x *GetPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[8]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,14 +784,7 @@ func (x *GetPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPaymentRequest.ProtoReflect.Descriptor instead.
 func (*GetPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *GetPaymentRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetPaymentRequest) GetPaymentId() string {
@@ -753,7 +810,7 @@ type GetPaymentResponse struct {
 
 func (x *GetPaymentResponse) Reset() {
 	*x = GetPaymentResponse{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[9]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -765,7 +822,7 @@ func (x *GetPaymentResponse) String() string {
 func (*GetPaymentResponse) ProtoMessage() {}
 
 func (x *GetPaymentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[9]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -778,7 +835,7 @@ func (x *GetPaymentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPaymentResponse.ProtoReflect.Descriptor instead.
 func (*GetPaymentResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{9}
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetPaymentResponse) GetPayment() *Payment {
@@ -790,14 +847,13 @@ func (x *GetPaymentResponse) GetPayment() *Payment {
 
 type ListMethodsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListMethodsRequest) Reset() {
 	*x = ListMethodsRequest{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[10]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +865,7 @@ func (x *ListMethodsRequest) String() string {
 func (*ListMethodsRequest) ProtoMessage() {}
 
 func (x *ListMethodsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[10]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,14 +878,7 @@ func (x *ListMethodsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMethodsRequest.ProtoReflect.Descriptor instead.
 func (*ListMethodsRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *ListMethodsRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{12}
 }
 
 type ListMethodsResponse struct {
@@ -841,7 +890,7 @@ type ListMethodsResponse struct {
 
 func (x *ListMethodsResponse) Reset() {
 	*x = ListMethodsResponse{}
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[11]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -853,7 +902,7 @@ func (x *ListMethodsResponse) String() string {
 func (*ListMethodsResponse) ProtoMessage() {}
 
 func (x *ListMethodsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[11]
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -866,7 +915,7 @@ func (x *ListMethodsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMethodsResponse.ProtoReflect.Descriptor instead.
 func (*ListMethodsResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{11}
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListMethodsResponse) GetMethods() []*PaymentMethod {
@@ -876,20 +925,133 @@ func (x *ListMethodsResponse) GetMethods() []*PaymentMethod {
 	return nil
 }
 
+type ListPaymentsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Narrow to one thing that was paid for. Empty returns the tenant's most
+	// recent payments.
+	ReferenceType string        `protobuf:"bytes,1,opt,name=reference_type,json=referenceType,proto3" json:"reference_type,omitempty"`
+	ReferenceId   string        `protobuf:"bytes,2,opt,name=reference_id,json=referenceId,proto3" json:"reference_id,omitempty"`
+	Status        PaymentStatus `protobuf:"varint,3,opt,name=status,proto3,enum=twentyfour.payments.v1.PaymentStatus" json:"status,omitempty"`
+	PageSize      int32         `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentsRequest) Reset() {
+	*x = ListPaymentsRequest{}
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPaymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPaymentsRequest) ProtoMessage() {}
+
+func (x *ListPaymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPaymentsRequest.ProtoReflect.Descriptor instead.
+func (*ListPaymentsRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListPaymentsRequest) GetReferenceType() string {
+	if x != nil {
+		return x.ReferenceType
+	}
+	return ""
+}
+
+func (x *ListPaymentsRequest) GetReferenceId() string {
+	if x != nil {
+		return x.ReferenceId
+	}
+	return ""
+}
+
+func (x *ListPaymentsRequest) GetStatus() PaymentStatus {
+	if x != nil {
+		return x.Status
+	}
+	return PaymentStatus_PAYMENT_STATUS_UNSPECIFIED
+}
+
+func (x *ListPaymentsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListPaymentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payments      []*Payment             `protobuf:"bytes,1,rep,name=payments,proto3" json:"payments,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentsResponse) Reset() {
+	*x = ListPaymentsResponse{}
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPaymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPaymentsResponse) ProtoMessage() {}
+
+func (x *ListPaymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_payments_v1_payments_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPaymentsResponse.ProtoReflect.Descriptor instead.
+func (*ListPaymentsResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_payments_v1_payments_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ListPaymentsResponse) GetPayments() []*Payment {
+	if x != nil {
+		return x.Payments
+	}
+	return nil
+}
+
 var File_twentyfour_payments_v1_payments_proto protoreflect.FileDescriptor
 
 const file_twentyfour_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
-	"%twentyfour/payments/v1/payments.proto\x12\x16twentyfour.payments.v1\x1a twentyfour/common/v1/money.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x91\x01\n" +
+	"%twentyfour/payments/v1/payments.proto\x12\x16twentyfour.payments.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a twentyfour/common/v1/money.proto\"\x91\x01\n" +
 	"\rPaymentMethod\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x128\n" +
 	"\x18requires_external_action\x18\x03 \x01(\bR\x16requiresExternalAction\x12\x1e\n" +
 	"\n" +
 	"electronic\x18\x04 \x01(\bR\n" +
-	"electronic\"\x8d\x03\n" +
-	"\x13CreateIntentRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
+	"electronic\"\xf0\x02\n" +
+	"\x13CreateIntentRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x123\n" +
 	"\x06amount\x18\x03 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\x06amount\x12\x1d\n" +
 	"\n" +
@@ -902,10 +1064,9 @@ const file_twentyfour_payments_v1_payments_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x01\n" +
 	"\x14CreateIntentResponse\x129\n" +
 	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\x12.\n" +
-	"\x13external_action_url\x18\x02 \x01(\tR\x11externalActionUrl\"\xd0\x04\n" +
+	"\x13external_action_url\x18\x02 \x01(\tR\x11externalActionUrl\"\xb9\x04\n" +
 	"\aPayment\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12'\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n" +
 	"\x06amount\x18\x04 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\x06amount\x12D\n" +
 	"\x0frefunded_amount\x18\x05 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\x0erefundedAmount\x12=\n" +
@@ -920,34 +1081,43 @@ const file_twentyfour_payments_v1_payments_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12;\n" +
 	"\vcaptured_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"capturedAt\"\x81\x01\n" +
-	"\x0eCaptureRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
+	"capturedAtJ\x04\b\x02\x10\x03\"d\n" +
+	"\x0eCaptureRequest\x12\x1d\n" +
 	"\n" +
 	"payment_id\x18\x02 \x01(\tR\tpaymentId\x123\n" +
 	"\x06amount\x18\x03 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\x06amount\"L\n" +
 	"\x0fCaptureResponse\x129\n" +
-	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"\xc1\x01\n" +
-	"\rRefundRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
+	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"F\n" +
+	"\rCancelRequest\x12\x1d\n" +
+	"\n" +
+	"payment_id\x18\x01 \x01(\tR\tpaymentId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"K\n" +
+	"\x0eCancelResponse\x129\n" +
+	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"\xa4\x01\n" +
+	"\rRefundRequest\x12\x1d\n" +
 	"\n" +
 	"payment_id\x18\x02 \x01(\tR\tpaymentId\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n" +
 	"\x06amount\x18\x04 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\x06amount\x12\x16\n" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\"K\n" +
 	"\x0eRefundResponse\x129\n" +
-	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"x\n" +
-	"\x11GetPaymentRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
+	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"[\n" +
+	"\x11GetPaymentRequest\x12\x1d\n" +
 	"\n" +
 	"payment_id\x18\x02 \x01(\tR\tpaymentId\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"O\n" +
 	"\x12GetPaymentResponse\x129\n" +
-	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"1\n" +
-	"\x12ListMethodsRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"V\n" +
+	"\apayment\x18\x01 \x01(\v2\x1f.twentyfour.payments.v1.PaymentR\apayment\"\x14\n" +
+	"\x12ListMethodsRequest\"V\n" +
 	"\x13ListMethodsResponse\x12?\n" +
-	"\amethods\x18\x01 \x03(\v2%.twentyfour.payments.v1.PaymentMethodR\amethods*\x84\x02\n" +
+	"\amethods\x18\x01 \x03(\v2%.twentyfour.payments.v1.PaymentMethodR\amethods\"\xbb\x01\n" +
+	"\x13ListPaymentsRequest\x12%\n" +
+	"\x0ereference_type\x18\x01 \x01(\tR\rreferenceType\x12!\n" +
+	"\freference_id\x18\x02 \x01(\tR\vreferenceId\x12=\n" +
+	"\x06status\x18\x03 \x01(\x0e2%.twentyfour.payments.v1.PaymentStatusR\x06status\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"S\n" +
+	"\x14ListPaymentsResponse\x12;\n" +
+	"\bpayments\x18\x01 \x03(\v2\x1f.twentyfour.payments.v1.PaymentR\bpayments*\x84\x02\n" +
 	"\rPaymentStatus\x12\x1e\n" +
 	"\x1aPAYMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PAYMENT_STATUS_PENDING\x10\x01\x12\x1d\n" +
@@ -956,14 +1126,16 @@ const file_twentyfour_payments_v1_payments_proto_rawDesc = "" +
 	"\x15PAYMENT_STATUS_FAILED\x10\x04\x12\x1b\n" +
 	"\x17PAYMENT_STATUS_REFUNDED\x10\x05\x12%\n" +
 	"!PAYMENT_STATUS_PARTIALLY_REFUNDED\x10\x06\x12\x1c\n" +
-	"\x18PAYMENT_STATUS_CANCELLED\x10\a2\xfe\x03\n" +
+	"\x18PAYMENT_STATUS_CANCELLED\x10\a2\xc2\x05\n" +
 	"\x0fPaymentsService\x12i\n" +
 	"\fCreateIntent\x12+.twentyfour.payments.v1.CreateIntentRequest\x1a,.twentyfour.payments.v1.CreateIntentResponse\x12Z\n" +
 	"\aCapture\x12&.twentyfour.payments.v1.CaptureRequest\x1a'.twentyfour.payments.v1.CaptureResponse\x12W\n" +
+	"\x06Cancel\x12%.twentyfour.payments.v1.CancelRequest\x1a&.twentyfour.payments.v1.CancelResponse\x12W\n" +
 	"\x06Refund\x12%.twentyfour.payments.v1.RefundRequest\x1a&.twentyfour.payments.v1.RefundResponse\x12c\n" +
 	"\n" +
 	"GetPayment\x12).twentyfour.payments.v1.GetPaymentRequest\x1a*.twentyfour.payments.v1.GetPaymentResponse\x12f\n" +
-	"\vListMethods\x12*.twentyfour.payments.v1.ListMethodsRequest\x1a+.twentyfour.payments.v1.ListMethodsResponseB\xee\x01\n" +
+	"\vListMethods\x12*.twentyfour.payments.v1.ListMethodsRequest\x1a+.twentyfour.payments.v1.ListMethodsResponse\x12i\n" +
+	"\fListPayments\x12+.twentyfour.payments.v1.ListPaymentsRequest\x1a,.twentyfour.payments.v1.ListPaymentsResponseB\xee\x01\n" +
 	"\x1acom.twentyfour.payments.v1B\rPaymentsProtoP\x01ZGgithub.com/twentyfour/platform/gen/go/twentyfour/payments/v1;paymentsv1\xa2\x02\x03TPX\xaa\x02\x16Twentyfour.Payments.V1\xca\x02\x16Twentyfour\\Payments\\V1\xe2\x02\"Twentyfour\\Payments\\V1\\GPBMetadata\xea\x02\x18Twentyfour::Payments::V1b\x06proto3"
 
 var (
@@ -979,7 +1151,7 @@ func file_twentyfour_payments_v1_payments_proto_rawDescGZIP() []byte {
 }
 
 var file_twentyfour_payments_v1_payments_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_twentyfour_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_twentyfour_payments_v1_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_twentyfour_payments_v1_payments_proto_goTypes = []any{
 	(PaymentStatus)(0),            // 0: twentyfour.payments.v1.PaymentStatus
 	(*PaymentMethod)(nil),         // 1: twentyfour.payments.v1.PaymentMethod
@@ -988,46 +1160,57 @@ var file_twentyfour_payments_v1_payments_proto_goTypes = []any{
 	(*Payment)(nil),               // 4: twentyfour.payments.v1.Payment
 	(*CaptureRequest)(nil),        // 5: twentyfour.payments.v1.CaptureRequest
 	(*CaptureResponse)(nil),       // 6: twentyfour.payments.v1.CaptureResponse
-	(*RefundRequest)(nil),         // 7: twentyfour.payments.v1.RefundRequest
-	(*RefundResponse)(nil),        // 8: twentyfour.payments.v1.RefundResponse
-	(*GetPaymentRequest)(nil),     // 9: twentyfour.payments.v1.GetPaymentRequest
-	(*GetPaymentResponse)(nil),    // 10: twentyfour.payments.v1.GetPaymentResponse
-	(*ListMethodsRequest)(nil),    // 11: twentyfour.payments.v1.ListMethodsRequest
-	(*ListMethodsResponse)(nil),   // 12: twentyfour.payments.v1.ListMethodsResponse
-	nil,                           // 13: twentyfour.payments.v1.CreateIntentRequest.MetadataEntry
-	(*v1.Money)(nil),              // 14: twentyfour.common.v1.Money
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
+	(*CancelRequest)(nil),         // 7: twentyfour.payments.v1.CancelRequest
+	(*CancelResponse)(nil),        // 8: twentyfour.payments.v1.CancelResponse
+	(*RefundRequest)(nil),         // 9: twentyfour.payments.v1.RefundRequest
+	(*RefundResponse)(nil),        // 10: twentyfour.payments.v1.RefundResponse
+	(*GetPaymentRequest)(nil),     // 11: twentyfour.payments.v1.GetPaymentRequest
+	(*GetPaymentResponse)(nil),    // 12: twentyfour.payments.v1.GetPaymentResponse
+	(*ListMethodsRequest)(nil),    // 13: twentyfour.payments.v1.ListMethodsRequest
+	(*ListMethodsResponse)(nil),   // 14: twentyfour.payments.v1.ListMethodsResponse
+	(*ListPaymentsRequest)(nil),   // 15: twentyfour.payments.v1.ListPaymentsRequest
+	(*ListPaymentsResponse)(nil),  // 16: twentyfour.payments.v1.ListPaymentsResponse
+	nil,                           // 17: twentyfour.payments.v1.CreateIntentRequest.MetadataEntry
+	(*v1.Money)(nil),              // 18: twentyfour.common.v1.Money
+	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
 }
 var file_twentyfour_payments_v1_payments_proto_depIdxs = []int32{
-	14, // 0: twentyfour.payments.v1.CreateIntentRequest.amount:type_name -> twentyfour.common.v1.Money
-	13, // 1: twentyfour.payments.v1.CreateIntentRequest.metadata:type_name -> twentyfour.payments.v1.CreateIntentRequest.MetadataEntry
+	18, // 0: twentyfour.payments.v1.CreateIntentRequest.amount:type_name -> twentyfour.common.v1.Money
+	17, // 1: twentyfour.payments.v1.CreateIntentRequest.metadata:type_name -> twentyfour.payments.v1.CreateIntentRequest.MetadataEntry
 	4,  // 2: twentyfour.payments.v1.CreateIntentResponse.payment:type_name -> twentyfour.payments.v1.Payment
-	14, // 3: twentyfour.payments.v1.Payment.amount:type_name -> twentyfour.common.v1.Money
-	14, // 4: twentyfour.payments.v1.Payment.refunded_amount:type_name -> twentyfour.common.v1.Money
+	18, // 3: twentyfour.payments.v1.Payment.amount:type_name -> twentyfour.common.v1.Money
+	18, // 4: twentyfour.payments.v1.Payment.refunded_amount:type_name -> twentyfour.common.v1.Money
 	0,  // 5: twentyfour.payments.v1.Payment.status:type_name -> twentyfour.payments.v1.PaymentStatus
-	15, // 6: twentyfour.payments.v1.Payment.created_at:type_name -> google.protobuf.Timestamp
-	15, // 7: twentyfour.payments.v1.Payment.captured_at:type_name -> google.protobuf.Timestamp
-	14, // 8: twentyfour.payments.v1.CaptureRequest.amount:type_name -> twentyfour.common.v1.Money
+	19, // 6: twentyfour.payments.v1.Payment.created_at:type_name -> google.protobuf.Timestamp
+	19, // 7: twentyfour.payments.v1.Payment.captured_at:type_name -> google.protobuf.Timestamp
+	18, // 8: twentyfour.payments.v1.CaptureRequest.amount:type_name -> twentyfour.common.v1.Money
 	4,  // 9: twentyfour.payments.v1.CaptureResponse.payment:type_name -> twentyfour.payments.v1.Payment
-	14, // 10: twentyfour.payments.v1.RefundRequest.amount:type_name -> twentyfour.common.v1.Money
-	4,  // 11: twentyfour.payments.v1.RefundResponse.payment:type_name -> twentyfour.payments.v1.Payment
-	4,  // 12: twentyfour.payments.v1.GetPaymentResponse.payment:type_name -> twentyfour.payments.v1.Payment
-	1,  // 13: twentyfour.payments.v1.ListMethodsResponse.methods:type_name -> twentyfour.payments.v1.PaymentMethod
-	2,  // 14: twentyfour.payments.v1.PaymentsService.CreateIntent:input_type -> twentyfour.payments.v1.CreateIntentRequest
-	5,  // 15: twentyfour.payments.v1.PaymentsService.Capture:input_type -> twentyfour.payments.v1.CaptureRequest
-	7,  // 16: twentyfour.payments.v1.PaymentsService.Refund:input_type -> twentyfour.payments.v1.RefundRequest
-	9,  // 17: twentyfour.payments.v1.PaymentsService.GetPayment:input_type -> twentyfour.payments.v1.GetPaymentRequest
-	11, // 18: twentyfour.payments.v1.PaymentsService.ListMethods:input_type -> twentyfour.payments.v1.ListMethodsRequest
-	3,  // 19: twentyfour.payments.v1.PaymentsService.CreateIntent:output_type -> twentyfour.payments.v1.CreateIntentResponse
-	6,  // 20: twentyfour.payments.v1.PaymentsService.Capture:output_type -> twentyfour.payments.v1.CaptureResponse
-	8,  // 21: twentyfour.payments.v1.PaymentsService.Refund:output_type -> twentyfour.payments.v1.RefundResponse
-	10, // 22: twentyfour.payments.v1.PaymentsService.GetPayment:output_type -> twentyfour.payments.v1.GetPaymentResponse
-	12, // 23: twentyfour.payments.v1.PaymentsService.ListMethods:output_type -> twentyfour.payments.v1.ListMethodsResponse
-	19, // [19:24] is the sub-list for method output_type
-	14, // [14:19] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	4,  // 10: twentyfour.payments.v1.CancelResponse.payment:type_name -> twentyfour.payments.v1.Payment
+	18, // 11: twentyfour.payments.v1.RefundRequest.amount:type_name -> twentyfour.common.v1.Money
+	4,  // 12: twentyfour.payments.v1.RefundResponse.payment:type_name -> twentyfour.payments.v1.Payment
+	4,  // 13: twentyfour.payments.v1.GetPaymentResponse.payment:type_name -> twentyfour.payments.v1.Payment
+	1,  // 14: twentyfour.payments.v1.ListMethodsResponse.methods:type_name -> twentyfour.payments.v1.PaymentMethod
+	0,  // 15: twentyfour.payments.v1.ListPaymentsRequest.status:type_name -> twentyfour.payments.v1.PaymentStatus
+	4,  // 16: twentyfour.payments.v1.ListPaymentsResponse.payments:type_name -> twentyfour.payments.v1.Payment
+	2,  // 17: twentyfour.payments.v1.PaymentsService.CreateIntent:input_type -> twentyfour.payments.v1.CreateIntentRequest
+	5,  // 18: twentyfour.payments.v1.PaymentsService.Capture:input_type -> twentyfour.payments.v1.CaptureRequest
+	7,  // 19: twentyfour.payments.v1.PaymentsService.Cancel:input_type -> twentyfour.payments.v1.CancelRequest
+	9,  // 20: twentyfour.payments.v1.PaymentsService.Refund:input_type -> twentyfour.payments.v1.RefundRequest
+	11, // 21: twentyfour.payments.v1.PaymentsService.GetPayment:input_type -> twentyfour.payments.v1.GetPaymentRequest
+	13, // 22: twentyfour.payments.v1.PaymentsService.ListMethods:input_type -> twentyfour.payments.v1.ListMethodsRequest
+	15, // 23: twentyfour.payments.v1.PaymentsService.ListPayments:input_type -> twentyfour.payments.v1.ListPaymentsRequest
+	3,  // 24: twentyfour.payments.v1.PaymentsService.CreateIntent:output_type -> twentyfour.payments.v1.CreateIntentResponse
+	6,  // 25: twentyfour.payments.v1.PaymentsService.Capture:output_type -> twentyfour.payments.v1.CaptureResponse
+	8,  // 26: twentyfour.payments.v1.PaymentsService.Cancel:output_type -> twentyfour.payments.v1.CancelResponse
+	10, // 27: twentyfour.payments.v1.PaymentsService.Refund:output_type -> twentyfour.payments.v1.RefundResponse
+	12, // 28: twentyfour.payments.v1.PaymentsService.GetPayment:output_type -> twentyfour.payments.v1.GetPaymentResponse
+	14, // 29: twentyfour.payments.v1.PaymentsService.ListMethods:output_type -> twentyfour.payments.v1.ListMethodsResponse
+	16, // 30: twentyfour.payments.v1.PaymentsService.ListPayments:output_type -> twentyfour.payments.v1.ListPaymentsResponse
+	24, // [24:31] is the sub-list for method output_type
+	17, // [17:24] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_twentyfour_payments_v1_payments_proto_init() }
@@ -1041,7 +1224,7 @@ func file_twentyfour_payments_v1_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_twentyfour_payments_v1_payments_proto_rawDesc), len(file_twentyfour_payments_v1_payments_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -3,13 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { auth } from '@twentyfour/api'
 import { BootstrapProvider, launchTargets } from '@twentyfour/runtime'
 import { Spinner } from '@twentyfour/ui'
-
-/** Where the sign-in application lives. Same origin, so the session cookie
- *  issued there is already present when the browser comes back.
- *
- *  The trailing slash matters: without it nginx answers with a directory
- *  redirect, and the browser makes an extra round trip for nothing. */
-const AUTH_PATH = '/auth/'
+import { signInUrl } from './session'
 
 /**
  * Nothing renders until the server says who is signed in.
@@ -38,7 +32,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     // Replace rather than assign: a signed-out page should not sit in history
     // for the back button to return to after signing in.
     const here = window.location.pathname + window.location.search
-    window.location.replace(`${AUTH_PATH}?return=${encodeURIComponent(here)}`)
+    window.location.replace(signInUrl(here))
     return (
       <div className="grid min-h-dvh place-items-center">
         <Spinner label="Taking you to sign in" />

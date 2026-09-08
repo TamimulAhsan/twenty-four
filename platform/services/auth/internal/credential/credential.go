@@ -52,6 +52,8 @@ func SetMinPasswordLength(n int) {
 const MaxPasswordLength = 1024
 
 var (
+	// Built from the enforced minimum, not the default: a deployment that
+	// lowered it must not report a number it is not using.
 	ErrTooShort     = fmt.Errorf("password must be at least %d characters", DefaultMinPasswordLength)
 	ErrTooLong      = fmt.Errorf("password must be at most %d characters", MaxPasswordLength)
 	ErrBadHash      = errors.New("credential: malformed stored hash")
@@ -63,6 +65,9 @@ var (
 func Validate(pw string) error {
 	n := utf8.RuneCountInString(pw)
 	if n < MinPasswordLength {
+		if MinPasswordLength != DefaultMinPasswordLength {
+			return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+		}
 		return ErrTooShort
 	}
 	if n > MaxPasswordLength {

@@ -76,3 +76,34 @@ export const queryKeys = {
     subscription: () => ['billing', 'subscription'] as const,
   },
 } as const
+
+/**
+ * Admin plane keys.
+ *
+ * A separate tree, prefixed, so nothing an admin screen caches can ever be
+ * served to a merchant screen or the other way round. The two planes run in
+ * different applications on different hosts, so this can only happen by
+ * mistake, and a shared prefix is how that mistake would look.
+ */
+export const adminKeys = {
+  session: () => ['admin', 'session'] as const,
+  overview: () => ['admin', 'overview'] as const,
+  environment: () => ['admin', 'environment'] as const,
+  billing: () => ['admin', 'billing'] as const,
+  tiers: () => ['admin', 'tiers'] as const,
+  staff: () => ['admin', 'staff'] as const,
+  roles: () => ['admin', 'roles'] as const,
+  audit: (filter?: string) => ['admin', 'audit', filter ?? 'all'] as const,
+  sessions: () => ['admin', 'support-sessions'] as const,
+  provisioning: {
+    queue: () => ['admin', 'provisioning'] as const,
+    run: (tenantId: string) => ['admin', 'provisioning', tenantId] as const,
+  },
+  tenants: {
+    list: () => ['admin', 'tenants'] as const,
+    detail: (id: string) => ['admin', 'tenants', id] as const,
+    orders: (id: string) => ['admin', 'tenants', id, 'orders'] as const,
+    invoices: (id: string) => ['admin', 'tenants', id, 'invoices'] as const,
+    audit: (id: string) => ['admin', 'tenants', id, 'audit'] as const,
+  },
+} as const

@@ -1,7 +1,13 @@
-// Package pricing turns catalog prices into the exact figures a sale is made
-// of. Every amount is an integer in the currency's minor units; nothing here
-// ever sees a float.
-package pricing
+// Package money is the one place the platform knows what a currency is and how
+// to round it. Every amount is an integer in the currency's minor units;
+// nothing here ever sees a float.
+//
+// It lives in packages rather than inside Catalog because Payments, Invoicing
+// and the ledger all need the same answers, and two currency tables is two
+// answers to "does HUF have a subunit". The money rules are not guidance: an
+// amount rounded one way on a receipt and another way in the books is a
+// reconciliation problem that surfaces months later.
+package money
 
 import (
 	"errors"
@@ -25,11 +31,11 @@ func Exponent(currency string) (int, bool) {
 }
 
 var (
-	ErrCurrency     = errors.New("pricing: unknown currency")
-	ErrMismatch     = errors.New("pricing: currency mismatch")
-	ErrQuantity     = errors.New("pricing: quantity must be positive")
-	ErrTaxRate      = errors.New("pricing: tax rate out of range")
-	ErrDiscountHigh = errors.New("pricing: discount exceeds line total")
+	ErrCurrency     = errors.New("money: unknown currency")
+	ErrMismatch     = errors.New("money: currency mismatch")
+	ErrQuantity     = errors.New("money: quantity must be positive")
+	ErrTaxRate      = errors.New("money: tax rate out of range")
+	ErrDiscountHigh = errors.New("money: discount exceeds line total")
 )
 
 // Line is one row of a sale, priced from a catalog item.
@@ -67,7 +73,7 @@ func PriceLine(l Line) (Amounts, error) {
 		return Amounts{}, fmt.Errorf("%w: %d", ErrTaxRate, l.TaxBasisPoints)
 	}
 	if l.DiscountMinor < 0 {
-		return Amounts{}, errors.New("pricing: discount must not be negative")
+		return Amounts{}, errors.New("money: discount must not be negative")
 	}
 
 	base := l.UnitPriceMinor * int64(l.Quantity)
@@ -96,7 +102,7 @@ func PriceLine(l Line) (Amounts, error) {
 // adding up to its total.
 func Total(as []Amounts) (Amounts, error) {
 	if len(as) == 0 {
-		return Amounts{}, errors.New("pricing: no lines to total")
+		return Amounts{}, errors.New("money: no lines to total")
 	}
 	out := Amounts{Currency: as[0].Currency}
 	for _, a := range as {
@@ -115,7 +121,7 @@ func Total(as []Amounts) (Amounts, error) {
 // zero, which would quietly under-collect tax on roughly half of all lines.
 func divRoundHalfUp(num, den int64) int64 {
 	if den == 0 {
-		panic("pricing: division by zero")
+		panic("money: division by zero")
 	}
 	neg := (num < 0) != (den < 0)
 	if num < 0 {

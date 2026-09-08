@@ -21,9 +21,11 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	PaymentsService_CreateIntent_FullMethodName = "/twentyfour.payments.v1.PaymentsService/CreateIntent"
 	PaymentsService_Capture_FullMethodName      = "/twentyfour.payments.v1.PaymentsService/Capture"
+	PaymentsService_Cancel_FullMethodName       = "/twentyfour.payments.v1.PaymentsService/Cancel"
 	PaymentsService_Refund_FullMethodName       = "/twentyfour.payments.v1.PaymentsService/Refund"
 	PaymentsService_GetPayment_FullMethodName   = "/twentyfour.payments.v1.PaymentsService/GetPayment"
 	PaymentsService_ListMethods_FullMethodName  = "/twentyfour.payments.v1.PaymentsService/ListMethods"
+	PaymentsService_ListPayments_FullMethodName = "/twentyfour.payments.v1.PaymentsService/ListPayments"
 )
 
 // PaymentsServiceClient is the client API for PaymentsService service.
@@ -43,17 +45,30 @@ const (
 //
 // POS asks for a payment and gets a result. It never learns that Bangladesh
 // answered with a mobile wallet and Hungary with a card.
+//
+// No request carries a tenant: the gateway resolved it onto the request
+// context. Note also what is NOT here. There is no Approve and no Decline,
+// because no real provider has such a call. The development provider's manual
+// approval screen is its own HTTP surface, outside this contract, exactly where
+// a hosted payment page would be.
 type PaymentsServiceClient interface {
 	// Idempotent on idempotency_key: the same key always returns the same
 	// payment, never a second charge. A till that loses its network mid-tender
 	// and retries must not double-charge the customer.
 	CreateIntent(ctx context.Context, in *CreateIntentRequest, opts ...grpc.CallOption) (*CreateIntentResponse, error)
 	Capture(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (*CaptureResponse, error)
+	// Gives up on a payment that was never completed. A customer who walked
+	// away from the terminal leaves a payment nobody will ever approve, and it
+	// must not sit on the provider's books waiting forever.
+	Cancel(ctx context.Context, in *CancelRequest, opts ...grpc.CallOption) (*CancelResponse, error)
 	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*RefundResponse, error)
 	GetPayment(ctx context.Context, in *GetPaymentRequest, opts ...grpc.CallOption) (*GetPaymentResponse, error)
 	// Which tender types this deployment can actually accept. The till renders
 	// its buttons from this rather than hardcoding "cash / card".
 	ListMethods(ctx context.Context, in *ListMethodsRequest, opts ...grpc.CallOption) (*ListMethodsResponse, error)
+	// Everything taken for one reference, or one day's takings. The till and the
+	// Payments page both read from here rather than keeping their own list.
+	ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error)
 }
 
 type paymentsServiceClient struct {
@@ -78,6 +93,16 @@ func (c *paymentsServiceClient) Capture(ctx context.Context, in *CaptureRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CaptureResponse)
 	err := c.cc.Invoke(ctx, PaymentsService_Capture_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentsServiceClient) Cancel(ctx context.Context, in *CancelRequest, opts ...grpc.CallOption) (*CancelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_Cancel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +139,16 @@ func (c *paymentsServiceClient) ListMethods(ctx context.Context, in *ListMethods
 	return out, nil
 }
 
+func (c *paymentsServiceClient) ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPaymentsResponse)
+	err := c.cc.Invoke(ctx, PaymentsService_ListPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentsServiceServer is the server API for PaymentsService service.
 // All implementations must embed UnimplementedPaymentsServiceServer
 // for forward compatibility.
@@ -131,17 +166,30 @@ func (c *paymentsServiceClient) ListMethods(ctx context.Context, in *ListMethods
 //
 // POS asks for a payment and gets a result. It never learns that Bangladesh
 // answered with a mobile wallet and Hungary with a card.
+//
+// No request carries a tenant: the gateway resolved it onto the request
+// context. Note also what is NOT here. There is no Approve and no Decline,
+// because no real provider has such a call. The development provider's manual
+// approval screen is its own HTTP surface, outside this contract, exactly where
+// a hosted payment page would be.
 type PaymentsServiceServer interface {
 	// Idempotent on idempotency_key: the same key always returns the same
 	// payment, never a second charge. A till that loses its network mid-tender
 	// and retries must not double-charge the customer.
 	CreateIntent(context.Context, *CreateIntentRequest) (*CreateIntentResponse, error)
 	Capture(context.Context, *CaptureRequest) (*CaptureResponse, error)
+	// Gives up on a payment that was never completed. A customer who walked
+	// away from the terminal leaves a payment nobody will ever approve, and it
+	// must not sit on the provider's books waiting forever.
+	Cancel(context.Context, *CancelRequest) (*CancelResponse, error)
 	Refund(context.Context, *RefundRequest) (*RefundResponse, error)
 	GetPayment(context.Context, *GetPaymentRequest) (*GetPaymentResponse, error)
 	// Which tender types this deployment can actually accept. The till renders
 	// its buttons from this rather than hardcoding "cash / card".
 	ListMethods(context.Context, *ListMethodsRequest) (*ListMethodsResponse, error)
+	// Everything taken for one reference, or one day's takings. The till and the
+	// Payments page both read from here rather than keeping their own list.
+	ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error)
 	mustEmbedUnimplementedPaymentsServiceServer()
 }
 
@@ -158,6 +206,9 @@ func (UnimplementedPaymentsServiceServer) CreateIntent(context.Context, *CreateI
 func (UnimplementedPaymentsServiceServer) Capture(context.Context, *CaptureRequest) (*CaptureResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Capture not implemented")
 }
+func (UnimplementedPaymentsServiceServer) Cancel(context.Context, *CancelRequest) (*CancelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Cancel not implemented")
+}
 func (UnimplementedPaymentsServiceServer) Refund(context.Context, *RefundRequest) (*RefundResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Refund not implemented")
 }
@@ -166,6 +217,9 @@ func (UnimplementedPaymentsServiceServer) GetPayment(context.Context, *GetPaymen
 }
 func (UnimplementedPaymentsServiceServer) ListMethods(context.Context, *ListMethodsRequest) (*ListMethodsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMethods not implemented")
+}
+func (UnimplementedPaymentsServiceServer) ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPayments not implemented")
 }
 func (UnimplementedPaymentsServiceServer) mustEmbedUnimplementedPaymentsServiceServer() {}
 func (UnimplementedPaymentsServiceServer) testEmbeddedByValue()                         {}
@@ -224,6 +278,24 @@ func _PaymentsService_Capture_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_Cancel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).Cancel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_Cancel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).Cancel(ctx, req.(*CancelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PaymentsService_Refund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefundRequest)
 	if err := dec(in); err != nil {
@@ -278,6 +350,24 @@ func _PaymentsService_ListMethods_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentsService_ListPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServiceServer).ListPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentsService_ListPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServiceServer).ListPayments(ctx, req.(*ListPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentsService_ServiceDesc is the grpc.ServiceDesc for PaymentsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -294,6 +384,10 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PaymentsService_Capture_Handler,
 		},
 		{
+			MethodName: "Cancel",
+			Handler:    _PaymentsService_Cancel_Handler,
+		},
+		{
 			MethodName: "Refund",
 			Handler:    _PaymentsService_Refund_Handler,
 		},
@@ -304,6 +398,10 @@ var PaymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMethods",
 			Handler:    _PaymentsService_ListMethods_Handler,
+		},
+		{
+			MethodName: "ListPayments",
+			Handler:    _PaymentsService_ListPayments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

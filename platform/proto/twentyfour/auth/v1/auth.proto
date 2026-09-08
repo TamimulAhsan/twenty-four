@@ -5,7 +5,7 @@ package twentyfour.auth.v1;
 import "google/protobuf/timestamp.proto";
 
 // AuthService owns identity: who someone is, and whether they are still signed
-// in. It owns credentials, sessions and tokens — and nothing else.
+// in. It owns credentials, sessions and tokens, and nothing else.
 //
 // It does NOT decide what anyone may do. That is RBAC's job, and Auth calls it
 // only to bind an initial role at signup. Keeping the two apart means a
@@ -15,24 +15,66 @@ service AuthService {
   rpc Signup(SignupRequest) returns (SignupResponse);
   // Adds a staff member to an existing tenant. Consumes a seat.
   rpc InviteUser(InviteUserRequest) returns (InviteUserResponse);
+  // Creates a TwentyFour specialist on the admin plane.
+  //
+  // Not Signup: there is no business, no tenant and no merchant code. An admin
+  // account belongs to the platform, and its tenant id is the nil UUID, which
+  // tenantctx refuses. That is deliberate: an admin token cannot reach a
+  // tenant-scoped call unless the admin gateway names a tenant explicitly.
+  rpc CreateStaff(CreateStaffRequest) returns (CreateStaffResponse);
   rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+  // Issues a fresh invitation token for someone who has not accepted yet. It
+  // does not consume a second seat: they already hold one.
+  rpc ReissueInvite(ReissueInviteRequest) returns (ReissueInviteResponse);
 
+  // Resolves the account, and answers with a token only if the caller is the
+  // gateway for the plane that account belongs to. Otherwise it answers with a
+  // one-time handoff code, so no gateway ever holds a token for the other
+  // plane.
   rpc Login(LoginRequest) returns (LoginResponse);
+  // Exchanges a handoff code for a token. Single use, short lived, and bound
+  // to the address that asked for it.
+  rpc RedeemHandoff(RedeemHandoffRequest) returns (RedeemHandoffResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   // The gateway's hot path. Verifies the token signature AND that the session
   // is still live, so a revoked session stops working immediately rather than
   // when the token happens to expire.
   rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
 
+  // The tenant's permanent merchant code, which appears on every document it
+  // ever issues. Auth holds it because Auth mints the tenant ID at signup and
+  // is the only service that knows a tenant exists at the moment one is
+  // created. Tenant & Business Profile will own it eventually; callers go
+  // through this RPC so that move is a change of address and nothing more.
+  rpc GetMerchantCode(GetMerchantCodeRequest) returns (GetMerchantCodeResponse);
+  // The same, for a page of the admin directory.
+  //
+  // A batch rather than a call per tenant: the directory renders the code
+  // against every row, and one round trip per row across a service boundary is
+  // the shape that stops working somewhere between fifty tenants and five
+  // hundred. A tenant with no code is simply absent from the answer.
+  rpc ListMerchantCodes(ListMerchantCodesRequest) returns (ListMerchantCodesResponse);
+
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc DeactivateUser(DeactivateUserRequest) returns (DeactivateUserResponse);
+  rpc ReactivateUser(ReactivateUserRequest) returns (ReactivateUserResponse);
+  // Deletes an account outright. Refused for anyone who has ever signed in:
+  // their name is on orders and documents that have to stay resolvable, so
+  // those accounts are deactivated instead. Only an unaccepted invitation can
+  // be deleted, because nothing references it yet.
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+
+  // The password rule, so a signup form states the number the server will
+  // actually enforce rather than a copy of it that drifts. Auth owns the rule,
+  // so Auth is what answers.
+  rpc GetPasswordPolicy(GetPasswordPolicyRequest) returns (GetPasswordPolicyResponse);
 
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
   rpc RequestPasswordReset(RequestPasswordResetRequest) returns (RequestPasswordResetResponse);
   rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
 
-  // Admin plane only — MFA is mandatory there.
+  // Admin plane only. MFA is mandatory there.
   rpc EnrollTotp(EnrollTotpRequest) returns (EnrollTotpResponse);
   rpc ConfirmTotp(ConfirmTotpRequest) returns (ConfirmTotpResponse);
 }
@@ -87,6 +129,40 @@ message SignupResponse {
   string tenant_id = 2;
   // Signup does not sign you in; the email must be verified first.
   string verification_token = 3;
+  // Assigned here and never reissued, including after the tenant leaves.
+  string merchant_code = 4;
+}
+
+message GetMerchantCodeRequest {
+  string tenant_id = 1;
+}
+message GetMerchantCodeResponse {
+  string tenant_id = 1;
+  // Six characters of Crockford base32, e.g. "7QK3M9". I, L, O and U are not
+  // in the alphabet: the first three are misread off a printed invoice, and
+  // the fourth is dropped so a random string does not spell something the
+  // merchant has to look at every day.
+  string merchant_code = 2;
+  google.protobuf.Timestamp assigned_at = 3;
+}
+
+message CreateStaffRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+  // An admin-plane role key from RBAC: platform_admin, specialist or support.
+  string role_key = 4;
+}
+message CreateStaffResponse {
+  User user = 1;
+}
+
+message ListMerchantCodesRequest {
+  repeated string tenant_ids = 1;
+}
+message ListMerchantCodesResponse {
+  // Keyed by tenant id. A tenant with no code assigned is not in the map.
+  map<string, string> merchant_codes = 1;
 }
 
 message InviteUserRequest {
@@ -106,28 +182,58 @@ message AcceptInviteRequest {
   string invite_token = 1;
   string password = 2;
 }
-message AcceptInviteResponse { User user = 1; }
+message AcceptInviteResponse {
+  User user = 1;
+}
 
 message LoginRequest {
+  // An address exists on one plane only, so it identifies an account outright
+  // and the caller does not say which plane to look in.
   string email = 1;
   string password = 2;
-  Plane plane = 3;
+  // Which gateway is asking, and therefore the only kind of token it may be
+  // handed. Not a filter on the lookup: the account decides its own plane, and
+  // this decides whether the answer is a token or a handoff code.
+  reserved 3;
+  reserved "plane";
   // Required when the account has TOTP enrolled.
   string totp_code = 4;
   string user_agent = 5;
   string ip = 6;
+  Plane caller_plane = 7;
 }
 message LoginResponse {
   User user = 1;
-  // Opaque to every caller. Only VerifyToken interprets it.
+  // Opaque to every caller. Only VerifyToken interprets it. Empty when the
+  // account belongs to a plane this caller does not serve.
   string token = 2;
   Session session = 3;
   // True when credentials were right but a TOTP code is still needed.
   bool totp_required = 4;
+  // Set instead of a token when the account belongs to the other plane. The
+  // caller redirects the browser to that plane's gateway, which redeems it.
+  string handoff_code = 5;
 }
 
-message LogoutRequest { string token = 1; }
-message LogoutResponse { bool ended = 1; }
+message RedeemHandoffRequest {
+  string code = 1;
+  // The address redeeming. Checked against the one that was issued the code:
+  // a code that travels to another machine is a code that was intercepted.
+  string ip = 2;
+  string user_agent = 3;
+}
+message RedeemHandoffResponse {
+  User user = 1;
+  string token = 2;
+  Session session = 3;
+}
+
+message LogoutRequest {
+  string token = 1;
+}
+message LogoutResponse {
+  bool ended = 1;
+}
 
 message VerifyTokenRequest {
   string token = 1;
@@ -148,7 +254,9 @@ message GetUserRequest {
   string tenant_id = 1;
   string user_id = 2;
 }
-message GetUserResponse { User user = 1; }
+message GetUserResponse {
+  User user = 1;
+}
 
 message ListUsersRequest {
   string tenant_id = 1;
@@ -160,35 +268,76 @@ message ListUsersResponse {
   int32 active_count = 2;
 }
 
+message ReissueInviteRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+}
+message ReissueInviteResponse {
+  string invite_token = 1;
+}
+
+message ReactivateUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string actor_id = 3;
+}
+message ReactivateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string actor_id = 3;
+}
+message DeleteUserResponse {
+  bool deleted = 1;
+}
+
 message DeactivateUserRequest {
   string tenant_id = 1;
   string user_id = 2;
   string actor_id = 3;
 }
-message DeactivateUserResponse { bool deactivated = 1; }
+message DeactivateUserResponse {
+  bool deactivated = 1;
+}
+
+message GetPasswordPolicyRequest {}
+message GetPasswordPolicyResponse { int32 min_length = 1; }
 
 message ChangePasswordRequest {
   string user_id = 1;
   string current_password = 2;
   string new_password = 3;
 }
-message ChangePasswordResponse { bool changed = 1; }
+message ChangePasswordResponse {
+  bool changed = 1;
+}
 
 message RequestPasswordResetRequest {
   string email = 1;
-  Plane plane = 2;
+  // An address exists on one plane only, so there is nothing to disambiguate.
+  reserved 2;
+  reserved "plane";
 }
-// Always reports success, whether or not the address exists — otherwise this
+// Always reports success, whether or not the address exists. Otherwise this
 // endpoint becomes an account-enumeration oracle.
-message RequestPasswordResetResponse { bool accepted = 1; }
+message RequestPasswordResetResponse {
+  bool accepted = 1;
+}
 
 message ResetPasswordRequest {
   string reset_token = 1;
   string new_password = 2;
 }
-message ResetPasswordResponse { bool reset = 1; }
+message ResetPasswordResponse {
+  bool reset = 1;
+}
 
-message EnrollTotpRequest { string user_id = 1; }
+message EnrollTotpRequest {
+  string user_id = 1;
+}
 message EnrollTotpResponse {
   string secret = 1;
   string otpauth_uri = 2;
@@ -199,4 +348,6 @@ message ConfirmTotpRequest {
   string user_id = 1;
   string code = 2;
 }
-message ConfirmTotpResponse { bool enrolled = 1; }
+message ConfirmTotpResponse {
+  bool enrolled = 1;
+}

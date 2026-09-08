@@ -22,8 +22,8 @@ const (
 )
 
 // Money is always integer minor units plus an explicit ISO 4217 code.
-// Never a float, never a bare number. The exponent differs by currency —
-// HUF has no subunit in circulation, BDT has two — so an amount without its
+// Never a float, never a bare number. The exponent differs by currency, and
+// HUF has no subunit in circulation where BDT has two, so an amount without its
 // currency is meaningless and a float amount is a rounding bug waiting to happen.
 type Money struct {
 	state protoimpl.MessageState `protogen:"open.v1"`

@@ -10,6 +10,7 @@ import (
 	v1 "github.com/twentyfour/platform/gen/go/twentyfour/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -79,7 +80,6 @@ func (ItemKind) EnumDescriptor() ([]byte, []int) {
 type Item struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TenantId    string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Sku         string                 `protobuf:"bytes,3,opt,name=sku,proto3" json:"sku,omitempty"`
 	Name        string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	Description string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
@@ -89,13 +89,27 @@ type Item struct {
 	UnitPrice   *v1.Money   `protobuf:"bytes,7,opt,name=unit_price,json=unitPrice,proto3" json:"unit_price,omitempty"`
 	TaxRate     *v1.TaxRate `protobuf:"bytes,8,opt,name=tax_rate,json=taxRate,proto3" json:"tax_rate,omitempty"`
 	TaxIncluded bool        `protobuf:"varint,9,opt,name=tax_included,json=taxIncluded,proto3" json:"tax_included,omitempty"`
-	Category    string      `protobuf:"bytes,10,opt,name=category,proto3" json:"category,omitempty"`
-	TrackStock  bool        `protobuf:"varint,11,opt,name=track_stock,json=trackStock,proto3" json:"track_stock,omitempty"`
-	Active      bool        `protobuf:"varint,12,opt,name=active,proto3" json:"active,omitempty"`
+	// Empty means uncategorised, which is a legitimate state and not an error.
+	CategoryId string `protobuf:"bytes,10,opt,name=category_id,json=categoryId,proto3" json:"category_id,omitempty"`
+	TrackStock bool   `protobuf:"varint,11,opt,name=track_stock,json=trackStock,proto3" json:"track_stock,omitempty"`
+	Active     bool   `protobuf:"varint,12,opt,name=active,proto3" json:"active,omitempty"`
 	// For services: how long it occupies a resource. Zero for products.
 	DurationMinutes int32 `protobuf:"varint,13,opt,name=duration_minutes,json=durationMinutes,proto3" json:"duration_minutes,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// What the item costs the merchant, per unit.
+	//
+	// Unset means not recorded, which is not the same as zero: an item with no
+	// recorded cost has no margin, rather than a margin of one hundred percent,
+	// and every report that touches margin has to be able to tell those apart.
+	CostPrice *v1.Money `protobuf:"bytes,14,opt,name=cost_price,json=costPrice,proto3" json:"cost_price,omitempty"`
+	// Till button colour, as the merchant chose it. Presentation only.
+	Colour    string                 `protobuf:"bytes,15,opt,name=colour,proto3" json:"colour,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Set once archived. An archived item is invisible to the till and still
+	// resolvable from every order that referenced it.
+	ArchivedAt    *timestamppb.Timestamp `protobuf:"bytes,18,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Item) Reset() {
@@ -131,13 +145,6 @@ func (*Item) Descriptor() ([]byte, []int) {
 func (x *Item) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *Item) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
 	}
 	return ""
 }
@@ -191,9 +198,9 @@ func (x *Item) GetTaxIncluded() bool {
 	return false
 }
 
-func (x *Item) GetCategory() string {
+func (x *Item) GetCategoryId() string {
 	if x != nil {
-		return x.Category
+		return x.CategoryId
 	}
 	return ""
 }
@@ -219,17 +226,120 @@ func (x *Item) GetDurationMinutes() int32 {
 	return 0
 }
 
+func (x *Item) GetCostPrice() *v1.Money {
+	if x != nil {
+		return x.CostPrice
+	}
+	return nil
+}
+
+func (x *Item) GetColour() string {
+	if x != nil {
+		return x.Colour
+	}
+	return ""
+}
+
+func (x *Item) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Item) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *Item) GetArchivedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ArchivedAt
+	}
+	return nil
+}
+
+type Category struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Display order on the till. Ties break on name.
+	Position      int32 `protobuf:"varint,3,opt,name=position,proto3" json:"position,omitempty"`
+	ItemCount     int32 `protobuf:"varint,4,opt,name=item_count,json=itemCount,proto3" json:"item_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Category) Reset() {
+	*x = Category{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Category) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Category) ProtoMessage() {}
+
+func (x *Category) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Category.ProtoReflect.Descriptor instead.
+func (*Category) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Category) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Category) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Category) GetPosition() int32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *Category) GetItemCount() int32 {
+	if x != nil {
+		return x.ItemCount
+	}
+	return 0
+}
+
 type GetItemRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetItemRequest) Reset() {
 	*x = GetItemRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[1]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -241,7 +351,7 @@ func (x *GetItemRequest) String() string {
 func (*GetItemRequest) ProtoMessage() {}
 
 func (x *GetItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[1]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -254,14 +364,7 @@ func (x *GetItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemRequest.ProtoReflect.Descriptor instead.
 func (*GetItemRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *GetItemRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetItemRequest) GetId() string {
@@ -280,7 +383,7 @@ type GetItemResponse struct {
 
 func (x *GetItemResponse) Reset() {
 	*x = GetItemResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[2]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +395,7 @@ func (x *GetItemResponse) String() string {
 func (*GetItemResponse) ProtoMessage() {}
 
 func (x *GetItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[2]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +408,7 @@ func (x *GetItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemResponse.ProtoReflect.Descriptor instead.
 func (*GetItemResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{2}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetItemResponse) GetItem() *Item {
@@ -317,7 +420,6 @@ func (x *GetItemResponse) GetItem() *Item {
 
 type PriceItemsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Lines         []*PriceLineRequest    `protobuf:"bytes,2,rep,name=lines,proto3" json:"lines,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -325,7 +427,7 @@ type PriceItemsRequest struct {
 
 func (x *PriceItemsRequest) Reset() {
 	*x = PriceItemsRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[3]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -337,7 +439,7 @@ func (x *PriceItemsRequest) String() string {
 func (*PriceItemsRequest) ProtoMessage() {}
 
 func (x *PriceItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[3]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -350,14 +452,7 @@ func (x *PriceItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceItemsRequest.ProtoReflect.Descriptor instead.
 func (*PriceItemsRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *PriceItemsRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PriceItemsRequest) GetLines() []*PriceLineRequest {
@@ -379,7 +474,7 @@ type PriceLineRequest struct {
 
 func (x *PriceLineRequest) Reset() {
 	*x = PriceLineRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[4]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -391,7 +486,7 @@ func (x *PriceLineRequest) String() string {
 func (*PriceLineRequest) ProtoMessage() {}
 
 func (x *PriceLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[4]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -404,7 +499,7 @@ func (x *PriceLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceLineRequest.ProtoReflect.Descriptor instead.
 func (*PriceLineRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{4}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PriceLineRequest) GetItemId() string {
@@ -448,7 +543,7 @@ type PricedLine struct {
 
 func (x *PricedLine) Reset() {
 	*x = PricedLine{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[5]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +555,7 @@ func (x *PricedLine) String() string {
 func (*PricedLine) ProtoMessage() {}
 
 func (x *PricedLine) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[5]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +568,7 @@ func (x *PricedLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PricedLine.ProtoReflect.Descriptor instead.
 func (*PricedLine) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{5}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PricedLine) GetItemId() string {
@@ -551,7 +646,7 @@ type PriceItemsResponse struct {
 
 func (x *PriceItemsResponse) Reset() {
 	*x = PriceItemsResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[6]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -563,7 +658,7 @@ func (x *PriceItemsResponse) String() string {
 func (*PriceItemsResponse) ProtoMessage() {}
 
 func (x *PriceItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[6]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -576,7 +671,7 @@ func (x *PriceItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriceItemsResponse.ProtoReflect.Descriptor instead.
 func (*PriceItemsResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{6}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PriceItemsResponse) GetLines() []*PricedLine {
@@ -608,19 +703,25 @@ func (x *PriceItemsResponse) GetTaxTotal() *v1.Money {
 }
 
 type ListItemsRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	TenantId        string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	Category        string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
-	IncludeArchived bool                   `protobuf:"varint,3,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
-	PageSize        int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	PageToken       string                 `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CategoryId string                 `protobuf:"bytes,2,opt,name=category_id,json=categoryId,proto3" json:"category_id,omitempty"`
+	// Archived items are excluded unless asked for.
+	IncludeArchived bool   `protobuf:"varint,3,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
+	PageSize        int32  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken       string `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	// Unspecified returns both kinds.
+	Kind ItemKind `protobuf:"varint,6,opt,name=kind,proto3,enum=twentyfour.catalog.v1.ItemKind" json:"kind,omitempty"`
+	// Case-insensitive substring of name or SKU.
+	Search string `protobuf:"bytes,7,opt,name=search,proto3" json:"search,omitempty"`
+	// Inactive items are stocked but not currently sold. Excluded unless asked.
+	IncludeInactive bool `protobuf:"varint,8,opt,name=include_inactive,json=includeInactive,proto3" json:"include_inactive,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ListItemsRequest) Reset() {
 	*x = ListItemsRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[7]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +733,7 @@ func (x *ListItemsRequest) String() string {
 func (*ListItemsRequest) ProtoMessage() {}
 
 func (x *ListItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[7]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,19 +746,12 @@ func (x *ListItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListItemsRequest.ProtoReflect.Descriptor instead.
 func (*ListItemsRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{7}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ListItemsRequest) GetTenantId() string {
+func (x *ListItemsRequest) GetCategoryId() string {
 	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ListItemsRequest) GetCategory() string {
-	if x != nil {
-		return x.Category
+		return x.CategoryId
 	}
 	return ""
 }
@@ -683,6 +777,27 @@ func (x *ListItemsRequest) GetPageToken() string {
 	return ""
 }
 
+func (x *ListItemsRequest) GetKind() ItemKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ItemKind_ITEM_KIND_UNSPECIFIED
+}
+
+func (x *ListItemsRequest) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
+}
+
+func (x *ListItemsRequest) GetIncludeInactive() bool {
+	if x != nil {
+		return x.IncludeInactive
+	}
+	return false
+}
+
 type ListItemsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Items         []*Item                `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
@@ -693,7 +808,7 @@ type ListItemsResponse struct {
 
 func (x *ListItemsResponse) Reset() {
 	*x = ListItemsResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[8]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +820,7 @@ func (x *ListItemsResponse) String() string {
 func (*ListItemsResponse) ProtoMessage() {}
 
 func (x *ListItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[8]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +833,7 @@ func (x *ListItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListItemsResponse.ProtoReflect.Descriptor instead.
 func (*ListItemsResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{8}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListItemsResponse) GetItems() []*Item {
@@ -737,7 +852,6 @@ func (x *ListItemsResponse) GetNextPageToken() string {
 
 type CreateItemRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Item          *Item                  `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -745,7 +859,7 @@ type CreateItemRequest struct {
 
 func (x *CreateItemRequest) Reset() {
 	*x = CreateItemRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[9]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -757,7 +871,7 @@ func (x *CreateItemRequest) String() string {
 func (*CreateItemRequest) ProtoMessage() {}
 
 func (x *CreateItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[9]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,14 +884,7 @@ func (x *CreateItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateItemRequest.ProtoReflect.Descriptor instead.
 func (*CreateItemRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *CreateItemRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CreateItemRequest) GetItem() *Item {
@@ -796,7 +903,7 @@ type CreateItemResponse struct {
 
 func (x *CreateItemResponse) Reset() {
 	*x = CreateItemResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[10]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -808,7 +915,7 @@ func (x *CreateItemResponse) String() string {
 func (*CreateItemResponse) ProtoMessage() {}
 
 func (x *CreateItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[10]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -821,7 +928,7 @@ func (x *CreateItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateItemResponse.ProtoReflect.Descriptor instead.
 func (*CreateItemResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{10}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateItemResponse) GetItem() *Item {
@@ -832,16 +939,19 @@ func (x *CreateItemResponse) GetItem() *Item {
 }
 
 type UpdateItemRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	Item          *Item                  `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Item  *Item                  `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
+	// Which fields to change. Empty replaces every settable field, which is what
+	// a form that submits the whole object wants; naming fields is what a
+	// partial edit wants. Without this a PATCH of one field would blank the rest.
+	UpdateMask    []string `protobuf:"bytes,3,rep,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateItemRequest) Reset() {
 	*x = UpdateItemRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[11]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -853,7 +963,7 @@ func (x *UpdateItemRequest) String() string {
 func (*UpdateItemRequest) ProtoMessage() {}
 
 func (x *UpdateItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[11]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -866,19 +976,19 @@ func (x *UpdateItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateItemRequest.ProtoReflect.Descriptor instead.
 func (*UpdateItemRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *UpdateItemRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UpdateItemRequest) GetItem() *Item {
 	if x != nil {
 		return x.Item
+	}
+	return nil
+}
+
+func (x *UpdateItemRequest) GetUpdateMask() []string {
+	if x != nil {
+		return x.UpdateMask
 	}
 	return nil
 }
@@ -892,7 +1002,7 @@ type UpdateItemResponse struct {
 
 func (x *UpdateItemResponse) Reset() {
 	*x = UpdateItemResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[12]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1014,7 @@ func (x *UpdateItemResponse) String() string {
 func (*UpdateItemResponse) ProtoMessage() {}
 
 func (x *UpdateItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[12]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1027,7 @@ func (x *UpdateItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateItemResponse.ProtoReflect.Descriptor instead.
 func (*UpdateItemResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{12}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpdateItemResponse) GetItem() *Item {
@@ -929,7 +1039,6 @@ func (x *UpdateItemResponse) GetItem() *Item {
 
 type ArchiveItemRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -937,7 +1046,7 @@ type ArchiveItemRequest struct {
 
 func (x *ArchiveItemRequest) Reset() {
 	*x = ArchiveItemRequest{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[13]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -949,7 +1058,7 @@ func (x *ArchiveItemRequest) String() string {
 func (*ArchiveItemRequest) ProtoMessage() {}
 
 func (x *ArchiveItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[13]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -962,14 +1071,7 @@ func (x *ArchiveItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveItemRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveItemRequest) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *ArchiveItemRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ArchiveItemRequest) GetId() string {
@@ -988,7 +1090,7 @@ type ArchiveItemResponse struct {
 
 func (x *ArchiveItemResponse) Reset() {
 	*x = ArchiveItemResponse{}
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[14]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1000,7 +1102,7 @@ func (x *ArchiveItemResponse) String() string {
 func (*ArchiveItemResponse) ProtoMessage() {}
 
 func (x *ArchiveItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[14]
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1013,7 +1115,7 @@ func (x *ArchiveItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveItemResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveItemResponse) Descriptor() ([]byte, []int) {
-	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{14}
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ArchiveItemResponse) GetItem() *Item {
@@ -1023,14 +1125,367 @@ func (x *ArchiveItemResponse) GetItem() *Item {
 	return nil
 }
 
+type ListCategoriesRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IncludeArchived bool                   `protobuf:"varint,2,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListCategoriesRequest) Reset() {
+	*x = ListCategoriesRequest{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCategoriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCategoriesRequest) ProtoMessage() {}
+
+func (x *ListCategoriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCategoriesRequest.ProtoReflect.Descriptor instead.
+func (*ListCategoriesRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListCategoriesRequest) GetIncludeArchived() bool {
+	if x != nil {
+		return x.IncludeArchived
+	}
+	return false
+}
+
+type ListCategoriesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Categories    []*Category            `protobuf:"bytes,1,rep,name=categories,proto3" json:"categories,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCategoriesResponse) Reset() {
+	*x = ListCategoriesResponse{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCategoriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCategoriesResponse) ProtoMessage() {}
+
+func (x *ListCategoriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCategoriesResponse.ProtoReflect.Descriptor instead.
+func (*ListCategoriesResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListCategoriesResponse) GetCategories() []*Category {
+	if x != nil {
+		return x.Categories
+	}
+	return nil
+}
+
+type CreateCategoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      *Category              `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCategoryRequest) Reset() {
+	*x = CreateCategoryRequest{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCategoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCategoryRequest) ProtoMessage() {}
+
+func (x *CreateCategoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCategoryRequest.ProtoReflect.Descriptor instead.
+func (*CreateCategoryRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *CreateCategoryRequest) GetCategory() *Category {
+	if x != nil {
+		return x.Category
+	}
+	return nil
+}
+
+type CreateCategoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      *Category              `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCategoryResponse) Reset() {
+	*x = CreateCategoryResponse{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCategoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCategoryResponse) ProtoMessage() {}
+
+func (x *CreateCategoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCategoryResponse.ProtoReflect.Descriptor instead.
+func (*CreateCategoryResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *CreateCategoryResponse) GetCategory() *Category {
+	if x != nil {
+		return x.Category
+	}
+	return nil
+}
+
+type UpdateCategoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      *Category              `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCategoryRequest) Reset() {
+	*x = UpdateCategoryRequest{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCategoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCategoryRequest) ProtoMessage() {}
+
+func (x *UpdateCategoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCategoryRequest.ProtoReflect.Descriptor instead.
+func (*UpdateCategoryRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *UpdateCategoryRequest) GetCategory() *Category {
+	if x != nil {
+		return x.Category
+	}
+	return nil
+}
+
+type UpdateCategoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      *Category              `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCategoryResponse) Reset() {
+	*x = UpdateCategoryResponse{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCategoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCategoryResponse) ProtoMessage() {}
+
+func (x *UpdateCategoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCategoryResponse.ProtoReflect.Descriptor instead.
+func (*UpdateCategoryResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *UpdateCategoryResponse) GetCategory() *Category {
+	if x != nil {
+		return x.Category
+	}
+	return nil
+}
+
+// Archiving a category leaves its items in place and uncategorised, rather
+// than taking a shelf's worth of stock off the till with it.
+type ArchiveCategoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArchiveCategoryRequest) Reset() {
+	*x = ArchiveCategoryRequest{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveCategoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveCategoryRequest) ProtoMessage() {}
+
+func (x *ArchiveCategoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveCategoryRequest.ProtoReflect.Descriptor instead.
+func (*ArchiveCategoryRequest) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ArchiveCategoryRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type ArchiveCategoryResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ItemsUncategorised int32                  `protobuf:"varint,1,opt,name=items_uncategorised,json=itemsUncategorised,proto3" json:"items_uncategorised,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ArchiveCategoryResponse) Reset() {
+	*x = ArchiveCategoryResponse{}
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveCategoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveCategoryResponse) ProtoMessage() {}
+
+func (x *ArchiveCategoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_twentyfour_catalog_v1_catalog_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveCategoryResponse.ProtoReflect.Descriptor instead.
+func (*ArchiveCategoryResponse) Descriptor() ([]byte, []int) {
+	return file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ArchiveCategoryResponse) GetItemsUncategorised() int32 {
+	if x != nil {
+		return x.ItemsUncategorised
+	}
+	return 0
+}
+
 var File_twentyfour_catalog_v1_catalog_proto protoreflect.FileDescriptor
 
 const file_twentyfour_catalog_v1_catalog_proto_rawDesc = "" +
 	"\n" +
-	"#twentyfour/catalog/v1/catalog.proto\x12\x15twentyfour.catalog.v1\x1a twentyfour/common/v1/money.proto\"\xc9\x03\n" +
+	"#twentyfour/catalog/v1/catalog.proto\x12\x15twentyfour.catalog.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a twentyfour/common/v1/money.proto\"\xc9\x05\n" +
 	"\x04Item\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x10\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03sku\x18\x03 \x01(\tR\x03sku\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x05 \x01(\tR\vdescription\x123\n" +
@@ -1038,20 +1493,34 @@ const file_twentyfour_catalog_v1_catalog_proto_rawDesc = "" +
 	"\n" +
 	"unit_price\x18\a \x01(\v2\x1b.twentyfour.common.v1.MoneyR\tunitPrice\x128\n" +
 	"\btax_rate\x18\b \x01(\v2\x1d.twentyfour.common.v1.TaxRateR\ataxRate\x12!\n" +
-	"\ftax_included\x18\t \x01(\bR\vtaxIncluded\x12\x1a\n" +
-	"\bcategory\x18\n" +
-	" \x01(\tR\bcategory\x12\x1f\n" +
+	"\ftax_included\x18\t \x01(\bR\vtaxIncluded\x12\x1f\n" +
+	"\vcategory_id\x18\n" +
+	" \x01(\tR\n" +
+	"categoryId\x12\x1f\n" +
 	"\vtrack_stock\x18\v \x01(\bR\n" +
 	"trackStock\x12\x16\n" +
 	"\x06active\x18\f \x01(\bR\x06active\x12)\n" +
-	"\x10duration_minutes\x18\r \x01(\x05R\x0fdurationMinutes\"=\n" +
-	"\x0eGetItemRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"B\n" +
+	"\x10duration_minutes\x18\r \x01(\x05R\x0fdurationMinutes\x12:\n" +
+	"\n" +
+	"cost_price\x18\x0e \x01(\v2\x1b.twentyfour.common.v1.MoneyR\tcostPrice\x12\x16\n" +
+	"\x06colour\x18\x0f \x01(\tR\x06colour\x129\n" +
+	"\n" +
+	"created_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12;\n" +
+	"\varchived_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"archivedAtJ\x04\b\x02\x10\x03R\ttenant_id\"i\n" +
+	"\bCategory\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bposition\x18\x03 \x01(\x05R\bposition\x12\x1d\n" +
+	"\n" +
+	"item_count\x18\x04 \x01(\x05R\titemCount\" \n" +
+	"\x0eGetItemRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"B\n" +
 	"\x0fGetItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"o\n" +
-	"\x11PriceItemsRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12=\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"R\n" +
+	"\x11PriceItemsRequest\x12=\n" +
 	"\x05lines\x18\x02 \x03(\v2'.twentyfour.catalog.v1.PriceLineRequestR\x05lines\"n\n" +
 	"\x10PriceLineRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x1a\n" +
@@ -1074,36 +1543,56 @@ const file_twentyfour_catalog_v1_catalog_proto_rawDesc = "" +
 	"\vgross_total\x18\x02 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\n" +
 	"grossTotal\x128\n" +
 	"\tnet_total\x18\x03 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\bnetTotal\x128\n" +
-	"\ttax_total\x18\x04 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\btaxTotal\"\xb2\x01\n" +
-	"\x10ListItemsRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1a\n" +
-	"\bcategory\x18\x02 \x01(\tR\bcategory\x12)\n" +
+	"\ttax_total\x18\x04 \x01(\v2\x1b.twentyfour.common.v1.MoneyR\btaxTotal\"\x92\x02\n" +
+	"\x10ListItemsRequest\x12\x1f\n" +
+	"\vcategory_id\x18\x02 \x01(\tR\n" +
+	"categoryId\x12)\n" +
 	"\x10include_archived\x18\x03 \x01(\bR\x0fincludeArchived\x12\x1b\n" +
 	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x05 \x01(\tR\tpageToken\"n\n" +
+	"page_token\x18\x05 \x01(\tR\tpageToken\x123\n" +
+	"\x04kind\x18\x06 \x01(\x0e2\x1f.twentyfour.catalog.v1.ItemKindR\x04kind\x12\x16\n" +
+	"\x06search\x18\a \x01(\tR\x06search\x12)\n" +
+	"\x10include_inactive\x18\b \x01(\bR\x0fincludeInactive\"n\n" +
 	"\x11ListItemsResponse\x121\n" +
 	"\x05items\x18\x01 \x03(\v2\x1b.twentyfour.catalog.v1.ItemR\x05items\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"a\n" +
-	"\x11CreateItemRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12/\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"D\n" +
+	"\x11CreateItemRequest\x12/\n" +
 	"\x04item\x18\x02 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"E\n" +
 	"\x12CreateItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"a\n" +
-	"\x11UpdateItemRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12/\n" +
-	"\x04item\x18\x02 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"E\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"e\n" +
+	"\x11UpdateItemRequest\x12/\n" +
+	"\x04item\x18\x02 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\x12\x1f\n" +
+	"\vupdate_mask\x18\x03 \x03(\tR\n" +
+	"updateMask\"E\n" +
 	"\x12UpdateItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"A\n" +
-	"\x12ArchiveItemRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x0e\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"$\n" +
+	"\x12ArchiveItemRequest\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"F\n" +
 	"\x13ArchiveItemResponse\x12/\n" +
-	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item*S\n" +
+	"\x04item\x18\x01 \x01(\v2\x1b.twentyfour.catalog.v1.ItemR\x04item\"B\n" +
+	"\x15ListCategoriesRequest\x12)\n" +
+	"\x10include_archived\x18\x02 \x01(\bR\x0fincludeArchived\"Y\n" +
+	"\x16ListCategoriesResponse\x12?\n" +
+	"\n" +
+	"categories\x18\x01 \x03(\v2\x1f.twentyfour.catalog.v1.CategoryR\n" +
+	"categories\"T\n" +
+	"\x15CreateCategoryRequest\x12;\n" +
+	"\bcategory\x18\x02 \x01(\v2\x1f.twentyfour.catalog.v1.CategoryR\bcategory\"U\n" +
+	"\x16CreateCategoryResponse\x12;\n" +
+	"\bcategory\x18\x01 \x01(\v2\x1f.twentyfour.catalog.v1.CategoryR\bcategory\"T\n" +
+	"\x15UpdateCategoryRequest\x12;\n" +
+	"\bcategory\x18\x02 \x01(\v2\x1f.twentyfour.catalog.v1.CategoryR\bcategory\"U\n" +
+	"\x16UpdateCategoryResponse\x12;\n" +
+	"\bcategory\x18\x01 \x01(\v2\x1f.twentyfour.catalog.v1.CategoryR\bcategory\"(\n" +
+	"\x16ArchiveCategoryRequest\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"J\n" +
+	"\x17ArchiveCategoryResponse\x12/\n" +
+	"\x13items_uncategorised\x18\x01 \x01(\x05R\x12itemsUncategorised*S\n" +
 	"\bItemKind\x12\x19\n" +
 	"\x15ITEM_KIND_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11ITEM_KIND_PRODUCT\x10\x01\x12\x15\n" +
-	"\x11ITEM_KIND_SERVICE\x10\x022\xd9\x04\n" +
+	"\x11ITEM_KIND_SERVICE\x10\x022\x98\b\n" +
 	"\x0eCatalogService\x12X\n" +
 	"\aGetItem\x12%.twentyfour.catalog.v1.GetItemRequest\x1a&.twentyfour.catalog.v1.GetItemResponse\x12a\n" +
 	"\n" +
@@ -1113,7 +1602,11 @@ const file_twentyfour_catalog_v1_catalog_proto_rawDesc = "" +
 	"CreateItem\x12(.twentyfour.catalog.v1.CreateItemRequest\x1a).twentyfour.catalog.v1.CreateItemResponse\x12a\n" +
 	"\n" +
 	"UpdateItem\x12(.twentyfour.catalog.v1.UpdateItemRequest\x1a).twentyfour.catalog.v1.UpdateItemResponse\x12d\n" +
-	"\vArchiveItem\x12).twentyfour.catalog.v1.ArchiveItemRequest\x1a*.twentyfour.catalog.v1.ArchiveItemResponseB\xe6\x01\n" +
+	"\vArchiveItem\x12).twentyfour.catalog.v1.ArchiveItemRequest\x1a*.twentyfour.catalog.v1.ArchiveItemResponse\x12m\n" +
+	"\x0eListCategories\x12,.twentyfour.catalog.v1.ListCategoriesRequest\x1a-.twentyfour.catalog.v1.ListCategoriesResponse\x12m\n" +
+	"\x0eCreateCategory\x12,.twentyfour.catalog.v1.CreateCategoryRequest\x1a-.twentyfour.catalog.v1.CreateCategoryResponse\x12m\n" +
+	"\x0eUpdateCategory\x12,.twentyfour.catalog.v1.UpdateCategoryRequest\x1a-.twentyfour.catalog.v1.UpdateCategoryResponse\x12p\n" +
+	"\x0fArchiveCategory\x12-.twentyfour.catalog.v1.ArchiveCategoryRequest\x1a..twentyfour.catalog.v1.ArchiveCategoryResponseB\xe6\x01\n" +
 	"\x19com.twentyfour.catalog.v1B\fCatalogProtoP\x01ZEgithub.com/twentyfour/platform/gen/go/twentyfour/catalog/v1;catalogv1\xa2\x02\x03TCX\xaa\x02\x15Twentyfour.Catalog.V1\xca\x02\x15Twentyfour\\Catalog\\V1\xe2\x02!Twentyfour\\Catalog\\V1\\GPBMetadata\xea\x02\x17Twentyfour::Catalog::V1b\x06proto3"
 
 var (
@@ -1129,65 +1622,93 @@ func file_twentyfour_catalog_v1_catalog_proto_rawDescGZIP() []byte {
 }
 
 var file_twentyfour_catalog_v1_catalog_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_twentyfour_catalog_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_twentyfour_catalog_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_twentyfour_catalog_v1_catalog_proto_goTypes = []any{
-	(ItemKind)(0),               // 0: twentyfour.catalog.v1.ItemKind
-	(*Item)(nil),                // 1: twentyfour.catalog.v1.Item
-	(*GetItemRequest)(nil),      // 2: twentyfour.catalog.v1.GetItemRequest
-	(*GetItemResponse)(nil),     // 3: twentyfour.catalog.v1.GetItemResponse
-	(*PriceItemsRequest)(nil),   // 4: twentyfour.catalog.v1.PriceItemsRequest
-	(*PriceLineRequest)(nil),    // 5: twentyfour.catalog.v1.PriceLineRequest
-	(*PricedLine)(nil),          // 6: twentyfour.catalog.v1.PricedLine
-	(*PriceItemsResponse)(nil),  // 7: twentyfour.catalog.v1.PriceItemsResponse
-	(*ListItemsRequest)(nil),    // 8: twentyfour.catalog.v1.ListItemsRequest
-	(*ListItemsResponse)(nil),   // 9: twentyfour.catalog.v1.ListItemsResponse
-	(*CreateItemRequest)(nil),   // 10: twentyfour.catalog.v1.CreateItemRequest
-	(*CreateItemResponse)(nil),  // 11: twentyfour.catalog.v1.CreateItemResponse
-	(*UpdateItemRequest)(nil),   // 12: twentyfour.catalog.v1.UpdateItemRequest
-	(*UpdateItemResponse)(nil),  // 13: twentyfour.catalog.v1.UpdateItemResponse
-	(*ArchiveItemRequest)(nil),  // 14: twentyfour.catalog.v1.ArchiveItemRequest
-	(*ArchiveItemResponse)(nil), // 15: twentyfour.catalog.v1.ArchiveItemResponse
-	(*v1.Money)(nil),            // 16: twentyfour.common.v1.Money
-	(*v1.TaxRate)(nil),          // 17: twentyfour.common.v1.TaxRate
+	(ItemKind)(0),                   // 0: twentyfour.catalog.v1.ItemKind
+	(*Item)(nil),                    // 1: twentyfour.catalog.v1.Item
+	(*Category)(nil),                // 2: twentyfour.catalog.v1.Category
+	(*GetItemRequest)(nil),          // 3: twentyfour.catalog.v1.GetItemRequest
+	(*GetItemResponse)(nil),         // 4: twentyfour.catalog.v1.GetItemResponse
+	(*PriceItemsRequest)(nil),       // 5: twentyfour.catalog.v1.PriceItemsRequest
+	(*PriceLineRequest)(nil),        // 6: twentyfour.catalog.v1.PriceLineRequest
+	(*PricedLine)(nil),              // 7: twentyfour.catalog.v1.PricedLine
+	(*PriceItemsResponse)(nil),      // 8: twentyfour.catalog.v1.PriceItemsResponse
+	(*ListItemsRequest)(nil),        // 9: twentyfour.catalog.v1.ListItemsRequest
+	(*ListItemsResponse)(nil),       // 10: twentyfour.catalog.v1.ListItemsResponse
+	(*CreateItemRequest)(nil),       // 11: twentyfour.catalog.v1.CreateItemRequest
+	(*CreateItemResponse)(nil),      // 12: twentyfour.catalog.v1.CreateItemResponse
+	(*UpdateItemRequest)(nil),       // 13: twentyfour.catalog.v1.UpdateItemRequest
+	(*UpdateItemResponse)(nil),      // 14: twentyfour.catalog.v1.UpdateItemResponse
+	(*ArchiveItemRequest)(nil),      // 15: twentyfour.catalog.v1.ArchiveItemRequest
+	(*ArchiveItemResponse)(nil),     // 16: twentyfour.catalog.v1.ArchiveItemResponse
+	(*ListCategoriesRequest)(nil),   // 17: twentyfour.catalog.v1.ListCategoriesRequest
+	(*ListCategoriesResponse)(nil),  // 18: twentyfour.catalog.v1.ListCategoriesResponse
+	(*CreateCategoryRequest)(nil),   // 19: twentyfour.catalog.v1.CreateCategoryRequest
+	(*CreateCategoryResponse)(nil),  // 20: twentyfour.catalog.v1.CreateCategoryResponse
+	(*UpdateCategoryRequest)(nil),   // 21: twentyfour.catalog.v1.UpdateCategoryRequest
+	(*UpdateCategoryResponse)(nil),  // 22: twentyfour.catalog.v1.UpdateCategoryResponse
+	(*ArchiveCategoryRequest)(nil),  // 23: twentyfour.catalog.v1.ArchiveCategoryRequest
+	(*ArchiveCategoryResponse)(nil), // 24: twentyfour.catalog.v1.ArchiveCategoryResponse
+	(*v1.Money)(nil),                // 25: twentyfour.common.v1.Money
+	(*v1.TaxRate)(nil),              // 26: twentyfour.common.v1.TaxRate
+	(*timestamppb.Timestamp)(nil),   // 27: google.protobuf.Timestamp
 }
 var file_twentyfour_catalog_v1_catalog_proto_depIdxs = []int32{
 	0,  // 0: twentyfour.catalog.v1.Item.kind:type_name -> twentyfour.catalog.v1.ItemKind
-	16, // 1: twentyfour.catalog.v1.Item.unit_price:type_name -> twentyfour.common.v1.Money
-	17, // 2: twentyfour.catalog.v1.Item.tax_rate:type_name -> twentyfour.common.v1.TaxRate
-	1,  // 3: twentyfour.catalog.v1.GetItemResponse.item:type_name -> twentyfour.catalog.v1.Item
-	5,  // 4: twentyfour.catalog.v1.PriceItemsRequest.lines:type_name -> twentyfour.catalog.v1.PriceLineRequest
-	16, // 5: twentyfour.catalog.v1.PricedLine.unit_price:type_name -> twentyfour.common.v1.Money
-	17, // 6: twentyfour.catalog.v1.PricedLine.tax_rate:type_name -> twentyfour.common.v1.TaxRate
-	16, // 7: twentyfour.catalog.v1.PricedLine.gross:type_name -> twentyfour.common.v1.Money
-	16, // 8: twentyfour.catalog.v1.PricedLine.net:type_name -> twentyfour.common.v1.Money
-	16, // 9: twentyfour.catalog.v1.PricedLine.tax:type_name -> twentyfour.common.v1.Money
-	6,  // 10: twentyfour.catalog.v1.PriceItemsResponse.lines:type_name -> twentyfour.catalog.v1.PricedLine
-	16, // 11: twentyfour.catalog.v1.PriceItemsResponse.gross_total:type_name -> twentyfour.common.v1.Money
-	16, // 12: twentyfour.catalog.v1.PriceItemsResponse.net_total:type_name -> twentyfour.common.v1.Money
-	16, // 13: twentyfour.catalog.v1.PriceItemsResponse.tax_total:type_name -> twentyfour.common.v1.Money
-	1,  // 14: twentyfour.catalog.v1.ListItemsResponse.items:type_name -> twentyfour.catalog.v1.Item
-	1,  // 15: twentyfour.catalog.v1.CreateItemRequest.item:type_name -> twentyfour.catalog.v1.Item
-	1,  // 16: twentyfour.catalog.v1.CreateItemResponse.item:type_name -> twentyfour.catalog.v1.Item
-	1,  // 17: twentyfour.catalog.v1.UpdateItemRequest.item:type_name -> twentyfour.catalog.v1.Item
-	1,  // 18: twentyfour.catalog.v1.UpdateItemResponse.item:type_name -> twentyfour.catalog.v1.Item
-	1,  // 19: twentyfour.catalog.v1.ArchiveItemResponse.item:type_name -> twentyfour.catalog.v1.Item
-	2,  // 20: twentyfour.catalog.v1.CatalogService.GetItem:input_type -> twentyfour.catalog.v1.GetItemRequest
-	4,  // 21: twentyfour.catalog.v1.CatalogService.PriceItems:input_type -> twentyfour.catalog.v1.PriceItemsRequest
-	8,  // 22: twentyfour.catalog.v1.CatalogService.ListItems:input_type -> twentyfour.catalog.v1.ListItemsRequest
-	10, // 23: twentyfour.catalog.v1.CatalogService.CreateItem:input_type -> twentyfour.catalog.v1.CreateItemRequest
-	12, // 24: twentyfour.catalog.v1.CatalogService.UpdateItem:input_type -> twentyfour.catalog.v1.UpdateItemRequest
-	14, // 25: twentyfour.catalog.v1.CatalogService.ArchiveItem:input_type -> twentyfour.catalog.v1.ArchiveItemRequest
-	3,  // 26: twentyfour.catalog.v1.CatalogService.GetItem:output_type -> twentyfour.catalog.v1.GetItemResponse
-	7,  // 27: twentyfour.catalog.v1.CatalogService.PriceItems:output_type -> twentyfour.catalog.v1.PriceItemsResponse
-	9,  // 28: twentyfour.catalog.v1.CatalogService.ListItems:output_type -> twentyfour.catalog.v1.ListItemsResponse
-	11, // 29: twentyfour.catalog.v1.CatalogService.CreateItem:output_type -> twentyfour.catalog.v1.CreateItemResponse
-	13, // 30: twentyfour.catalog.v1.CatalogService.UpdateItem:output_type -> twentyfour.catalog.v1.UpdateItemResponse
-	15, // 31: twentyfour.catalog.v1.CatalogService.ArchiveItem:output_type -> twentyfour.catalog.v1.ArchiveItemResponse
-	26, // [26:32] is the sub-list for method output_type
-	20, // [20:26] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	25, // 1: twentyfour.catalog.v1.Item.unit_price:type_name -> twentyfour.common.v1.Money
+	26, // 2: twentyfour.catalog.v1.Item.tax_rate:type_name -> twentyfour.common.v1.TaxRate
+	25, // 3: twentyfour.catalog.v1.Item.cost_price:type_name -> twentyfour.common.v1.Money
+	27, // 4: twentyfour.catalog.v1.Item.created_at:type_name -> google.protobuf.Timestamp
+	27, // 5: twentyfour.catalog.v1.Item.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 6: twentyfour.catalog.v1.Item.archived_at:type_name -> google.protobuf.Timestamp
+	1,  // 7: twentyfour.catalog.v1.GetItemResponse.item:type_name -> twentyfour.catalog.v1.Item
+	6,  // 8: twentyfour.catalog.v1.PriceItemsRequest.lines:type_name -> twentyfour.catalog.v1.PriceLineRequest
+	25, // 9: twentyfour.catalog.v1.PricedLine.unit_price:type_name -> twentyfour.common.v1.Money
+	26, // 10: twentyfour.catalog.v1.PricedLine.tax_rate:type_name -> twentyfour.common.v1.TaxRate
+	25, // 11: twentyfour.catalog.v1.PricedLine.gross:type_name -> twentyfour.common.v1.Money
+	25, // 12: twentyfour.catalog.v1.PricedLine.net:type_name -> twentyfour.common.v1.Money
+	25, // 13: twentyfour.catalog.v1.PricedLine.tax:type_name -> twentyfour.common.v1.Money
+	7,  // 14: twentyfour.catalog.v1.PriceItemsResponse.lines:type_name -> twentyfour.catalog.v1.PricedLine
+	25, // 15: twentyfour.catalog.v1.PriceItemsResponse.gross_total:type_name -> twentyfour.common.v1.Money
+	25, // 16: twentyfour.catalog.v1.PriceItemsResponse.net_total:type_name -> twentyfour.common.v1.Money
+	25, // 17: twentyfour.catalog.v1.PriceItemsResponse.tax_total:type_name -> twentyfour.common.v1.Money
+	0,  // 18: twentyfour.catalog.v1.ListItemsRequest.kind:type_name -> twentyfour.catalog.v1.ItemKind
+	1,  // 19: twentyfour.catalog.v1.ListItemsResponse.items:type_name -> twentyfour.catalog.v1.Item
+	1,  // 20: twentyfour.catalog.v1.CreateItemRequest.item:type_name -> twentyfour.catalog.v1.Item
+	1,  // 21: twentyfour.catalog.v1.CreateItemResponse.item:type_name -> twentyfour.catalog.v1.Item
+	1,  // 22: twentyfour.catalog.v1.UpdateItemRequest.item:type_name -> twentyfour.catalog.v1.Item
+	1,  // 23: twentyfour.catalog.v1.UpdateItemResponse.item:type_name -> twentyfour.catalog.v1.Item
+	1,  // 24: twentyfour.catalog.v1.ArchiveItemResponse.item:type_name -> twentyfour.catalog.v1.Item
+	2,  // 25: twentyfour.catalog.v1.ListCategoriesResponse.categories:type_name -> twentyfour.catalog.v1.Category
+	2,  // 26: twentyfour.catalog.v1.CreateCategoryRequest.category:type_name -> twentyfour.catalog.v1.Category
+	2,  // 27: twentyfour.catalog.v1.CreateCategoryResponse.category:type_name -> twentyfour.catalog.v1.Category
+	2,  // 28: twentyfour.catalog.v1.UpdateCategoryRequest.category:type_name -> twentyfour.catalog.v1.Category
+	2,  // 29: twentyfour.catalog.v1.UpdateCategoryResponse.category:type_name -> twentyfour.catalog.v1.Category
+	3,  // 30: twentyfour.catalog.v1.CatalogService.GetItem:input_type -> twentyfour.catalog.v1.GetItemRequest
+	5,  // 31: twentyfour.catalog.v1.CatalogService.PriceItems:input_type -> twentyfour.catalog.v1.PriceItemsRequest
+	9,  // 32: twentyfour.catalog.v1.CatalogService.ListItems:input_type -> twentyfour.catalog.v1.ListItemsRequest
+	11, // 33: twentyfour.catalog.v1.CatalogService.CreateItem:input_type -> twentyfour.catalog.v1.CreateItemRequest
+	13, // 34: twentyfour.catalog.v1.CatalogService.UpdateItem:input_type -> twentyfour.catalog.v1.UpdateItemRequest
+	15, // 35: twentyfour.catalog.v1.CatalogService.ArchiveItem:input_type -> twentyfour.catalog.v1.ArchiveItemRequest
+	17, // 36: twentyfour.catalog.v1.CatalogService.ListCategories:input_type -> twentyfour.catalog.v1.ListCategoriesRequest
+	19, // 37: twentyfour.catalog.v1.CatalogService.CreateCategory:input_type -> twentyfour.catalog.v1.CreateCategoryRequest
+	21, // 38: twentyfour.catalog.v1.CatalogService.UpdateCategory:input_type -> twentyfour.catalog.v1.UpdateCategoryRequest
+	23, // 39: twentyfour.catalog.v1.CatalogService.ArchiveCategory:input_type -> twentyfour.catalog.v1.ArchiveCategoryRequest
+	4,  // 40: twentyfour.catalog.v1.CatalogService.GetItem:output_type -> twentyfour.catalog.v1.GetItemResponse
+	8,  // 41: twentyfour.catalog.v1.CatalogService.PriceItems:output_type -> twentyfour.catalog.v1.PriceItemsResponse
+	10, // 42: twentyfour.catalog.v1.CatalogService.ListItems:output_type -> twentyfour.catalog.v1.ListItemsResponse
+	12, // 43: twentyfour.catalog.v1.CatalogService.CreateItem:output_type -> twentyfour.catalog.v1.CreateItemResponse
+	14, // 44: twentyfour.catalog.v1.CatalogService.UpdateItem:output_type -> twentyfour.catalog.v1.UpdateItemResponse
+	16, // 45: twentyfour.catalog.v1.CatalogService.ArchiveItem:output_type -> twentyfour.catalog.v1.ArchiveItemResponse
+	18, // 46: twentyfour.catalog.v1.CatalogService.ListCategories:output_type -> twentyfour.catalog.v1.ListCategoriesResponse
+	20, // 47: twentyfour.catalog.v1.CatalogService.CreateCategory:output_type -> twentyfour.catalog.v1.CreateCategoryResponse
+	22, // 48: twentyfour.catalog.v1.CatalogService.UpdateCategory:output_type -> twentyfour.catalog.v1.UpdateCategoryResponse
+	24, // 49: twentyfour.catalog.v1.CatalogService.ArchiveCategory:output_type -> twentyfour.catalog.v1.ArchiveCategoryResponse
+	40, // [40:50] is the sub-list for method output_type
+	30, // [30:40] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_twentyfour_catalog_v1_catalog_proto_init() }
@@ -1201,7 +1722,7 @@ func file_twentyfour_catalog_v1_catalog_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_twentyfour_catalog_v1_catalog_proto_rawDesc), len(file_twentyfour_catalog_v1_catalog_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   15,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

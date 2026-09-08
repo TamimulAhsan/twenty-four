@@ -1,10 +1,16 @@
 /**
  * The one place the frontend talks to the network.
  *
- * Every call goes to the Tenant Gateway under /api. The gateway verifies the
- * token, resolves the tenant and checks entitlement before anything downstream
- * sees the request, so nothing here carries a tenant id in a body or trusts a
- * client-side gate.
+ * There are two gateways, and they are not the same door. The Tenant Gateway
+ * under /api verifies the merchant's token, resolves the tenant and checks
+ * entitlement before anything downstream sees the request, so nothing here
+ * carries a tenant id in a body or trusts a client-side gate. The Admin
+ * Gateway under /admin/api has its own auth realm: staff SSO, MFA and an IP
+ * allowlist, and it is reached from a different host entirely.
+ *
+ * They share this transport and nothing else. A base is picked per call rather
+ * than per module so a mistake is a compile error at the call site instead of
+ * a merchant token being presented to the staff plane.
  */
 
 export interface FieldError {
@@ -62,10 +68,14 @@ export interface RequestOptions {
   idempotencyKey?: string
 }
 
-const BASE = '/api'
+/** The Tenant Gateway. Merchant session, entitlement enforced per request. */
+const TENANT_BASE = '/api'
 
-function buildUrl(path: string, query: RequestOptions['query']): string {
-  const url = `${BASE}${path}`
+/** The Admin Gateway. Staff SSO, MFA, IP allowlist, its own host. */
+const ADMIN_BASE = '/admin/api'
+
+function buildUrl(base: string, path: string, query: RequestOptions['query']): string {
+  const url = `${base}${path}`
   if (!query) return url
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
@@ -75,7 +85,7 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
   return search ? `${url}?${search}` : url
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function call<T>(base: string, path: string, options: RequestOptions): Promise<T> {
   const { method = 'GET', body, signal, query, idempotencyKey } = options
 
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -84,7 +94,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   let response: Response
   try {
-    response = await fetch(buildUrl(path, query), {
+    response = await fetch(buildUrl(base, path, query), {
       method,
       headers,
       // The session cookie is issued on the parent domain and shared with the
@@ -133,6 +143,22 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   return payload as T
+}
+
+/** A call to the Tenant Gateway, as the signed-in merchant. */
+export function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return call<T>(TENANT_BASE, path, options)
+}
+
+/**
+ * A call to the Admin Gateway, as a signed-in specialist.
+ *
+ * Separate from request on purpose. The two planes never share an auth path,
+ * and the admin console is served from its own host, so a call that went to
+ * the wrong base would be a cross-plane request rather than a 404.
+ */
+export function adminRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return call<T>(ADMIN_BASE, path, options)
 }
 
 /** Generates an idempotency key for a write that must not double-apply. */

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	rbacpb "github.com/twentyfour/platform/gen/go/twentyfour/rbac/v1"
-	"github.com/twentyfour/platform/services/gateway/internal/httpx"
+	"github.com/twentyfour/platform/packages/httpx"
 )
 
 // Read endpoints whose services are not built yet.
@@ -39,15 +39,10 @@ func (g *gateway) registerReadStubs(mux *http.ServeMux) {
 	// Collections. The permission on each is the real one from the RBAC
 	// vocabulary, so a staff member already sees a narrower dashboard than an
 	// owner even before the services behind these exist.
-	mux.Handle("GET /api/catalog/items", empty("catalog:item:read"))
-	mux.Handle("GET /api/catalog/categories", empty("catalog:item:read"))
-	mux.Handle("GET /api/orders", empty("pos:order:read"))
+	// Catalog is real now and registers its own routes; see catalog.go.
 	mux.Handle("GET /api/bookings", empty("bookings:booking:read"))
-	mux.Handle("GET /api/tables", empty("bookings:booking:read"))
-	mux.Handle("GET /api/inventory/levels", empty("inventory:stock:read"))
-	mux.Handle("GET /api/staff", empty("staff:member:read"))
-	mux.Handle("GET /api/staff/invitations", empty("staff:member:read"))
-	mux.Handle("GET /api/payments", empty("payment:payment:read"))
+	// Catalog, Staff, Inventory, Payments and POS are all real now. Their
+	// routes live in catalog.go, team.go, payments.go, orders.go and day.go.
 	mux.Handle("GET /api/documents", empty("invoice:document:read"))
 	mux.Handle("GET /api/customers", empty("crm:contact:read"))
 	mux.Handle("GET /api/discounts", empty("catalog:item:read"))
@@ -56,27 +51,10 @@ func (g *gateway) registerReadStubs(mux *http.ServeMux) {
 	// Roles come from RBAC, which does exist.
 	mux.Handle("GET /api/roles", g.authenticated(g.listRoles))
 
-	// Single objects. A null body is the honest answer for a programme or an
-	// onboarding run that has not been created.
+	// A null body is the honest answer for a loyalty programme nobody has set
+	// up. Onboarding is real now; see signup.go.
 	mux.Handle("GET /api/loyalty/programme", object("crm:contact:read", nil))
-	mux.Handle("GET /api/onboarding", object("", nil))
 
-	// The day's takings. Zero is the correct figure for a business that has not
-	// sold anything yet, and the till reads the same shape once POS is built.
-	mux.Handle("GET /api/orders/takings", object("pos:takings:read", map[string]any{
-		"date":       "",
-		"orderCount": 0,
-		"gross":      money(0),
-		"net":        money(0),
-		"tax":        money(0),
-		"byMethod":   []any{},
-	}))
-}
-
-// money is the wire shape: integer minor units and an explicit currency, never
-// a float. One environment is one market, so the currency is the market's.
-func money(minor int64) map[string]any {
-	return map[string]any{"minor": minor, "currency": "HUF"}
 }
 
 // listRoles returns the tenant's roles from RBAC, which is a real service.

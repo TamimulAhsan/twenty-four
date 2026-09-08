@@ -25,7 +25,10 @@ The platform itself is not built here yet.
 | `pitch-deck.txt` | Plain-text pitch deck, 10 sections. Derived from the site copy. |
 | `system-architecture.html` | **Platform architecture document.** 17 sections, 14 Mermaid diagrams, 15 reference tables. |
 | `platform/` | **The implementation.** Go monorepo + k3s manifests. See `platform/README.md`. |
-| `roadmap.md` | Development roadmap — phases, exit criteria, decision gates. |
+| `roadmap.md` | Development roadmap: phases, exit criteria, decision gates. |
+| `backend-plan.md` | **Backend build plan.** What the remaining nine services are, in what order, and why. Phase 1 is done. |
+| `frontend-plan.md` | Frontend build plan for the five applications across both planes. |
+| `admin-plan.md` | **One sign-in for both planes, and wiring the admin console to real services.** A1 and A2 are done and running. |
 | `.claude/settings.local.json` | Permission allowlist only. No project config. |
 
 ---
@@ -146,7 +149,19 @@ market's implementations:
 
 | Swapped per market | Not swapped |
 |---|---|
-| Payments · Invoice & Receipt · Subscription Billing | Everything else, including the Ledger |
+| Payments · Invoicing & Billing | Everything else, including the Ledger |
+
+**Invoicing and Subscription Billing are one service.** They were two. Both
+issue fiscal documents under a market's rules, both need numbering, layout,
+mandatory fields and local tax treatment, and the only real difference is who
+the document is addressed to: the merchant's customer, or the merchant. Two
+services would have meant two implementations of the same numbering and layout
+machinery in every market. The risk taken is that dunning and cycle charging are
+genuinely different work from issuing a receipt, so if that half grows a life of
+its own it splits back out; the seam to keep clean is that nothing outside the
+service knows which kind of document it asked for.
+
+That makes the swapped set **two pods, not three**.
 
 **There is no country logic anywhere in the codebase.** No country codes, no adapters selected at
 runtime, no `if country == …`. The deployed Payments service simply *is* the Hungarian one. If you
@@ -356,7 +371,8 @@ Solid arrow = synchronous call. Dotted (`-.->`) = asynchronous event.
 
 All open source, all self-hosted. Full table with licences in `system-architecture.html` §17.
 
-**Go** for every service we write. **React + TypeScript** for the three SPAs. **NestJS/TypeScript**
+**Go** for every service we write. **React + TypeScript** for the SPAs: four on the merchant
+plane and the admin console on its own. **NestJS/TypeScript**
 for the Twenty CRM fork — that one is not Go, and it brings a Node runtime and a second build
 pipeline with it.
 
@@ -456,6 +472,112 @@ horizontally in its own box. Squeezing 11 participants to fit made the text ille
 
 ---
 
+## Backend conventions
+
+Written once in `platform/packages/` and used by every service from Catalog
+onwards. Auth and RBAC predate them and were deliberately not retrofitted.
+
+| Package | What it is |
+|---|---|
+| `tenantctx` | Reads the gateway's identity headers into a context and refuses a request without a tenant. This is the whole of the tenant boundary; a missed scope is a cross-tenant leak |
+| `pg` | Pool, embedded migrations, and a `Tx` helper a handler cannot leave open. Named `pg`, not `pgx`, so a file can also import `jackc/pgx` |
+| `outbox` | Writes an event row in the caller's transaction; drains batches for the relay |
+| `money` | The one place the platform knows what a currency is and how to round it. Catalog, Payments and eventually the ledger share it, because two currency tables is two answers to "does HUF have a subunit" |
+| `grpcx` | Server with health, reflection, panic recovery and consistent logging; client with sane keepalives |
+
+### Commands name surfaces, not deployments
+
+`make pos-up` moves the till: its frontend *and* the POS service behind it. Same
+for `auth` and `admin`. `make dashboard-up` moves the frontend alone, because
+the dashboard reads from a dozen services and owns none of them, so each of
+those keeps its own command. `-web-up` and `-api-up` address one half.
+
+**Which names are paired is derived, not listed.** A name is a surface with two
+halves when it has both `services/<name>/Containerfile` and
+`services/web/apps/<name>/Containerfile`; one half makes it web-only or
+api-only. So `bookings` moves its frontend alone today and will start moving
+both the day the bookings service is written, with no list to remember to edit.
+`system-up` picks a service up the moment it has a Containerfile, the same way.
+
+The cluster monitor reads the same rule off the same directories, which is why
+its buttons mean what the targets mean. They disagreed once: the monitor acted
+on one Deployment, so stopping "pos" from it left the frontend serving a dead
+API. Two lists, one of them wrong. There is now one rule and two readers.
+
+`platform/deploy/inventory.tsv` names every backend service that has, or will
+have, its own pod, built or not. Status displays read it, so an unbuilt service
+shows as "not built yet" rather than not appearing. Keep it in step with
+`backend-plan.md`.
+
+**One row is one deployment**, which is not the same list as §3: that names
+capabilities, this names things you can start and stop. Entitlement and the
+module registry are tables inside Tenant; the onboarding checklist is the
+provisioning saga's own rows. A row for something that can never be brought up
+would be noise in a display about what is up. Do not add one back because §3
+lists it; add one when something earns a deployment.
+
+**Services do not authenticate.** The gateway verified the token, resolved the
+tenant and checked the permission before anything downstream saw the request.
+Network policy is what makes trusting those headers safe.
+
+**Nothing writes to Kafka except the relay.** A service writes to its own outbox
+in the transaction that made the change, and stops caring. That is what makes "a
+third party being down must never block a sale" true rather than aspirational:
+with the broker down, sales still commit and events queue in Postgres.
+
+The relay claims, publishes and marks published in **one transaction**, so
+delivery is at-least-once. **Every consumer must be idempotent**, keyed on the
+`event-id` header or a natural key such as the order reference. It discovers its
+work by reading a directory of DSN files projected from the `service-dsn`
+Secret and draining the databases that have an `outbox` table, so adding a
+service is a Secret change, not a relay change.
+
+### The development payment provider
+
+Payments ships with a provider where **a person decides**. A payment that needs
+something outside the software is created `pending` with an `external_action_url`
+pointing at an approval page; a human clicks Approve or Decline, and that is the
+answer the till receives. `make pay-desk` opens each one in a browser tab.
+
+That is not a shortcut, and it is worth defending. A provider that always
+approved instantly would let callers quietly grow a dependence on synchronous
+success, and the first real card terminal would break every one of them. A till
+that has been made to wait for a human is a till that will cope with a card
+machine.
+
+Two things about its shape:
+
+- **The approval page is not on `PaymentsService`.** There is no `Approve` RPC,
+  because no real provider has one. What a real provider has is a hosted page
+  the customer is sent to, and the desk sits in exactly that place: a separate
+  HTTP surface on the same pod, outside the contract.
+- **Cash is the one method that skips it**, because cash genuinely needs nothing
+  outside the software. The money is in the drawer by the time the button is
+  pressed.
+
+The desk is unauthenticated: whoever is at the terminal is the customer, not a
+merchant user, and knowing the payment's UUID stands in for holding the card.
+That is thin, and is why this provider must never be deployed anywhere real.
+
+### The merchant code
+
+Six characters of Crockford base32 (`I`, `L`, `O`, `U` excluded, because the
+first three are misread off a printed invoice and the fourth makes codes spell
+things). Assigned once at signup, never changed, and **never reissued even after
+a tenant leaves**: its documents are still referenced by tax authorities, and
+reusing the code would make two businesses indistinguishable on paper.
+
+It lives in **Auth** for now, because Auth mints the tenant ID at signup and is
+the only service that knows a tenant exists at the moment one is created. Tenant
+& Business Profile will own it eventually, so **nothing outside Auth reads the
+table**: callers use `GetMerchantCode`, which is the same call they will make
+once the rows have moved.
+
+It is the middle field of the invoice number, which is one format in every
+market: `2026-7QK3M9-110`, year-merchantcode-sequence. That is a **deliberate
+deviation** from §7, which lists numbering as free to differ per market. It is
+easy to reverse, since the format lives in the market-swapped Invoice service.
+
 ## Decisions taken
 
 Recorded here so they are not relitigated. Full table in `system-architecture.html` §16.
@@ -474,6 +596,11 @@ Recorded here so they are not relitigated. Full table in `system-architecture.ht
 | Ledger | **One ledger per environment** — one entity, one currency, one set of books. |
 | CRM presentation | **Subdomain + shared session cookie.** Not OIDC, not an iframe. |
 | Custom domains | **Deferred.** Keep the shape future-proof; build later. |
+| Merchant code | **Six Crockford base32 characters**, assigned at signup, never reissued. Held in Auth, read through an RPC. |
+| Invoice numbering | **One format in every market**: `year-merchantcode-sequence`. Gapless per tenant per year, allocated under a row lock. |
+| Sign-in | **One form, on the merchant origin.** Auth resolves the plane from the address and answers with a destination. An address exists on one plane only. |
+| Admin plane origin | **Its own subdomain and its own gateway.** Host-only cookie, never the parent domain. |
+| Payment provider | **None yet.** A dev provider implements the contract deterministically; integrating a real one is a later pass touching one pod. |
 
 ## Still open
 
