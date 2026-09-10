@@ -7,11 +7,15 @@ website, bookings, point of sale, payments, marketing and CRM in one platform. T
 model is the product: a specialist runs a 40-minute intake call, configures the system for that
 trade, and the business is **live within 24 hours or their first month is free**.
 
-This repo currently holds the **marketing site** and the **platform architecture document**.
-The platform itself is not built here yet.
+This repo holds the **marketing site**, the **platform architecture document**, and
+**`platform/`: the implementation** — a Go monorepo deployed to k3s. Setting it up on a
+machine is [`platform/README.md`](platform/README.md).
 
-> Not a git repository. No build step, no `package.json`, no test suite. Everything is
-> hand-authored HTML/CSS/JS opened directly in a browser.
+> A git repository, on `origin` at `github.com/TamimulAhsan/twenty-four`.
+>
+> The **marketing site** has no build step, no `package.json` and no test suite: it is
+> hand-authored HTML/CSS/JS opened directly in a browser. The **platform** does have all
+> three, and none of them are shared with the site.
 
 ---
 

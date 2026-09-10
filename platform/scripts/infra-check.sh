@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Proves the infra actually works, not merely that pods report Running.
 set -uo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 NS=twentyfour
 fail=0
 MINIO_USER=$(kubectl -n $NS get secret minio -o jsonpath='{.data.MINIO_ROOT_USER}' 2>/dev/null | base64 -d)

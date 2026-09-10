@@ -151,8 +151,12 @@ func role(ns, name, ownerKind string, labels map[string]string) string {
 		return "datastore"
 	}
 	// Falls back to the name for anything that predates the labels, and for
-	// the infrastructure charts we do not write.
-	for _, d := range []string{"postgres", "redis", "kafka", "clickhouse", "minio"} {
+	// the infrastructure we do not write. Connect belongs here despite being a
+	// Deployment with no volume: it is part of the data tier, its image is not
+	// built by service.sh, and classifying it as an app made the monitor offer
+	// it a rebuild button and then describe it as something this checkout
+	// cannot build.
+	for _, d := range []string{"postgres", "redis", "kafka", "clickhouse", "minio", "connect"} {
 		if strings.Contains(name, d) {
 			return "datastore"
 		}

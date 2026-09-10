@@ -8,6 +8,7 @@
 # Not seed-account.sh with a flag: that one creates a business, a tenant and a
 # merchant code, and a specialist has none of those.
 set -euo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 NS=twentyfour
 EMAIL=${1:-admin@example.com}

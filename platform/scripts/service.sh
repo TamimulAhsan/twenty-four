@@ -10,6 +10,7 @@
 # is a hand-maintained list, so building the next service is enough to make its
 # commands work.
 set -euo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 NS=twentyfour
 REG=localhost:5000/twentyfour

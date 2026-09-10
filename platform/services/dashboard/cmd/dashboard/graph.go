@@ -361,7 +361,7 @@ func (s *server) Collect(namespaces []string) (*Graph, error) {
 		m := metrics[p.Metadata.Namespace+"/"+p.Metadata.Name]
 		podRole := role(p.Metadata.Namespace, p.Metadata.Name, ownerKind, p.Metadata.Labels)
 		deployment := workloadName(p.Metadata.Name, p.Metadata.Labels)
-		w := s.describe(p.Metadata.Namespace, deployment, podRole)
+		w := s.describe(p.Metadata.Namespace, deployment, podRole, ownerWorkload(ownerKind))
 		g.workloads[w.Name] = w
 		running[p.Metadata.Namespace+"/"+deployment] = true
 		g.Nodes = append(g.Nodes, GNode{
@@ -495,7 +495,7 @@ func (s *server) Collect(namespaces []string) (*Graph, error) {
 			nsSet[ns] = true
 			labels := d.Spec.Template.Metadata.Labels
 			r := role(ns, name, set.kind, labels)
-			w := s.describe(ns, name, r)
+			w := s.describe(ns, name, r, set.kind)
 			g.workloads[w.Name] = w
 
 			want := 0
@@ -620,6 +620,22 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(b)
+}
+
+// ownerWorkload turns a pod's owner into the workload kind `kubectl rollout`
+// understands.
+//
+// A StatefulSet owns its pods directly, so its name comes straight through. A
+// Deployment does not: it owns a ReplicaSet which owns the pod, so "ReplicaSet"
+// is what a Deployment's pod reports and Deployment is what has to be said to
+// kubectl. Anything else — a Job's pod, a bare pod — has no rollout at all, and
+// Deployment is the harmless answer because nothing in that shape offers a
+// restart button in the first place.
+func ownerWorkload(ownerKind string) string {
+	if ownerKind == "StatefulSet" {
+		return "StatefulSet"
+	}
+	return "Deployment"
 }
 
 // selects reports whether a Service's selector matches a pod template's labels.

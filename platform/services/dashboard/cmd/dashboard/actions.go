@@ -132,16 +132,26 @@ func (w Workload) command(action string) ([][]string, error) {
 		return nil, fmt.Errorf("nothing here can act on %s", w.Name)
 	}
 
-	// A datastore is not ours to build and its volume outlives the pod, so it
-	// is never part of a surface and only ever restarted in place.
+	// A data-tier workload is not ours to build, so it is never part of a
+	// surface and is only ever restarted in place.
+	//
+	// The resource kind is carried rather than assumed. It was assumed once,
+	// as statefulset, which is true of Postgres, Kafka, ClickHouse and MinIO
+	// and false of Redis and Kafka Connect: those two are Deployments, and the
+	// one button they offer answered "statefulsets.apps not found".
 	if w.Parts[0].Runner == "kubectl" {
 		if action != "restart" {
 			return nil, fmt.Errorf("%s only accepts restart", w.Name)
 		}
-		t := w.Parts[0].Target
+		p := w.Parts[0]
+		kind := strings.ToLower(p.Kind)
+		if kind == "" {
+			kind = "deployment"
+		}
+		res := kind + "/" + p.Target
 		return [][]string{
-			{"kubectl", "-n", "twentyfour", "rollout", "restart", "statefulset/" + t},
-			{"kubectl", "-n", "twentyfour", "rollout", "status", "statefulset/" + t, "--timeout=180s"},
+			{"kubectl", "-n", "twentyfour", "rollout", "restart", res},
+			{"kubectl", "-n", "twentyfour", "rollout", "status", res, "--timeout=180s"},
 		}, nil
 	}
 

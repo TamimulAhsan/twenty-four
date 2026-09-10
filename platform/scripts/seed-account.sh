@@ -4,6 +4,7 @@
 # Signup goes through the gateway, so this exercises the same path a real
 # merchant would: Auth creates the user, then calls RBAC to bind the owner role.
 set -euo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 NS=twentyfour
 EMAIL=${1:-merchant@example.com}

@@ -37,8 +37,11 @@ help: ## Show this help
 	@printf '\n  \033[1mVariables\033[0m\n'
 	@printf '    REBUILD=1        build images from source first; without it a target\n'
 	@printf '                     reuses whatever is already in the registry\n'
+	@printf '    SERVICE=pos      which service \033[36mmake logs\033[0m follows\n'
 	@printf '    MON_PORT=8091    where the cluster monitor listens\n'
-	@printf '    EMAIL= PASSWORD= NAME=   passed to the seed commands\n'
+	@printf '    MON_READ_ONLY=1  serve the monitor with every action refused\n'
+	@printf '    EMAIL= PASSWORD= NAME= BUSINESS=   passed to \033[36mseed-account\033[0m\n'
+	@printf '    EMAIL= PASSWORD= NAME= ROLE=       passed to \033[36mseed-staff\033[0m\n'
 	@printf '\n  Reading order: platform/README.md, then backend-plan.md.\n\n'
 
 ##@ Setting up a machine
@@ -49,7 +52,7 @@ preflight: ## Check toolchain, cluster and registry
 registry: ## Start the local image registry (podman)
 	@./scripts/registry.sh
 
-infra: ## Deploy Postgres, Redis, Kafka, ClickHouse and the CDC pipeline
+infra: ## Deploy the data tier: Postgres, Redis, Kafka, ClickHouse, MinIO, CDC
 	@./scripts/connect-image.sh
 	@kubectl apply -f deploy/infra/00-namespace.yaml >/dev/null
 	@./scripts/system.sh secrets
@@ -58,21 +61,24 @@ infra: ## Deploy Postgres, Redis, Kafka, ClickHouse and the CDC pipeline
 	@kubectl -n $(NS) delete job ensure-databases --ignore-not-found >/dev/null
 	@kubectl apply -f deploy/infra/
 	@echo "waiting for infra to become ready..."
-	@kubectl -n $(NS) rollout status statefulset/postgres   --timeout=180s
-	@kubectl -n $(NS) rollout status deployment/redis       --timeout=180s
-	@kubectl -n $(NS) rollout status statefulset/kafka      --timeout=240s
-	@kubectl -n $(NS) rollout status statefulset/clickhouse --timeout=300s
-	@kubectl -n $(NS) rollout status deployment/connect     --timeout=300s
+# Waited for by the same code system-up uses, rather than by a list here. The
+# list here was five rollouts and the data tier is six workloads: MinIO was
+# applied on the line above and never waited for, so this target could report
+# the infrastructure ready while object storage was still starting.
+	@./scripts/system.sh wait-infra
 
-infra-check: ## Prove Postgres, Redis and Kafka actually work
+infra-check: ## Prove every data-tier component actually works, not just runs
 	@./scripts/infra-check.sh
 
 
 # ---- the cluster monitor ----------------------------------------------------
 #
 # Runs on your machine rather than in the cluster, so it can still answer when
-# the cluster cannot. Read-only: it collects with `kubectl get` through your own
-# kubeconfig. MON_PORT and MON_NAMESPACES override the defaults.
+# the cluster cannot. It collects read-only, through your own kubeconfig, and it
+# can also start, stop, restart and rebuild a workload by running the very
+# scripts below — so it reaches exactly what a shell here could reach and
+# nothing more. MON_READ_ONLY=1 serves the view with every action refused;
+# MON_PORT and MON_NAMESPACES override the rest.
 
 ##@ The whole system
 
@@ -107,8 +113,11 @@ monitoring-dev: ## Run the cluster monitor with hot reload (Go :8090 + Vite :517
 
 ##@ Development
 
-logs: ## Tail core logs
-	@kubectl -n $(NS) logs -f deployment/core
+logs: ## Tail a service's logs (SERVICE=pos; defaults to the canary)
+# Defaulted rather than required, because this target predates there being more
+# than one service to tail. There are twenty-three now, and "make logs" quietly
+# showing the phase-0 canary's is a worse answer than asking which one.
+	@kubectl -n $(NS) logs -f deployment/$(or $(SERVICE),core)
 
 test: ## Run Go tests across all modules
 	@for m in $(MODULES); do echo "-- $$m"; (cd $$m && go test ./...); done

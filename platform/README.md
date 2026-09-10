@@ -7,93 +7,189 @@ Implementation of the architecture in
 
 ## What is real
 
-| | |
+Twenty-three backend services, six frontend bundles, and the data tier behind
+them. `make api-status` prints the live version of this list; the table is its
+shape.
+
+| Domain | Services |
 |---|---|
-| **Auth** | Signup, login, sessions, PASETO tokens, lockout, password reset, merchant codes |
-| **RBAC** | Roles, permissions, plane isolation, seven system roles |
-| **Gateway** | Terminates `/api`, verifies tokens, checks permissions, owns the session cookie |
-| **Relay** | Drains every service's outbox onto Kafka |
-| **Catalog** | Items, categories, prices, tax rules |
-| **Staff** | Members, roles, invitations, and the seat quota |
-| **Inventory** | Stock levels, moves, reservations, low-stock thresholds |
-| **Payments** | Intents, capture, refund, with a provider where a person decides |
-| **POS** | Sales, tabs, refunds, voids, the day's takings, the drawer count, the floor |
-| **Tenant** | Business profile, entitlement, and the registry of modules, tiers and trades |
-| **Provisioning** | The saga that turns a signup into a working business, and its checklist |
-| **Web** | Four frontends: dashboard, till, bookings, sign-in |
-| **Core** | The Phase 0 service that proved the deployment path. Kept as a canary |
+| **Edge** | Gateway (`/api`), Admin gateway (`/admin/api`, on its own host) |
+| **Core** | Auth, RBAC |
+| **Control** | Tenant (profile, entitlement, module registry), Provisioning (the 24-hour saga) |
+| **Commerce** | Catalog, Inventory, Staff, POS, Bookings, Kitchen |
+| **Finance** | Payments, Invoicing, Ledger |
+| **Platform** | Relay, Notification, Media, Audit, Scheduler, Analytics, Support, Core (the phase-0 canary) |
+| **Web** | Dashboard, till, bookings, sign-in, admin console, and the unavailable page |
 
-Everything else the frontend calls is still a gateway stub returning an empty
-collection.
+| Data tier | |
+|---|---|
+| PostgreSQL | One database per service that owns a schema |
+| Redis | Sessions and the entitlement policy cache |
+| Kafka | KRaft mode, single broker in dev. Written only by the relay |
+| ClickHouse | Analytics, fed by CDC off Kafka |
+| Kafka Connect | Debezium source and the ClickHouse sink, in one image built here |
+| MinIO | Object storage. Media is the only writer |
 
-## Local setup
+Not written yet: the storefront, CRM sync, marketing, ads and creative.
+`make api-status` shows those as **not built yet** against the phase in
+[`../backend-plan.md`](../backend-plan.md) they belong to.
 
-Local mirrors production: **k3s** (not compose, not Docker), with **podman** for
-image builds only.
+## Setting up a machine
 
-One-time, requires root:
+Local mirrors production: **k3s** (not compose, not Docker Desktop), with
+**podman** for image builds only. Nothing runs under podman except the registry.
+
+**What the machine needs.** About 8 GB of RAM: the workloads request 2.4 GiB
+between them and are allowed 9.2 GiB. About 13 GiB of volumes for Postgres,
+Kafka, ClickHouse and MinIO, plus room in the local registry for thirty images.
+A first bring-up builds all thirty, at roughly a minute each.
+
+### 1. The repository
 
 ```bash
-# Arch does not support partial upgrades. Installing podman onto a system that is
-# behind pulls in binaries your libraries cannot satisfy (libsubid.so.6 missing).
-sudo pacman -Syu
-sudo pacman -S --needed podman kubectl
+git clone https://github.com/TamimulAhsan/twenty-four.git
+cd twenty-four/platform
+```
 
-# Note the flag: --write-kubeconfig-mode. "node" is not a flag and k3s crashloops.
+Every command below is run from `platform/`. Nothing needs installing into the
+repository itself: the deployed frontends run `npm ci` inside their own image
+build, so there is no host-side `npm install` in the bring-up path.
+
+### 2. Tools
+
+`make preflight` checks every one of these and says which are required and which
+are merely useful, so this table is the explanation rather than the checklist.
+
+| Tool | Needed for | Arch |
+|---|---|---|
+| `go` ≥ 1.26 | Every backend service. `go.work` pins 1.26.0 | `sudo pacman -S go` |
+| `podman` | Image builds and the registry container | `sudo pacman -Syu podman` |
+| `kubectl` | Every script shells out to it | `sudo pacman -S kubectl` |
+| `k3s` | The cluster | the installer below |
+| `jq` | The Makefile reads `go.work` through it, and the seed scripts build JSON with it | `sudo pacman -S jq` |
+| `grpcurl` | `make seed-account` and `make seed-staff`, which talk to Auth over gRPC | `go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest` |
+| `node` ≥ 22 and `npm` | `make web-test`, `npm run dev:*`, and the cluster monitor's interface. Not the bring-up | `sudo pacman -S nodejs npm` |
+
+`jq` is required rather than optional for a reason worth knowing: the Makefile
+derives its module list by reading `go.work` through it. Without `jq` that list
+is empty, so `make test` and `make vet` iterate over nothing, print no error and
+exit zero. A suite that passes by not running is worse than one that fails.
+
+Two traps worth knowing before you hit them:
+
+- **Arch does not support partial upgrades.** Installing podman onto a system
+  that is behind pulls in binaries your libraries cannot satisfy (`libsubid.so.6`
+  missing). Sync the whole system, not the one package.
+- **`grpcurl` installs into `$(go env GOPATH)/bin`**, usually `~/go/bin`. If that
+  is not on your `PATH`, the seed scripts do not fail: they wait for Auth to
+  answer in a loop that can never succeed, and appear to hang. `make preflight`
+  notes its absence and prints the directory to add.
+
+### 3. The cluster
+
+```bash
+# Note the flag: --write-kubeconfig-mode. "node" is not a flag, and k3s crashloops.
 curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
 # Copy the file rather than pasting a heredoc: pasted heredocs lose the
-# "mirrors:" key, and k3s then hangs on "cannot unmarshal ... into registries.Registry".
+# "mirrors:" key, and k3s then hangs on
+# "cannot unmarshal ... into registries.Registry".
 sudo mkdir -p /etc/rancher/k3s
 sudo cp deploy/k3s/registries.yaml /etc/rancher/k3s/registries.yaml
 sudo systemctl restart k3s
 ```
 
-`make preflight` checks all of the above and prints the fix for whatever is wrong.
+Without `registries.yaml` k3s cannot pull from `localhost:5000`, and every pod
+sits in `ImagePullBackOff` while the registry itself looks perfectly healthy.
 
-Then:
+**The kubeconfig needs no copying.** The Makefile exports `$HOME/.kube/config`
+when it is readable and falls back to `/etc/rancher/k3s/k3s.yaml`. Every script
+in `scripts/` resolves it the same way, from `scripts/kubeconfig.sh`, so running
+one directly works as well as running it through `make`. An explicit
+`KUBECONFIG` still wins; the fallback only fills in a blank.
+
+**Port 80 must be free.** k3s publishes Traefik there through its own service
+load balancer, and every URL in this README is plain `http://` with no port.
+
+### 4. Hostnames
+
+Four merchant applications share `app.twentyfour.localhost`, so the session
+cookie issued on the parent domain carries between them. The admin console is
+`admin.twentyfour.localhost`, a separate origin on purpose: it is the plane that
+can see every merchant, so its cookie is host-only and never reaches that
+namespace.
+
+On a systemd machine nothing needs doing — `systemd-resolved` synthesises every
+`*.localhost` name. Check:
 
 ```bash
-make preflight   # verify toolchain, cluster, registry
-make up          # registry + infra + build + deploy + verify
+getent hosts app.twentyfour.localhost
 ```
 
-`make help` lists everything.
+If that answers nothing, add them by hand:
 
-## Cluster dashboard
+```
+127.0.0.1  app.twentyfour.localhost admin.twentyfour.localhost
+```
+
+### 5. Bring it up
 
 ```bash
-make dashboard        # builds the UI, serves on http://localhost:8090
-make dashboard-dev    # Go API on :8090 + Vite hot reload on :5173
+make preflight    # toolchain, k3s config, cluster, registry
+make system-up    # registry, data tier, every service, every frontend
 ```
 
-Read-only. It shells out to `kubectl`, so it uses whatever kubeconfig you already
-have and can never mutate the cluster.
+`make preflight` prints the fix for whatever is wrong rather than only the
+complaint, and it checks that each tool *runs* rather than that the binary
+exists — a broken shared-library link makes `command -v` succeed and the tool
+useless. It separates the two kinds of missing tool: `go`, `podman`, `kubectl`,
+`k3s` and `jq` fail it, because without any of them something here is broken;
+`grpcurl` and `node` are reported as notes, because their absence costs you the
+seed commands and the monitor rather than the bring-up.
 
-What it shows:
+The first `system-up` on a new machine builds everything, because every target
+builds when the registry has nothing to reuse. After that a bring-up reuses what
+is already there and takes under a minute. `REBUILD=1 make system-up` forces a
+rebuild from source.
 
-- **Live topology**, laid out by longest path from the ingress, so the cascade
-  reads top to bottom: `ingress → svc/core → pod/core → svc/{postgres,redis,kafka} → their pods`.
-  Tier rows are labelled by what they contain, and the canvas is sized to the
-  widest tier so cards never overlap.
-- **Real edges, not a hand-drawn picture.** Ingress→Service comes from Ingress
-  rules, Service→Pod from EndpointSlices, and Pod→Service **from the container's
-  own env vars**: `POSTGRES_ADDR` and friends are parsed back into dependency
-  arrows. Change what a pod depends on and the graph follows.
-- Per-pod phase, ready count, restarts, image, node, pod IP, age, ports, and
-  live CPU/memory from metrics-server.
-- Select a node to isolate its connections; the rest dims and its edges animate.
-  The panel lists what it talks to and what talks to it, each clickable.
-- A **"How to read this"** legend explaining every node type, every edge type and
-  how each is derived, plus what the status dots and restart badges mean.
-- `show kube-system` toggles the k3s internals in and out. Off by default: the
-  application view is the point.
-- **Pan and zoom.** Click-and-hold anywhere to drag the canvas; scroll to zoom
-  toward the cursor. Buttons for zoom in/out, `fit` (frames the whole graph) and
-  `1:1`, with a live percentage. It auto-fits on load and whenever the visible
-  node set changes, so toggling kube-system reframes automatically.
-  Dragging never selects: a pointer that moves more than 4px is a pan, not a click.
-- Updates stream over SSE every 2s; the browser reconnects on its own.
+`make up` is **not** this. It is the phase-0 canary: one trivial service that
+proves ingress, the registry and rollout still work, kept for exactly that.
+
+### 6. An account to sign in with
+
+```bash
+make seed-account   # merchant@example.com / 1234
+make seed-staff     # admin@example.com    / 1234
+```
+
+Both go through the same path a real signup takes. See **Signing in** below for
+where each one lands and for the two development-only switches that make a
+four-character password work.
+
+### 7. Confirm it
+
+```bash
+make system-status    # what is up, what is down, what each route returns
+make infra-check      # proves Postgres, Redis and Kafka actually work
+make monitoring-up    # the live topology, on http://localhost:8090
+```
+
+Then open `http://app.twentyfour.localhost`.
+
+`make help` lists every target, generated from the Makefile rather than
+maintained beside it.
+
+### When it does not come up
+
+| Symptom | Cause and fix |
+|---|---|
+| `preflight` says **cluster unreachable (k3s is 'inactive')** | `sudo systemctl start k3s`. The installer enables it at boot; if you would rather it not hold the memory until you ask, `sudo systemctl disable k3s` and start it per session |
+| `system-up` stops at **networking** | No pod can reach a ClusterIP. podman rewriting nftables during an image build has been enough to clear those rules. `sudo systemctl restart k3s` rebuilds them |
+| Pods in `ImagePullBackOff` | `registries.yaml` is missing or malformed. `make preflight` says which |
+| kubectl errors about `localhost:8080` | Neither `~/.kube/config` nor `/etc/rancher/k3s/k3s.yaml` is readable, so nothing resolved a kubeconfig. Check the k3s installer used `--write-kubeconfig-mode 644` |
+| Seed commands appear to hang | `grpcurl` is not on `PATH` |
+| A service shows **up** after a failed build | It is still running its previous image. The `images` section of `make system-status` compares the digest each pod runs against the digest the registry tag points at, which is the only honest answer |
+| Something is deeply wrong | `make nuke` deletes the namespace and the registry container. `make system-up` rebuilds from nothing |
 
 ## Signing in
 
@@ -202,14 +298,17 @@ make system-up  make system-down  make system-status
 becomes commandable the moment it has a `Containerfile`, so building the next
 one is enough to give it `catalog-up`, `catalog-down` and `catalog-build`.
 
-Until a paired surface's backend exists, its target says so and brings up the
-half that does:
+All four paired surfaces have both halves now. Where one does not, the target
+says so and brings up the half that exists rather than failing:
 
 ```
-$ make bookings-up
-    web-bookings is up
-    bookings has no server yet; nothing to bring up
+    web-<name> is up
+    <name> has no server yet; nothing to bring up
 ```
+
+The same line appears for the services still in the inventory but not written —
+the storefront, CRM sync, marketing, ads and creative — when a whole tier is
+brought up.
 
 Taking a frontend down scales its Deployment to zero. Traefik then has no
 endpoint for that route, returns 503, and the errors middleware serves the
@@ -258,23 +357,26 @@ platform/
 ├── packages/       Shared foundations, written once (see below)
 ├── deploy/
 │   ├── k3s/        registries.yaml: install to /etc/rancher/k3s/
-│   ├── infra/      Postgres, Redis, Kafka (dev-grade; prod differs: §17)
-│   ├── apps/       Backend deployments, services, Traefik ingress
-│   └── web/        Frontend deployments and the unavailable fallback
-├── scripts/        preflight, registry, build-push, system, web-app, seed-account
-└── services/
-    ├── auth/       Identity: credentials, sessions, tokens, merchant codes
-    ├── rbac/       Authorisation: roles, permissions, plane isolation
-    ├── gateway/    The tenant API gateway
-    ├── relay/      The outbox relay
-    ├── catalog/    Pricing arithmetic and contract; no server yet
-    ├── core/       Phase 0 canary
-    ├── admin/      The admin API gateway
-    ├── tenant/      Business profile, entitlement record and module registry
-    ├── provisioning/ The 24-hour saga, whose rows are the merchant's checklist
-    ├── dashboard/  The cluster monitor (a tool, not a product service)
-    └── web/        The five frontend applications
+│   ├── infra/      Postgres, Redis, Kafka, ClickHouse, Connect, MinIO
+│   │               (dev-grade; production differs: §17)
+│   ├── apps/       Backend deployments, services, Traefik IngressRoutes
+│   ├── web/        Frontend deployments and the unavailable fallback
+│   └── inventory.tsv  Every backend service that has, or will have, a pod
+├── scripts/        preflight, registry, system, service, web-app, monitoring,
+│                   infra-check, seed-account, seed-staff, pay-desk, and
+│                   kubeconfig.sh, which every one of them sources
+└── services/       One directory per service; a Containerfile is what makes
+                    one deployable, and what gives it its make targets
+    ├── web/        The five frontend applications and the unavailable page
+    ├── dashboard/  The cluster monitor. A tool, not a product service, and
+    │               the one thing here that runs on your machine
+    └── ...         The twenty-three listed under "What is real"
 ```
+
+A service earns its `make <name>-up`, `-down` and `-build` the moment it has a
+`Containerfile`. There is no list to edit — `make help` prints what currently
+exists, split into surfaces that move both halves, frontend-only and
+backend-only.
 
 ## Shared foundations: `packages/`
 
@@ -287,10 +389,14 @@ scoping wrong. These are written once and imported by everything after them.
 | `pg` | Pool, embedded migrations, and a `Tx` helper a handler cannot leave open. Named `pg` so a file can also import `jackc/pgx` without renaming one of them |
 | `outbox` | Writes an event row in the caller's transaction, and drains batches for the relay |
 | `grpcx` | Server with health, reflection, panic recovery and consistent logging; client with sane keepalives |
+| `bus` | The read side the outbox deliberately does not provide: a consumer-group reader and the table remembering which event IDs were handled. Delivery is at-least-once, so idempotency is a property of the consumer |
+| `money` | The one place the platform knows what a currency is and how to round it. Integer minor units, never a float. Shared because two currency tables is two answers to "does HUF have a subunit" |
+| `httpx` | The HTTP conventions both gateways answer with: response shape, error envelope, request ID. The frontend reads `code` to decide what to do, so these strings are contract |
+| `websession` | The session cookie. Parent-domain on the merchant plane so four applications share one sign-in; host-only on the admin plane, always |
 
-A service that touches tenant data uses all four. Auth and RBAC predate them and
-have not been retrofitted: they work, and rewriting a service that works to use
-a package is churn, not progress.
+A service that touches tenant data uses the first four. Auth and RBAC predate
+them and have not been retrofitted: they work, and rewriting a service that
+works to use a package is churn, not progress.
 
 ## Taking a payment
 
@@ -415,9 +521,14 @@ pod on its own does nothing you would want: the ReplicaSet makes another one and
 the button looks broken. Each action runs the script the Makefile already runs
 (`service.sh`, `web-app.sh`) and streams its output, so a rebuild shows you the
 same log a terminal would. One at a time, because two rebuilds of one image
-racing each other is a coin toss over what the registry ends up with. A
-datastore offers restart only: the image is not ours to build and the volume
-outlives the pod.
+racing each other is a coin toss over what the registry ends up with.
+
+A data-tier workload offers **restart only**, because none of those images are
+built from this repository. The six are not one shape and the monitor does not
+pretend they are: Postgres, Kafka, ClickHouse and MinIO are StatefulSets whose
+volumes outlive the pod, while Redis and Kafka Connect are Deployments holding
+no volume at all. That distinction is not cosmetic — the restart button issues
+`kubectl rollout restart` and has to name the right kind.
 
 **It runs on your machine, not in the cluster.** That is the point: a monitor
 that is itself a pod in the thing it monitors cannot tell you why the thing is
@@ -452,25 +563,26 @@ $ make api-status
   admin         edge      built   up            Terminates /admin/api on its own host ...
   catalog       commerce  built   up            Items, services, prices, tax rules ...
   pos           commerce  built   up            Registering a sale: cart, tender, ...
-  analytics     platform  6       not built yet Dashboard queries over ClickHouse ...
-  notification  platform  later   not built yet Templates, branding, channel preference ...
+  analytics     platform  built   up            Dashboard queries over ClickHouse ...
+  website       commerce  later   not built yet Site templates, pages, publishing ...
+  crmsync       growth    later   not built yet Bidirectional pipeline to Twenty ...
 
-  13 built, 16 still to come, 29 services in all.
+  23 built, 6 still to come, 29 services in all.
   Build order and reasoning: backend-plan.md
 ```
 
-The `phase` column is the honest answer to "where is POS":
+The `phase` column is the honest answer to "where is this service":
 
 | Phase | Meaning |
 |---|---|
-| `built` | Running now |
-| `2` to `8` | The build order in `backend-plan.md`. POS is phase 5, because it composes Catalog, Inventory and Payments and cannot be written before them |
-| `later` | In the architecture, not in this pass |
+| `built` | Running now. Twenty-three of the twenty-nine are |
+| `2` to `8` | The build order in `backend-plan.md`. Nothing sits here at present: POS was phase 5, because it composes Catalog, Inventory and Payments and could not be written before them |
+| `later` | In the architecture, not in this pass: the storefront, CRM sync, marketing, ads, creative |
 | `external` | Not written here. Twenty CRM is a fork with its own deployment and its own PostgreSQL |
 
 `make system-status` shows what is running and what this pass is working
-towards, then one summary line for the rest. Thirty-two rows is a catalogue, not
-a status display.
+towards, then one summary line for the rest. Twenty-nine rows is a catalogue,
+not a status display; `make api-status` prints all of them.
 
 Adding a service means one line here and its `Containerfile`. Nothing else is
 hand-maintained.

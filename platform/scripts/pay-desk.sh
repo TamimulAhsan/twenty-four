@@ -14,6 +14,7 @@
 #
 # Leave it running in a terminal. Ctrl-C stops it. It opens each payment once.
 set -uo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 HOST=${HOST:-app.twentyfour.localhost}
 BASE=${BASE:-http://localhost}

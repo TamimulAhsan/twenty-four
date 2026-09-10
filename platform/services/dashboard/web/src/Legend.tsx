@@ -3,7 +3,7 @@ const NODES = [
   ['var(--svc)', 'Service', 'Stable cluster IP and DNS name in front of a set of pods.'],
   ['var(--app)', 'Service pod', 'A Go binary we wrote. Gateways, domain services, the outbox relay.'],
   ['var(--fe)', 'Frontend pod', 'nginx serving one built bundle. One per application, each its own image and deployment, plus the fallback page every route lands on when its application is down.'],
-  ['var(--data)', 'Datastore pod', 'Postgres, Redis, Kafka, ClickHouse and MinIO. StatefulSets with attached volumes, so their data outlives the pod.'],
+  ['var(--data)', 'Data-tier pod', 'Postgres, Redis, Kafka, ClickHouse, MinIO and the Kafka Connect worker. None of these images are built from this repository, which is why they offer restart and nothing else. They are not uniformly stateful: Postgres, Kafka, ClickHouse and MinIO carry volumes that outlive the pod, while Redis is a cache that refills itself and Connect keeps its offsets in Kafka.'],
   ['var(--sys)', 'System pod', 'kube-system: CoreDNS, Traefik, metrics-server, local-path.'],
 ] as const
 
@@ -86,7 +86,8 @@ export function Legend({ open, onToggle }: { open: boolean; onToggle: () => void
 
           <p className="lp dim">
             Click any node to isolate its connections and see detail. Data refreshes every 2s over
-            SSE; the collector is read-only and only ever runs <code>kubectl get</code>.
+            SSE; the collector only ever reads — <code>kubectl get</code>, plus <code>top</code> for
+            the CPU and memory figures and <code>logs</code> when you ask for them.
           </p>
         </div>
       )}

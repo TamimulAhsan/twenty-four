@@ -15,13 +15,12 @@
 # help text says so rather than leaving it to be discovered.
 set -euo pipefail
 
-# Run through make this is already set. Run directly it is not, and the failure
+# Run through make this is already set; run directly it is not, and the failure
 # is a wall of kubectl errors about localhost:8080 rather than "no kubeconfig".
-if [ -z "${KUBECONFIG:-}" ]; then
-  if [ -r "$HOME/.kube/config" ]; then export KUBECONFIG=$HOME/.kube/config
-  elif [ -r /etc/rancher/k3s/k3s.yaml ]; then export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-  fi
-fi
+# It matters more here than anywhere else: this process is what the monitor's
+# own buttons run their scripts from, so an unresolved kubeconfig makes every
+# action in the interface fail rather than one command in a terminal.
+. "$(dirname "$0")/kubeconfig.sh"
 
 DIR=services/dashboard
 RUN=.run

@@ -6,19 +6,42 @@
 # deleting it: Traefik then has no endpoint, returns 503, and the errors
 # middleware serves the "temporarily unavailable" page in its place.
 set -euo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 WEB=services/web
 NS=twentyfour
 REG=localhost:5000/twentyfour
 
 usage() {
-  echo "usage: web-app.sh <build|deploy|up|down|status> <dashboard|pos|bookings|auth|admin|unavailable|all>"
+  echo "usage: web-app.sh <build|deploy|up|down|status> <$(apps | tr '\n' '|')unavailable|all>"
   exit 2
 }
+
+# Every frontend application, discovered rather than listed, with the same rule
+# service.sh uses for the backends: a Containerfile is what makes something
+# buildable. This was a hand-written list of five while everything around it was
+# derived, which meant the sixth application would have been built by
+# system-up, routed by Traefik, and invisible to `make web-status` and to every
+# per-application command here.
+#
+# unavailable is excluded from the acting list on purpose. It is the page every
+# other application falls back to when it is down, so it is not a surface
+# anybody starts and stops; "all" must never scale it to zero, or a system-down
+# would take away the page that explains the system is down. It is still
+# addressable by name for a rebuild, and status still reports it.
+apps() {
+  local d n
+  for d in "$WEB"/apps/*/; do
+    n=$(basename "$d")
+    [ "$n" = unavailable ] && continue
+    [ -f "$d/Containerfile" ] && echo "$n"
+  done
+  return 0
+}
+
 [ $# -ge 2 ] || usage
 action=$1 app=$2
 
-apps() { echo "dashboard auth pos bookings admin"; }
 expand() { [ "$app" = all ] && apps || echo "$app"; }
 
 # Builds only when asked, or when there is nothing to reuse. Bringing an

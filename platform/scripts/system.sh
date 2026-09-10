@@ -5,6 +5,7 @@
 # Each step reports as it finishes rather than at the end, because a full build
 # takes minutes and silence for minutes is indistinguishable from a hang.
 set -uo pipefail
+. "$(dirname "$0")/kubeconfig.sh"
 
 NS=twentyfour
 REG=localhost:5000/twentyfour
@@ -231,9 +232,21 @@ cmd_up() {
 
   group "data"
   step manifests    kubectl apply -f deploy/infra/
-  step postgres     kubectl -n $NS rollout status statefulset/postgres --timeout=240s
-  step redis        kubectl -n $NS rollout status deployment/redis --timeout=240s
-  step kafka        kubectl -n $NS rollout status statefulset/kafka --timeout=240s
+  # Derived, not listed. This was three hard-coded lines — postgres, redis,
+  # kafka — written when those were the whole data tier. ClickHouse, Kafka
+  # Connect and MinIO were added to deploy/infra/ afterwards and applied by the
+  # step above, but nothing waited for them, so "system-up finished" could
+  # arrive with the CDC pipeline still starting. A status display and a
+  # bring-up disagreeing about what the data tier is, is the bug this whole
+  # file is arranged to avoid.
+  #
+  # One step per workload rather than one for the group: ClickHouse and Kafka
+  # each take minutes, and a single line that says "data" for four of them is
+  # indistinguishable from a hang.
+  local w
+  for w in $(infra_workloads); do
+    step "${w##*/}" kubectl -n $NS rollout status "$w" --timeout=300s
+  done
   step databases    ensure_databases
   step reachable    ./scripts/infra-check.sh
 
@@ -396,5 +409,9 @@ case "${1:-}" in
   # Reachable on its own because "make infra" needs the DSN secret to exist
   # before the database Job can read the list of databases off it.
   secrets) ensure_secrets ;;
-  *) echo "usage: system.sh <up|down|status|secrets>"; exit 2 ;;
+  # And this one because "make infra" needs to wait for the same tier system-up
+  # waits for. It used to keep its own list of rollouts, which was missing
+  # MinIO: two answers to "what is the data tier", one of them wrong.
+  wait-infra) wait_infra ;;
+  *) echo "usage: system.sh <up|down|status|secrets|wait-infra>"; exit 2 ;;
 esac

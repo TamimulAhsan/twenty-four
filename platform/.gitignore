@@ -13,6 +13,24 @@
 services/*/core
 services/*/dashboard
 services/*/*d
+# ...and what that pattern must not swallow, which turned out to be most of the
+# repository.
+#
+# "*d" is far looser than it reads. Both "cmd" and "go.mod" end in d, so
+# services/*/*d matched every service's cmd/ directory and every service's
+# go.mod. Ten services' entrypoints and ten go.mod files were sitting untracked:
+# `git add` on one said nothing, `git status` never listed it, and a clone of
+# this repository would not build. It stayed invisible because a file already
+# tracked ignores .gitignore, so the rule only ever bit a file that was new.
+#
+# The distinction that actually separates a compiled binary from source here is
+# the extension: authd, gatewayd, core and dashboard have none, and every file
+# worth committing has one. So re-include anything with a dot, plus the cmd
+# directories themselves — a pattern cannot re-include a file whose parent
+# directory is excluded, which is why cmd/ is negated as a directory rather than
+# by its contents.
+!services/*/cmd/
+!services/*/*.*
 # frontend
 node_modules/
 dist/

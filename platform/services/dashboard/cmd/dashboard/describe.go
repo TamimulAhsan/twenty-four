@@ -36,6 +36,11 @@ type Part struct {
 	// web-pos is brought up as `web-app.sh up pos`.
 	Runner string
 	Target string
+	// Deployment or StatefulSet, which is what `kubectl rollout` has to be
+	// told. Carried rather than assumed: the data tier is not all one kind.
+	// Redis and Kafka Connect are Deployments, and restarting either as a
+	// StatefulSet fails with "not found" on the one button they offer.
+	Kind string
 	// api | web | store. Only used to order the steps, so that a surface goes
 	// down frontend-first and comes back up the same way the Makefile does it.
 	Half string
@@ -76,13 +81,26 @@ var frontends = map[string]struct{ purpose, domain string }{
 		"edge"},
 }
 
-// The data tier. Not ours to rebuild, and their volumes outlive the pod.
+// The data tier: everything in the namespace that is not a service we wrote.
+//
+// None of these images are built from this repository, so none of them offers a
+// rebuild. That is the whole reason they are listed apart rather than falling
+// through to the surface rules, and it is why the map has to stay complete: a
+// workload missing from here is one the monitor describes as "this checkout has
+// nothing that builds it", which is true of the image and misleading about the
+// workload.
+//
+// They are not uniformly stateful and the display should not imply that they
+// are. Postgres, Kafka, ClickHouse and MinIO carry volumes that outlive the
+// pod; Redis is a cache that rebuilds itself, and Connect keeps its offsets in
+// Kafka rather than on disk.
 var infra = map[string]struct{ purpose, domain string }{
 	"postgres":   {"One database per service, all in one server. Volumes survive a restart", "data"},
-	"redis":      {"The gateway's entitlement policy cache, invalidated by events rather than by TTL", "data"},
+	"redis":      {"The gateway's entitlement policy cache, invalidated by events rather than by TTL. Holds no volume: losing it costs one cold lookup per tenant", "data"},
 	"kafka":      {"The event bus, in KRaft mode. Only the outbox relay produces to it", "data"},
 	"clickhouse": {"Analytics store, fed by CDC off Kafka and never written to directly", "data"},
 	"minio":      {"Object storage. Only the Media service writes here", "data"},
+	"connect":    {"The CDC pipeline: Debezium reading Postgres, the sink writing ClickHouse. What it moves is not in its Deployment at all, but in the connector definitions beside it", "data"},
 }
 
 // surfaces is what the repository can build, split by half.
@@ -148,7 +166,7 @@ func loadInventory(path string) map[string]struct{ purpose, domain, phase string
 // upstream image with a volume attached: restarting it is a normal thing to do
 // and rebuilding it is meaningless, so the button is not offered rather than
 // offered and refused. Nothing in kube-system is ours to touch at all.
-func (s *server) describe(ns, deployment, role string) Workload {
+func (s *server) describe(ns, deployment, role, kind string) Workload {
 	switch {
 	case role == "system" || ns == "kube-system":
 		return Workload{
@@ -160,7 +178,7 @@ func (s *server) describe(ns, deployment, role string) Workload {
 	case role == "datastore":
 		w := Workload{
 			Name:    deployment,
-			Parts:   []Part{{Deployment: deployment, Runner: "kubectl", Target: deployment, Half: "store"}},
+			Parts:   []Part{{Deployment: deployment, Runner: "kubectl", Target: deployment, Half: "store", Kind: kind}},
 			Actions: []string{"restart"},
 		}
 		if d, ok := infra[deployment]; ok {
@@ -180,10 +198,10 @@ func (s *server) describe(ns, deployment, role string) Workload {
 	// underneath it. Up, it is ready to render an empty state while the API
 	// is still rolling. This is the order the Makefile uses.
 	if s.surfaces.web[name] {
-		w.Parts = append(w.Parts, Part{Deployment: "web-" + name, Runner: "web-app.sh", Target: name, Half: "web"})
+		w.Parts = append(w.Parts, Part{Deployment: "web-" + name, Runner: "web-app.sh", Target: name, Half: "web", Kind: "Deployment"})
 	}
 	if s.surfaces.api[name] {
-		w.Parts = append(w.Parts, Part{Deployment: name, Runner: "service.sh", Target: name, Half: "api"})
+		w.Parts = append(w.Parts, Part{Deployment: name, Runner: "service.sh", Target: name, Half: "api", Kind: "Deployment"})
 	}
 	if len(w.Parts) == 0 {
 		// Deployed, but nothing on disk can build it. Say so rather than
