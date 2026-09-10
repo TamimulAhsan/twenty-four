@@ -17,6 +17,8 @@ ADMIN_HOST=admin.twentyfour.localhost
 LOG=$(mktemp -t twentyfour-system.XXXXXX)
 trap 'rm -f "$LOG"' EXIT
 
+INVENTORY=deploy/inventory.tsv
+
 # Every service directory that can produce an image, discovered rather than
 # listed: adding a service's Containerfile is enough for system-up to include
 # it. Order is alphabetical and does not matter, because every gRPC client here
@@ -24,8 +26,27 @@ trap 'rm -f "$LOG"' EXIT
 BACKEND=$(for d in services/*/; do
   [ -f "$d/Containerfile" ] && basename "$d"
 done | tr '\n' ' ')
-FRONTEND="unavailable dashboard auth pos bookings admin"
-INFRA_WORKLOADS="statefulset/postgres deployment/redis statefulset/kafka"
+# Which services own a database, discovered the same way: a service with a
+# migrations directory owns tables, and tables need somewhere to live. Auth and
+# RBAC appear here and not in the relay's work, because owning a schema and
+# having an outbox are different questions.
+DATABASES=$(for d in services/*/migrations/; do
+  [ -d "$d" ] && basename "$(dirname "$d")"
+done | sort | tr '\n' ' ')
+
+# Every frontend application, discovered the same way the backends are: a
+# Containerfile is what makes something buildable. unavailable comes first
+# because it is the page every route falls back to, so it has to be up before
+# anything that might fall back to it.
+FRONTEND=$(
+  { echo unavailable
+    for d in $WEB/apps/*/; do
+      n=$(basename "$d")
+      [ "$n" = unavailable ] && continue
+      [ -f "$d/Containerfile" ] && echo "$n"
+    done
+  } | tr '\n' ' '
+)
 
 # Frontend and backend both have an "auth", and they are different images.
 web_image() { echo "web-$1"; }
@@ -85,19 +106,24 @@ ensure_registry() {
 }
 
 ensure_secrets() {
-  # The DSNs and the token key are generated here rather than committed. A key
-  # in git is a key in every clone, and a rotated one would break every session.
-  kubectl -n $NS get secret service-dsn >/dev/null 2>&1 || \
-    kubectl -n $NS create secret generic service-dsn \
-      --from-literal=rbac='postgres://twentyfour:devpassword@postgres:5432/rbac?sslmode=disable' \
-      --from-literal=auth='postgres://twentyfour:devpassword@postgres:5432/auth?sslmode=disable' \
-      --from-literal=catalog='postgres://twentyfour:devpassword@postgres:5432/catalog?sslmode=disable' \
-      --from-literal=inventory='postgres://twentyfour:devpassword@postgres:5432/inventory?sslmode=disable' \
-      --from-literal=staff='postgres://twentyfour:devpassword@postgres:5432/staff?sslmode=disable' \
-      --from-literal=payments='postgres://twentyfour:devpassword@postgres:5432/payments?sslmode=disable' \
-      --from-literal=pos='postgres://twentyfour:devpassword@postgres:5432/pos?sslmode=disable' \
-      --from-literal=tenant='postgres://twentyfour:devpassword@postgres:5432/tenant?sslmode=disable' \
-      --from-literal=provisioning='postgres://twentyfour:devpassword@postgres:5432/provisioning?sslmode=disable'
+  # One DSN per service that owns a schema, and the list is derived rather than
+  # written down: a service with a migrations directory owns tables, and tables
+  # need a database. Reconciled on every run instead of created once, because a
+  # secret that already exists is exactly the case where a service added since
+  # is missing from it, and the failure that produces is a pod that starts,
+  # migrates nothing and reports itself healthy against no database at all.
+  #
+  # Regenerating is safe because these strings are deterministic. The token key
+  # is not: rotating it would end every open session, so that one is created
+  # once and left alone.
+  local args=()
+  local db
+  for db in $DATABASES; do
+    args+=(--from-literal="$db=postgres://twentyfour:devpassword@postgres:5432/$db?sslmode=disable")
+  done
+  kubectl -n $NS create secret generic service-dsn "${args[@]}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
   kubectl -n $NS get secret auth-token-key >/dev/null 2>&1 || \
     kubectl -n $NS create secret generic auth-token-key \
       --from-literal=key="$(head -c32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
@@ -126,8 +152,29 @@ roll() { # roll <deployment>: restart and wait, so we know the new image is live
     && kubectl -n $NS rollout status "deployment/$1" --timeout=180s
 }
 
+# The data tier, discovered rather than listed.
+#
+# Everything deployed in the namespace that is not one of ours: not a backend
+# service in the inventory, and not a frontend bundle. Adding ClickHouse, Kafka
+# Connect and MinIO to the platform is then enough to make them wait on start
+# and appear in the status display, with no list here that goes quietly stale
+# while the pipeline nobody is watching is the one that broke.
+infra_workloads() {
+  kubectl -n $NS get deploy,statefulset -o name 2>/dev/null | while read -r res; do
+    local name=${res##*/}
+    case "$name" in web-*) continue ;; esac
+    # A tab, because the inventory is tab separated and "pos" must not match
+    # a row for "postgres".
+    cut -f1 "$INVENTORY" | grep -qx "$name" && continue
+    echo "$res"
+  # Sorted on the name rather than the kind, so the display does not group by
+  # an accident of whether something happens to need a volume.
+  done | sort -t/ -k2
+}
+
 wait_infra() {
-  for w in $INFRA_WORKLOADS; do
+  local w
+  for w in $(infra_workloads); do
     kubectl -n $NS rollout status "$w" --timeout=240s || return 1
   done
 }
@@ -287,9 +334,10 @@ cmd_status() {
   }
 
   group "data"
-  show postgres statefulset/postgres
-  show redis    deployment/redis
-  show kafka    statefulset/kafka
+  # Discovered, so the CDC pipeline and object storage appear here without
+  # anybody remembering to add them. A pipeline missing from a status display
+  # is a pipeline whose failure looks like everything being fine.
+  for res in $(infra_workloads); do show "${res##*/}" "$res"; done
 
   group "backend"
   # Driven by the inventory rather than by what happens to be built, so a
@@ -345,5 +393,8 @@ case "${1:-}" in
   up)     cmd_up ;;
   down)   cmd_down ;;
   status) cmd_status ;;
-  *) echo "usage: system.sh <up|down|status>"; exit 2 ;;
+  # Reachable on its own because "make infra" needs the DSN secret to exist
+  # before the database Job can read the list of databases off it.
+  secrets) ensure_secrets ;;
+  *) echo "usage: system.sh <up|down|status|secrets>"; exit 2 ;;
 esac

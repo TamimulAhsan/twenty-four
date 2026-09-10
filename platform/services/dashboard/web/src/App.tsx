@@ -57,7 +57,16 @@ export default function App() {
 
   const s = g?.stats
   const allReady = s ? s.PodsReady === s.Pods : false
-  const connected = view ? view.edges.filter((e) => e.kind === 'depends').length : 0
+  // Calls and state, counted together: both are a workload needing something
+  // that is not itself. Bus edges are counted separately, because an event
+  // flow is not a dependency — a consumer keeps working when the thing it
+  // hears from is down, which is the whole reason the outbox exists.
+  const wired = view
+    ? view.edges.filter((e) => e.kind === 'depends' || e.kind === 'stores').length
+    : 0
+  const carried = view
+    ? view.edges.filter((e) => e.kind === 'publishes' || e.kind === 'consumes').length
+    : 0
 
   return (
     <div className="app">
@@ -93,7 +102,8 @@ export default function App() {
                 : 'nothing scaled to zero'} />
         <Tile k="Services" v={s?.Services ?? '—'} sub="stable cluster IPs" />
         <Tile k="Routes" v={s?.Ingresses ?? '—'} sub="Traefik host and path rules" />
-        <Tile k="Dependencies" v={connected} sub="pod → service, from flags and env" />
+        <Tile k="Dependencies" v={wired} sub="calls and databases, from flags and secrets" />
+        <Tile k="Event flows" v={carried} sub="outbox out, topics in" />
         <Tile k="Restarts" v={s?.Restarts ?? '—'}
               tone={(s?.Restarts ?? 0) > 0 ? 'warn' : 'ok'} sub="since pod creation" />
         <Tile k="Problems" v={g?.problems.length ?? '—'}

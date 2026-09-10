@@ -7,7 +7,8 @@ import { money } from '@twentyfour/money'
 import { useTerms } from '@twentyfour/terms'
 import { usePermission } from '@twentyfour/rbac'
 import {
-  RefundActions, RefundCheckbox, RefundConfirmation, RefundHint, useOrderRefund,
+  DEFAULT_PAPER, PrintableReceipt, RefundActions, RefundCheckbox, RefundConfirmation,
+  RefundHint, printReceipt, useOrderRefund,
 } from '@twentyfour/shell'
 import {
   Avatar, Badge, Button, Dialog, Icon, MoneyText, Skeleton, Table, TableScroll,
@@ -104,13 +105,31 @@ export function OrderDetailDialog({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          <Button variant="outline" iconStart="Printer" onClick={() => window.print()}>
-            Print
+          {/*
+            Prints the receipt, not this screen. Without the document below,
+            window.print() sends the dashboard: sidebar, dialog chrome and all,
+            across several sheets of whatever paper is loaded.
+          */}
+          <Button
+            variant="outline"
+            iconStart="Printer"
+            disabled={!order}
+            onClick={() => printReceipt(DEFAULT_PAPER)}
+          >
+            Print {terms.t('receipt', { case: 'lower' })}
           </Button>
           {order && <RefundActions refund={refund} />}
         </>
       }
     >
+      {/*
+        A reprint is the same document the till handed over, on the same roll.
+        A customer who has lost their receipt asks the person in the back
+        office, and what they get back has to be the receipt rather than a
+        picture of a screen that happens to list the same figures.
+      */}
+      {order && <PrintableReceipt order={order} paper={DEFAULT_PAPER} />}
+
       {orderQuery?.isPending ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}

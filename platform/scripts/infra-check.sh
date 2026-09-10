@@ -3,6 +3,8 @@
 set -uo pipefail
 NS=twentyfour
 fail=0
+MINIO_USER=$(kubectl -n $NS get secret minio -o jsonpath='{.data.MINIO_ROOT_USER}' 2>/dev/null | base64 -d)
+MINIO_PASS=$(kubectl -n $NS get secret minio -o jsonpath='{.data.MINIO_ROOT_PASSWORD}' 2>/dev/null | base64 -d)
 GREEN=$'\033[32m'; RED=$'\033[31m'; RESET=$'\033[0m'
 ok()  { printf '  %sok%s    %-10s %s\n' "$GREEN" "$RESET" "$1" "$2"; }
 bad() { printf '  %sFAIL%s  %-10s %s\n' "$RED" "$RESET" "$1" "$2"; fail=1; }
@@ -37,6 +39,47 @@ if out=$(kubectl -n $NS exec statefulset/kafka -- \
   fi
 else
   bad kafka "$(printf '%s' "$out" | tail -1 | cut -c1-70)"
+fi
+
+if out=$(kubectl -n $NS exec statefulset/clickhouse -- \
+      clickhouse-client --user twentyfour --password devpassword \
+      --database analytics -q 'SELECT count() FROM system.tables WHERE database = current_database()' 2>&1); then
+  ok clickhouse "$(printf '%s' "$out" | tr -d '\r') projection tables"
+else
+  bad clickhouse "$(printf '%s' "$out" | tail -1 | cut -c1-70)"
+fi
+
+# A connector that is merely registered is not a connector that is running, and
+# a Connect worker reports the two separately: a task can be FAILED under a
+# connector that says RUNNING, which is how a pipeline stops moving without
+# anything looking wrong.
+if out=$(kubectl -n $NS exec deployment/connect -- \
+      curl -sf http://localhost:8083/connectors?expand=status 2>&1); then
+  states=$(printf '%s' "$out" | tr ',' '\n' | grep -o '"state":"[A-Z]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' ')
+  registered=$(printf '%s' "$out" | grep -o '"name":"[^"]*"' | wc -l)
+  case "$states" in
+    "RUNNING ") ok connect "$registered connectors and tasks, all running" ;;
+    "")         bad connect "no connectors registered" ;;
+    *)          bad connect "states: $states" ;;
+  esac
+else
+  bad connect "$(printf '%s' "$out" | tail -1 | cut -c1-70)"
+fi
+
+# A bucket that exists is the only thing worth checking here: Media creates it
+# on start, so its absence means Media never came up or never had credentials,
+# and both of those are invisible until somebody tries to upload a photograph.
+if out=$(kubectl -n $NS exec statefulset/minio -- \
+      mc --config-dir /tmp/mc alias set local http://localhost:9000 \
+      "$MINIO_USER" "$MINIO_PASS" 2>&1 >/dev/null &&
+      kubectl -n $NS exec statefulset/minio -- \
+      mc --config-dir /tmp/mc ls local 2>&1); then
+  buckets=$(printf '%s' "$out" | grep -c . || true)
+  [ "$buckets" -gt 0 ] \
+    && ok minio "$buckets bucket(s)" \
+    || bad minio "no buckets: Media has not started or cannot authenticate"
+else
+  bad minio "$(printf '%s' "$out" | tail -1 | cut -c1-70)"
 fi
 
 echo

@@ -1,0 +1,181 @@
+# The CDC pipeline: PostgreSQL -> Debezium -> Kafka -> sink -> ClickHouse.
+#
+# Analytics reads ClickHouse and never the operational stores, because a
+# reporting query against the database that is taking payments is how a busy
+# Saturday becomes an outage. This is how the rows get there, and it is the
+# only way they get there: no service writes to both.
+#
+# Note what this does NOT carry. The relay's domain events (order.placed and
+# the rest) are on the same bus and are not read here. An event says what
+# happened; analytics asks what is true, over rows it can join and re-aggregate
+# when a question changes. Rebuilding the tables from the event history would
+# mean every query depending on every event ever having been shaped correctly.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: connect, namespace: twentyfour }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: connect } }
+  template:
+    metadata: { labels: { app: connect } }
+    spec:
+      containers:
+        - name: connect
+          image: localhost:5000/twentyfour/connect:dev
+          ports: [{ containerPort: 8083, name: rest }]
+          env:
+            - { name: BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: GROUP_ID, value: "twentyfour-connect" }
+            - { name: CONFIG_STORAGE_TOPIC, value: "connect.configs" }
+            - { name: OFFSET_STORAGE_TOPIC, value: "connect.offsets" }
+            - { name: STATUS_STORAGE_TOPIC, value: "connect.status" }
+            # One broker, so anything higher leaves the topics uncreatable and
+            # Connect looping on startup with nothing that says why.
+            - { name: CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: CONNECT_STATUS_STORAGE_REPLICATION_FACTOR, value: "1" }
+            # Schemas stay on. The sink has to know that a column is a
+            # timestamp rather than a large integer, and schemaless JSON makes
+            # every one of those a guess made in the wrong place.
+            - { name: KEY_CONVERTER, value: "org.apache.kafka.connect.json.JsonConverter" }
+            - { name: VALUE_CONVERTER, value: "org.apache.kafka.connect.json.JsonConverter" }
+            - { name: CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE, value: "true" }
+            - { name: CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE, value: "true" }
+            - { name: KAFKA_HEAP_OPTS, value: "-Xms256m -Xmx768m" }
+          resources:
+            requests: { memory: 512Mi, cpu: 100m }
+            limits: { memory: 1500Mi }
+          readinessProbe:
+            httpGet: { path: /connectors, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+---
+apiVersion: v1
+kind: Service
+metadata: { name: connect, namespace: twentyfour }
+spec:
+  selector: { app: connect }
+  ports: [{ port: 8083, targetPort: 8083 }]
+---
+# The connectors, as data.
+#
+# One file per connector, registered by the Job below with PUT rather than
+# POST, so re-running it updates what is there instead of failing on a name
+# that already exists. Adding a table to the pipeline is an edit here and a
+# re-run, not a new deployment.
+#
+# The passwords are placeholders. They are filled in from the same Secrets the
+# services use, at registration time, so a connector definition can be read by
+# anybody without handing them the database.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: connect-connectors, namespace: twentyfour }
+data:
+  pos-source.json: |
+    {
+      "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+      "database.hostname": "postgres",
+      "database.port": "5432",
+      "database.user": "twentyfour",
+      "database.password": "__DB_PASSWORD__",
+      "database.dbname": "pos",
+      "topic.prefix": "cdc.pos",
+      "plugin.name": "pgoutput",
+      "slot.name": "dbz_pos",
+      "publication.name": "dbz_pos",
+      "table.include.list": "public.orders,public.order_lines,public.tenders",
+      "time.precision.mode": "connect",
+      "tombstones.on.delete": "false",
+      "topic.creation.default.replication.factor": "1",
+      "topic.creation.default.partitions": "1",
+      "transforms": "unwrap",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.add.fields": "op,lsn",
+      "transforms.unwrap.delete.tombstone.handling.mode": "rewrite"
+    }
+  catalog-source.json: |
+    {
+      "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+      "database.hostname": "postgres",
+      "database.port": "5432",
+      "database.user": "twentyfour",
+      "database.password": "__DB_PASSWORD__",
+      "database.dbname": "catalog",
+      "topic.prefix": "cdc.catalog",
+      "plugin.name": "pgoutput",
+      "slot.name": "dbz_catalog",
+      "publication.name": "dbz_catalog",
+      "table.include.list": "public.items,public.categories",
+      "time.precision.mode": "connect",
+      "tombstones.on.delete": "false",
+      "topic.creation.default.replication.factor": "1",
+      "topic.creation.default.partitions": "1",
+      "transforms": "unwrap",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.add.fields": "op,lsn",
+      "transforms.unwrap.delete.tombstone.handling.mode": "rewrite"
+    }
+  clickhouse-sink.json: |
+    {
+      "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+      "hostname": "clickhouse",
+      "port": "8123",
+      "ssl": "false",
+      "database": "analytics",
+      "username": "twentyfour",
+      "password": "__CH_PASSWORD__",
+      "topics.regex": "cdc\\..*",
+      "topic2TableMap": "cdc.pos.public.orders=orders,cdc.pos.public.order_lines=order_lines,cdc.pos.public.tenders=tenders,cdc.catalog.public.items=catalog_items,cdc.catalog.public.categories=catalog_categories",
+      "tasks.max": "1",
+      "errors.tolerance": "none",
+      "exactlyOnce": "false"
+    }
+---
+# Registering them. A Job rather than an init container, because the connectors
+# outlive any one Connect pod: they are stored in Kafka, and a restarted worker
+# picks up what is already registered.
+apiVersion: batch/v1
+kind: Job
+metadata: { name: register-connectors, namespace: twentyfour }
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: register
+          image: docker.io/curlimages/curl:8.11.1
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres, key: POSTGRES_PASSWORD } }
+            - name: CH_PASSWORD
+              valueFrom: { secretKeyRef: { name: clickhouse, key: CLICKHOUSE_PASSWORD } }
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until curl -sf http://connect:8083/connectors > /dev/null; do
+                echo "waiting for connect"; sleep 5
+              done
+              # Sources first. The sink starting against a topic that does not
+              # exist yet is survivable, but the reverse reads as a connector
+              # that failed rather than one that has nothing to do yet.
+              for f in pos-source catalog-source clickhouse-sink; do
+                sed -e "s|__DB_PASSWORD__|$DB_PASSWORD|" \
+                    -e "s|__CH_PASSWORD__|$CH_PASSWORD|" \
+                    "/connectors/$f.json" > "/tmp/$f.json"
+                code=$(curl -s -o /tmp/out -w '%{http_code}' -X PUT \
+                  -H 'Content-Type: application/json' \
+                  --data-binary "@/tmp/$f.json" \
+                  "http://connect:8083/connectors/$f/config")
+                echo "$f -> $code"
+                case "$code" in 2*) ;; *) cat /tmp/out; exit 1 ;; esac
+              done
+          volumeMounts:
+            - { name: connectors, mountPath: /connectors }
+      volumes:
+        - name: connectors
+          configMap: { name: connect-connectors }

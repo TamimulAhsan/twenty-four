@@ -82,11 +82,9 @@ func (g *gateway) inviteStaff(w http.ResponseWriter, r *http.Request, c caller) 
 		g.failGRPC(w, r, err)
 		return
 	}
-	// There is no Notification service yet, so the link is logged rather than
-	// sent. It is logged at the gateway as well as at Staff because this is
-	// where someone testing the flow is already looking.
 	if tok := resp.GetInviteToken(); tok != "" {
-		logInviteToken(r, resp.GetMember().GetEmail(), tok)
+		g.sendInvitation(g.downstream(r, c), r,
+			resp.GetMember().GetEmail(), resp.GetMember().GetName(), tok, g.acceptURL(tok))
 	}
 	httpx.JSON(w, r, http.StatusCreated, memberJSON(resp.GetMember(), c.UserID))
 }
@@ -134,7 +132,8 @@ func (g *gateway) reissueInvitation(w http.ResponseWriter, r *http.Request, c ca
 		return
 	}
 	if tok := resp.GetInviteToken(); tok != "" {
-		logInviteToken(r, resp.GetMember().GetEmail(), tok)
+		g.sendInvitation(g.downstream(r, c), r,
+			resp.GetMember().GetEmail(), resp.GetMember().GetName(), tok, g.acceptURL(tok))
 	}
 	httpx.JSON(w, r, http.StatusOK, memberJSON(resp.GetMember(), c.UserID))
 }

@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -217,4 +219,131 @@ func workloadName(pod string, labels map[string]string) string {
 		return strings.Join(parts[:len(parts)-2], "-")
 	}
 	return pod
+}
+
+// --- the event flow ---------------------------------------------------------
+//
+// Nothing in the cluster declares which service publishes what, or which
+// consumes it. A Deployment's flags say "-brokers=kafka:9092" and stop there,
+// so the topology drew every service that touches the bus as depending on
+// Kafka in the same undifferentiated way. That made the most interesting thing
+// about this system invisible: you could not see from the picture that a sale
+// rung up at the till reaches the ledger.
+//
+// So it is read from the source, at startup, the same way the surfaces and the
+// inventory are. A service publishes the topics it names in an outbox event,
+// and consumes the topics it names when it joins the bus. Both are literals in
+// Go, which makes this a scan rather than a list somebody has to maintain, and
+// a service whose topics are computed rather than written simply shows none:
+// wrong in the direction of saying less, not of inventing an arrow.
+
+// eventing is what one service does with the bus.
+type eventing struct {
+	Publishes []string
+	Consumes  []string
+	// True when the consumer subscribes by pattern rather than by name, which
+	// only the audit trail does. Listing its topics would be listing every
+	// topic in the platform, which is both wrong and useless as a label.
+	ConsumesEverything bool
+}
+
+var (
+	// Both idioms a service uses to name a topic: inline in the event, and
+	// assigned to a variable first, which is what a handler does when the
+	// topic depends on which state a thing moved to.
+	//
+	//   outbox.Event{ ... Topic: "order.placed" ... }
+	//   topic = "booking.cancelled"
+	topicLiteral = regexp.MustCompile(`(?:Topic:|topic\s*=)\s*"([a-z][a-z_]*\.[a-z][a-z_]*)"`)
+	// bus.NewConsumer(brokers, "ledger", []string{"order.placed", ...}, h)
+	consumerCall = regexp.MustCompile(`bus\.New(Regex)?Consumer\(`)
+	quoted       = regexp.MustCompile(`"([^"]*)"`)
+)
+
+// loadEventing scans each service's Go source for what it puts on the bus and
+// what it takes off.
+func loadEventing(root string) map[string]eventing {
+	out := map[string]eventing{}
+	dirs, _ := filepath.Glob(filepath.Join(root, "services", "*"))
+	for _, dir := range dirs {
+		name := filepath.Base(dir)
+		// web holds the frontends, and dashboard is this monitor. Skipping the
+		// monitor is not tidiness: it is the one directory whose source writes
+		// *about* the bus rather than to it, so scanning it finds the topic
+		// names in these very comments and reports the monitor as publishing
+		// sales.
+		if name == "web" || name == "dashboard" {
+			continue
+		}
+		// A service publishes only if it owns a schema, because publishing here
+		// means writing to an outbox and an outbox is a table. The gateway and
+		// the relay name topics in their source and own no database: the
+		// gateway because it passes them through, the relay because it carries
+		// everybody's.
+		owns := dirExists(filepath.Join(dir, "migrations"))
+		var e eventing
+		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			text := string(body)
+			if owns {
+				for _, m := range topicLiteral.FindAllStringSubmatch(text, -1) {
+					e.Publishes = appendOnce(e.Publishes, m[1])
+				}
+			}
+			for _, loc := range consumerCall.FindAllStringIndex(text, -1) {
+				regex := strings.Contains(text[loc[0]:loc[1]], "Regex")
+				// The call's arguments, bounded rather than parsed. A
+				// consumer's topic list is a literal slice a few characters
+				// after the call, and a Go parser here would be a lot of
+				// machinery for one regex worth of answer.
+				tail := text[loc[1]:min(loc[1]+400, len(text))]
+				for _, q := range quoted.FindAllStringSubmatch(tail, -1) {
+					value := q[1]
+					if regex {
+						e.ConsumesEverything = true
+						continue
+					}
+					if topicName.MatchString(value) {
+						e.Consumes = appendOnce(e.Consumes, value)
+					}
+				}
+			}
+			return nil
+		})
+		// The relay is the only producer, and it produces everybody's events
+		// rather than its own. Its own source names no topics, which is
+		// correct, and its edge to Kafka is drawn from the fact that it is the
+		// relay rather than from a scan.
+		if len(e.Publishes) > 0 || len(e.Consumes) > 0 || e.ConsumesEverything {
+			sort.Strings(e.Publishes)
+			sort.Strings(e.Consumes)
+			out[name] = e
+		}
+	}
+	return out
+}
+
+// topicName is the shape of an announcement: subject.verb, one dot. It is the
+// same rule the audit trail matches on, so a string that is not a topic, a
+// format verb or a log key, does not become an arrow.
+var topicName = regexp.MustCompile(`^[a-z][a-z_]*\.[a-z][a-z_]*$`)
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func appendOnce(list []string, v string) []string {
+	for _, existing := range list {
+		if existing == v {
+			return list
+		}
+	}
+	return append(list, v)
 }

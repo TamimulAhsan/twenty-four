@@ -28,6 +28,16 @@ spec:
             - "-pos=pos.twentyfour.svc.cluster.local:9108"
             - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
             - "-provisioning=provisioning.twentyfour.svc.cluster.local:9110"
+            - "-analytics=analytics.twentyfour.svc.cluster.local:9111"
+            - "-notification=notification.twentyfour.svc.cluster.local:9112"
+            - "-audit=audit.twentyfour.svc.cluster.local:9114"
+            - "-media=media.twentyfour.svc.cluster.local:9115"
+            - "-ledger=ledger.twentyfour.svc.cluster.local:9118"
+            - "-support=support.twentyfour.svc.cluster.local:9117"
+            - "-invoicing=invoicing.twentyfour.svc.cluster.local:9119"
+            - "-bookings=bookings.twentyfour.svc.cluster.local:9120"
+            - "-kitchen=kitchen.twentyfour.svc.cluster.local:9121"
+            - "-currency=HUF"
             # Local development is plain HTTP on a single host, so the cookie is
             # host-only and not Secure. Both must change before this is exposed
             # anywhere real: a session cookie sent over HTTP is a session anyone

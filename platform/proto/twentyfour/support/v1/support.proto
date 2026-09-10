@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package twentyfour.support.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SupportService is impersonation: a specialist seeing what a merchant sees,
+// time limited and recorded.
+//
+// The merchant is not asked first. That is a product decision and it is worth
+// stating rather than leaving to be discovered from the code: support happens
+// when a merchant has rung up with a broken till, and a flow that cannot begin
+// until that same merchant stops talking and clicks a button in a dashboard
+// they may not have open is a flow that gets worked around.
+//
+// What remains, and what each is for:
+//
+// It ends by itself. Every session has an expiry checked on every use, so the
+// failure mode is a console tab that stops working rather than one that never
+// stops.
+//
+// It is read-only unless somebody asked otherwise, and asking is a separate
+// argument at the point of starting rather than a default.
+//
+// It names a person. Never a shared account: "somebody at TwentyFour" is not
+// an answer to who read my books.
+//
+// It is recorded. Starting and ending are announced, the audit trail keeps
+// them like anything else, and the merchant can read that trail and end a live
+// session whenever they look.
+service SupportService {
+  // A specialist begins looking. Admin plane only, and the reason is required
+  // because a session with no reason is one nobody can review afterwards.
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+  // The business ends it. Kept even though nothing prompts them to: it costs
+  // nothing, and "I can stop this" is worth more than a notification nobody
+  // reads.
+  rpc RevokeAccess(RevokeAccessRequest) returns (RevokeAccessResponse);
+  rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
+  // Asked on every impersonated request. It is the only thing standing between
+  // a stale console tab and somebody else's data, so it checks expiry rather
+  // than trusting that a session was ended.
+  rpc CheckSession(CheckSessionRequest) returns (CheckSessionResponse);
+
+  // What was asked, granted, refused and looked at. Readable by the merchant,
+  // which is the point: a trail only the vendor can read is not a safeguard.
+  rpc ListRequests(ListRequestsRequest) returns (ListRequestsResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+}
+
+enum RequestState {
+  REQUEST_STATE_UNSPECIFIED = 0;
+  // Live. A grant is created in this state, because nobody is asked.
+  REQUEST_STATE_APPROVED = 2;
+  // The merchant took it back. Distinct from expired: one was ended by a
+  // person and the other ran out, and the trail should say which.
+  REQUEST_STATE_REVOKED = 4;
+  REQUEST_STATE_EXPIRED = 5;
+  reserved 1, 3;
+  reserved "REQUEST_STATE_PENDING", "REQUEST_STATE_REFUSED";
+}
+
+// What a grant permits. Two values rather than a permission set, because a
+// merchant approving a request has to understand what they are approving, and
+// "read and write catalog, read pos, read invoicing" is not a thing anybody can
+// consent to meaningfully.
+enum Scope {
+  SCOPE_UNSPECIFIED = 0;
+  // Look, and change nothing. The default, and what almost every request is.
+  SCOPE_READ_ONLY = 1;
+  // Act as they would. Asked for separately, approved separately, and worth a
+  // different sentence on the screen where it is approved.
+  SCOPE_ACT_ON_BEHALF = 2;
+}
+
+message AccessRequest {
+  string id = 1;
+  // The specialist. Their own user id on the admin plane, never a shared one:
+  // "somebody at TwentyFour" is not an answer to who looked.
+  string specialist_id = 2;
+  string specialist_name = 3;
+  // Written by the specialist, shown to the merchant. Required, because a
+  // request with no reason is a request nobody can judge.
+  string reason = 4;
+  Scope scope = 5;
+  RequestState state = 6;
+
+  reserved 7, 8, 9;
+
+  // When the grant stops working. Set at approval, and the reason a forgotten
+  // session is a session that expires rather than one that runs forever.
+  google.protobuf.Timestamp expires_at = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message Session {
+  string id = 1;
+  string request_id = 2;
+  string specialist_id = 3;
+  string specialist_name = 4;
+  Scope scope = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp ended_at = 8;
+  bool active = 9;
+}
+
+message RevokeAccessRequest {
+  string id = 1;
+}
+message RevokeAccessResponse {
+  AccessRequest request = 1;
+  // How many live sessions this ended, so the screen can say "and stopped one
+  // that was open" rather than leaving it to be guessed at.
+  int32 sessions_ended = 2;
+}
+
+message StartSessionRequest {
+  // Which business. Named explicitly because this call is made on the admin
+  // plane, where the caller's own tenant is not the subject.
+  string tenant_id = 1;
+  // Required. A session with no reason is one nobody can review afterwards.
+  string reason = 2;
+  Scope scope = 3;
+  // How long. Bounded by the service: a request for a month is a request to
+  // stop being temporary.
+  int64 requested_seconds = 4;
+  // Who is looking, in words, resolved by whoever authenticated them. This
+  // service holds no names, and the trail should show the name they had when
+  // they looked rather than the one they have now.
+  string specialist_name = 5;
+}
+message StartSessionResponse {
+  Session session = 1;
+  AccessRequest grant = 2;
+}
+
+message EndSessionRequest {
+  string id = 1;
+}
+message EndSessionResponse {
+  Session session = 1;
+}
+
+message CheckSessionRequest {
+  string id = 1;
+}
+message CheckSessionResponse {
+  bool valid = 1;
+  Session session = 2;
+  // Why not, when it is not. The console shows this rather than a blank screen.
+  string reason = 3;
+}
+
+message ListRequestsRequest {
+  RequestState state = 1;
+  int32 page_size = 2;
+}
+message ListRequestsResponse {
+  repeated AccessRequest requests = 1;
+}
+
+message ListSessionsRequest {
+  bool active_only = 1;
+  int32 page_size = 2;
+}
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}

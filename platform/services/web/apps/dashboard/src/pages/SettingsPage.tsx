@@ -5,14 +5,18 @@ import { BusinessTab } from './settings/BusinessTab'
 import { TaxTab } from './settings/TaxTab'
 import { WordsTab } from './settings/WordsTab'
 import { NotificationsTab } from './settings/NotificationsTab'
+import { AccessTab } from './settings/AccessTab'
 
-type Tab = 'business' | 'tax' | 'words' | 'notifications'
+type Tab = 'business' | 'tax' | 'words' | 'notifications' | 'access'
 
 const TABS: Array<{ id: Tab; label: string; permission: 'settings.business' | 'settings.tax' }> = [
   { id: 'business', label: 'Business', permission: 'settings.business' },
   { id: 'tax', label: 'Tax', permission: 'settings.tax' },
   { id: 'words', label: 'Words', permission: 'settings.business' },
   { id: 'notifications', label: 'Notifications', permission: 'settings.business' },
+  // Readable by anyone who can open settings, because who has looked at the
+  // books is not a thing to keep from the people whose books they are.
+  { id: 'access', label: 'Account access', permission: 'settings.business' },
 ]
 
 export function SettingsPage() {
@@ -56,6 +60,7 @@ export function SettingsPage() {
       {tab === 'tax' && <TaxTab />}
       {tab === 'words' && <WordsTab />}
       {tab === 'notifications' && <NotificationsTab />}
+      {tab === 'access' && <AccessTab />}
     </div>
   )
 }

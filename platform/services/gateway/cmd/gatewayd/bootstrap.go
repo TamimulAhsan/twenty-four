@@ -38,12 +38,18 @@ type openingHours struct {
 }
 
 type profileBody struct {
-	TenantID         string         `json:"tenantId"`
-	Name             string         `json:"name"`
-	Industry         string         `json:"industry"`
-	Locale           string         `json:"locale"`
-	Currency         string         `json:"currency"`
-	Timezone         string         `json:"timezone"`
+	TenantID string `json:"tenantId"`
+	Name     string `json:"name"`
+	Industry string `json:"industry"`
+	Locale   string `json:"locale"`
+	Currency string `json:"currency"`
+	Timezone string `json:"timezone"`
+	// The three a receipt cannot legally be printed without. Tenant has held
+	// them since it was written; bootstrap simply never passed them on, so the
+	// till printed a document with no issuer on the face of it.
+	Address          string         `json:"address"`
+	City             string         `json:"city"`
+	TaxID            string         `json:"taxId"`
 	TaxRates         []taxRate      `json:"taxRates"`
 	OpeningHours     []openingHours `json:"openingHours"`
 	PricesIncludeTax bool           `json:"pricesIncludeTax"`
@@ -116,6 +122,7 @@ func (g *gateway) bootstrap(w http.ResponseWriter, r *http.Request, c caller) {
 	body.Profile = profileBody{
 		TenantID: p.GetTenantId(), Name: p.GetName(), Industry: p.GetIndustry(),
 		Locale: p.GetLocale(), Currency: p.GetCurrency(), Timezone: p.GetTimezone(),
+		Address: p.GetAddress(), City: p.GetCity(), TaxID: p.GetTaxId(),
 		PricesIncludeTax: p.GetPricesIncludeTax(),
 		TaxRates:         taxRatesOf(p), OpeningHours: hoursOf(p),
 	}

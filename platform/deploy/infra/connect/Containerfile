@@ -1,0 +1,20 @@
+# Kafka Connect carrying both halves of the pipeline: Debezium reading
+# PostgreSQL's write-ahead log, and the ClickHouse sink writing what it read.
+#
+# Built rather than pulled because no published image holds both, and the
+# alternative to one runtime holding both is two Connect clusters on a machine
+# that is already running Kafka, Postgres and ClickHouse.
+#
+# Debezium's image is the base rather than the other way round: it already
+# carries the source connector, its dependencies and the Connect entrypoint
+# that reads its configuration from the environment.
+FROM docker.io/library/alpine:3.21 AS plugins
+ARG CLICKHOUSE_SINK_VERSION=v1.5.0
+RUN apk add --no-cache curl unzip \
+ && curl -fsSL -o /tmp/sink.zip \
+      "https://github.com/ClickHouse/clickhouse-kafka-connect/releases/download/${CLICKHOUSE_SINK_VERSION}/clickhouse-kafka-connect-${CLICKHOUSE_SINK_VERSION}.zip" \
+ && mkdir -p /plugins \
+ && unzip -q /tmp/sink.zip -d /plugins
+
+FROM quay.io/debezium/connect:3.6.2.Final
+COPY --from=plugins /plugins/ /kafka/connect/

@@ -24,6 +24,7 @@ Reference: [`system-architecture.html`](system-architecture.html) for the design
 | POS & Orders | Real. Sales, tabs, refunds, voids, takings, day close, the floor |
 | Tenant | Real. Profile, entitlement, the module registry, tiers and 43 industry profiles |
 | Provisioning | Real. The saga, the 24-hour checklist, and the SLA timer |
+| Analytics | Real. Reporting figures over ClickHouse, fed by CDC off Postgres |
 | Everything else | A gateway stub returning an empty collection |
 
 The frontend already calls 34 endpoints. Every one that is not `/auth/*`,
@@ -50,14 +51,14 @@ Nine services, grouped by the domains in the architecture.
 
 | Service | Owns | Note |
 |---|---|---|
-| **Payments** | Intents, authorise, capture, refund | Swapped per market. A development provider implements the contract; no real processor in this pass |
+| **Payments** | Intents, authorise, capture, cancel, refund | Swapped per market. A development provider implements the contract; no real processor in this pass |
 | **Invoicing & Billing** | Customer documents, numbering, tax lines, and the tenant's own subscription charging | Swapped per market. One numbering format for both markets, see Decisions. **Deferred** |
 
 ### Platform
 
 | Service | Owns | Note |
 |---|---|---|
-| **Reporting & Analytics** | Dashboard figures and charts | Reads ClickHouse |
+| **Reporting & Analytics** | Dashboard figures and charts | Reads ClickHouse. Owns no data, writes nothing, has no database of its own |
 | **Outbox Relay** | Drains every service's outbox into Kafka | Internal, no API |
 
 **Not built:** no dashboard service. The dashboard is a frontend; the gateway
@@ -179,10 +180,15 @@ an outage.
 PostgreSQL -> Debezium -> Kafka -> Kafka Connect -> ClickHouse -> Analytics API
 ```
 
-Three new workloads per market: Debezium, Kafka Connect and ClickHouse. That
-cost is why the architecture insists ClickHouse is fed only by CDC and never
-double-written by services: a service writing to both stores drifts the first
-time one write succeeds and the other does not.
+Two new workloads per market rather than three, because Debezium and the
+ClickHouse sink are both Kafka Connect plugins and run in one Connect worker.
+The image is built here: no published one carries both, and the alternative to
+one runtime holding both is two Connect clusters on a machine already running
+Kafka, Postgres and ClickHouse.
+
+That cost is why the architecture insists ClickHouse is fed only by CDC and
+never double-written by services: a service writing to both stores drifts the
+first time one write succeeds and the other does not.
 
 ---
 
@@ -338,11 +344,38 @@ idempotency key finds the payment again on a retry.
 paid half in cash and was then declined on the card must not be left having paid
 half. The sale did not happen, so neither did any part of the payment.
 
-**The till blocks while a card is approved.** That is what a card terminal
-actually feels like: press Charge, the machine beeps, everybody waits. Returning
-early with "pending" would mean the screen has to poll and the sale sits in a
-state nobody can explain to a customer at the counter. POS bounds the wait
-itself at three minutes.
+**The till waits for a person, and waits where the person is.** Pressing Charge
+on a card terminal makes everybody wait, and a till that has never been made to
+wait will not cope with one. The first version of this got the waiting right and
+the place wrong: POS held the request open for up to three minutes polling for
+an approval, while nothing had told the browser where the approval page was. The
+only thing that opened it was a shell watcher in a terminal nobody was running,
+so the button spun until the request was abandoned. A service that waits on an
+action it never asks anyone to perform is waiting for nothing.
+
+`PlaceOrder` and `SettleParked` now answer with `awaiting`, carrying the
+payment, its hosted page and the amount, which the gateway renders as `202` and
+`status: "awaiting_payment"`. The till opens the page, shows the amount with a
+way to give up, and asks for the sale again once the payment settles. The
+concern the first version raised was real, and it is answered rather than
+dismissed: a screen that polls needs a state somebody can explain at the
+counter, and "waiting for the customer" is a state the cashier can point at.
+
+**Asking again is safe because the checkout ID is derived, not minted.** It is a
+UUIDv5 of the tenant and the till's idempotency key, so every attempt at one
+sale reaches the same payment intent keys and finds the payment that already
+exists. Minting it per attempt, which is what the blocking version did, meant a
+retry created a second intent: the bug that left two pending payments on the
+approval desk from one sale, and the reason this is a property of the ID rather
+than a rule for callers to remember.
+
+**Giving up calls the payment off rather than refunding it.** `AbandonCheckout`
+works from what Payments holds, keyed by the checkout, because the case it
+exists for is a checkout that was never written down. Pending payments are
+cancelled and captured ones refunded, which is why `Payments.Cancel` was added:
+crediting a debit that never happened puts a lie in the books. Abandoning a
+checkout that already became a sale is refused, since that is a void or a
+refund.
 
 **Money goes back the way it came.** A refund is split across the payments that
 took it, in proportion. Refunding it all to the card because that is easier
@@ -414,8 +447,12 @@ Two bugs the verification caught:
   exist is not a failure, it is a request that was never going to work. The
   gateway now resolves the tier and trade before creating anything.
 - **The password rule disagreed with the form.** The client hardcoded ten
-  characters; Auth enforces twelve by default and four in development. Auth now
-  serves the number it actually enforces at `GET /api/auth/policy`.
+  characters; Auth enforces twelve by default and four in development, so the
+  form was wrong in both directions depending on the deployment. Auth serves the
+  number it actually enforces at `GET /api/auth/policy`, and the form asks for
+  it: the constant that remains is only what the field shows before the answer
+  arrives, deliberately lower than the default, because a fallback that is too
+  high refuses a password the deployment would have taken and nobody finds out.
 
 ### Deferred: Invoicing & Billing, Bookings
 
@@ -433,10 +470,80 @@ issuing a receipt, so if that half grows a life of its own it splits back out.
 The seam to keep clean is that nothing outside the service knows which kind of
 document it asked for.
 
-### 6. Analytics and the CDC pipeline
-ClickHouse, Debezium, Kafka Connect, and the reporting API over them.
+### 6. Analytics and the CDC pipeline: done
 
-*Done when: the Financials page shows figures derived from real orders.*
+ClickHouse, Debezium, Kafka Connect and the reporting API over them. Four new
+workloads and one new service, and no service that already existed had to write
+a line of code differently.
+
+*Verified: a cash sale rung up through the till appeared in the reporting API
+two seconds later; voiding it took it back out of the totals four seconds after
+that, without counting it as a refund; a period with an uncosted item reports no
+margin while a quiet day reports a margin of zero; and revenue by method splits
+a sale settled half in cash and half on a card across both.*
+
+**Nothing publishes to ClickHouse.** Debezium reads PostgreSQL's write-ahead log
+and a sink connector writes what it read. That is the difference between a
+projection and a second copy: no service knows analytics exists, none of them
+grew a second write, and none of them can drift from it by failing one of two
+writes. Turning it on was a Postgres restart with `wal_level=logical`, a
+connector definition per database, and nothing else.
+
+**The events on the same bus are not what feeds it.** The relay is already
+publishing `order.placed`, and using those would have looked like reuse. An
+event says what happened; analytics asks what is true, over rows it can join and
+re-aggregate when the question changes. Deriving the tables from the event
+history would make every future query depend on every past event having been
+shaped correctly, which is a bet on a schema nobody was designing for this.
+
+Four things settled here:
+
+**A projection is behind, and the screen says so.** Every answer carries the
+newest change it includes, and the Financials page renders it as one line. A
+merchant who can see a chart and a till at the same time will notice they
+disagree; being told why costs a sentence, and not being told costs the
+credibility of the whole screen. It is a high-water mark rather than a lag in
+seconds, because a lag cannot be measured from the data: a shop that has sold
+nothing since lunch is not four hours behind, it is up to date and quiet.
+
+**Absent is not zero, and the type system now carries the difference.** Cost and
+margin are unset when any line in the period has no recorded cost. An item
+nobody costed has no margin; reporting one of a hundred percent is a number a
+merchant would act on. The gateway needed a second money serialiser to say it:
+the existing one folds a zero into null, which is right for a line's discount
+and wrong for every figure here.
+
+**Revenue by method reads the tenders, not the order.** A sale settled half in
+cash and half on a card is half of each. The browser was giving the whole sale
+to the first tender, which is how a drawer stops reconciling. Moving the
+question to where the rows are made the correct answer the easy one.
+
+**The figures moved off the browser.** The dashboard was fetching every order in
+the period and adding them up on the client: correct at eight sales a day and
+hopeless at eight hundred, because the cost of the screen grew with the size of
+the business using it. The sales table still reads orders, because listing sales
+is not an aggregate.
+
+Two PostgreSQL and ClickHouse traps worth recording:
+
+- **A `ReplacingMergeTree` version column cannot be nullable.** The CDC metadata
+  arrives as optional fields, so the obvious declaration is refused at table
+  creation. Making them non-nullable is also the better answer: Debezium sets
+  all three on every record including snapshot rows, so a null arriving there
+  means the connector was reconfigured out from under the schema, and an insert
+  that fails says so where a nullable column would swallow it and quietly stop
+  de-duplicating.
+- **Deletes arrive as rows, not as absences.** Every query filters on the
+  deleted marker. This is not a corner case: a parked tab that is edited has its
+  lines replaced, so lines that lingered would double the revenue of every tab
+  anybody corrected.
+
+**Not in the projection yet:** payments, refunds, inventory and staff. Each is a
+table list in one connector definition and a table in one schema file, which is
+the point of the shape. Staff is the one that needs a decision rather than a
+line of config: splitting revenue by who rang it up needs a person's name, names
+live in Auth, and putting identity into the reporting store is a question about
+what analytics is allowed to hold rather than about plumbing.
 
 ---
 
@@ -584,3 +691,13 @@ Worth settling before the phase that depends on each.
    taken deliberately rather than by whatever the default happened to be. It
    needs an answer before a market has enough volume for it to matter, not
    before the next phase.
+3. **Retention on the replication slots.** A Debezium connector that is stopped
+   holds its slot, and PostgreSQL keeps every WAL segment that slot has not
+   read. A Connect worker down for a weekend is a disk filling up on the machine
+   taking payments, which is a worse failure than the reporting being stale.
+   Monitoring the slot lag is the answer, and it needs one before the first
+   deployment that nobody is watching.
+4. **What identity analytics may hold.** Splitting revenue by staff needs a
+   name, and names are Auth's. Copying them into the reporting store is a
+   decision about what a projection is allowed to contain, not a connector
+   change, and it is the same question again for customers.

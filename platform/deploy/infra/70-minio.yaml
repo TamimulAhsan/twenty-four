@@ -1,0 +1,78 @@
+# Object storage. AGPLv3, self-hosted and unmodified, which is how the
+# architecture's licence note says to use it.
+#
+# One bucket for the whole market, not one per tenant. A bucket per tenant would
+# put a provisioning step between signing up and uploading a logo, and would
+# make a thousand merchants a thousand buckets to enumerate, back up and grant
+# policy on. Isolation comes from the key prefix and from the fact that only
+# Media holds credentials: nothing else in the cluster can address an object at
+# all, so there is nothing for a missing scope to leak through.
+apiVersion: v1
+kind: Secret
+metadata: { name: minio, namespace: twentyfour }
+stringData:
+  MINIO_ROOT_USER: twentyfour
+  MINIO_ROOT_PASSWORD: devpassword
+  bucket: media
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: minio, namespace: twentyfour }
+spec:
+  serviceName: minio
+  replicas: 1
+  selector: { matchLabels: { app: minio } }
+  template:
+    metadata: { labels: { app: minio } }
+    spec:
+      containers:
+        - name: minio
+          image: docker.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+          args: ["server", "/data", "--console-address", ":9001"]
+          envFrom: [{ secretRef: { name: minio } }]
+          ports:
+            - { containerPort: 9000, name: s3 }
+            - { containerPort: 9001, name: console }
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: 9000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 20m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 5Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: minio, namespace: twentyfour }
+spec:
+  selector: { app: minio }
+  ports:
+    - { port: 9000, targetPort: 9000, name: s3 }
+    - { port: 9001, targetPort: 9001, name: console }
+---
+# A signed URL is signed for a host, because the host is inside the signature.
+# Signing against the in-cluster name would produce URLs that verify only from
+# inside the cluster, which is precisely where nobody needs them: the point of a
+# signed URL is that the browser fetches the bytes directly and they never pass
+# through the platform. So object storage gets a hostname of its own, and Media
+# signs against that one.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: minio
+  namespace: twentyfour
+spec:
+  entryPoints: [web]
+  routes:
+    - match: Host(`media.twentyfour.localhost`)
+      kind: Rule
+      services:
+        - name: minio
+          port: 9000

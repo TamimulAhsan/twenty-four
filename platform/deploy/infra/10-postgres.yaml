@@ -20,6 +20,23 @@ spec:
       containers:
         - name: postgres
           image: docker.io/library/postgres:18-alpine
+          # Logical decoding is what Debezium reads. It is off by default and
+          # cannot be turned on without a restart, so it is set here rather
+          # than discovered later by a connector that will not start. The slot
+          # and sender counts are one per captured database plus headroom: a
+          # connector that cannot get a slot fails silently until somebody
+          # goes looking for why a table stopped updating.
+          # "postgres" first, because args replaces the image's CMD outright
+          # and its entrypoint only initialises the cluster when it can see
+          # that it is being asked to run the server.
+          args:
+            - "postgres"
+            - "-c"
+            - "wal_level=logical"
+            - "-c"
+            - "max_replication_slots=10"
+            - "-c"
+            - "max_wal_senders=10"
           envFrom: [{ secretRef: { name: postgres } }]
           env:
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }

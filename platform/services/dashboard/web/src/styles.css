@@ -3,6 +3,7 @@
   --fg:#e6e9ef; --muted:#8b93a7; --faint:#5b6377;
   --ok:#2ee6a8; --warn:#ffb443; --bad:#ff5470; --edge:#3d68d8;
   --app:#2ee6a8; --fe:#67e8f9; --data:#ffb443; --svc:#5b8dee; --sys:#6f7788; --ingress:#c084fc;
+  --bus:#f0708a; --cdc:#a78bfa;
   --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 *{box-sizing:border-box}
@@ -103,6 +104,10 @@ pre.logs{background:#06080b;border:1px solid var(--line);border-radius:6px;paddi
 .k-routes{color:var(--ingress);border-color:#c084fc40}
 .k-selects{color:#8a94ad;border-color:#4a557040}
 .k-depends{color:var(--app);border-color:#2ee6a840}
+.k-stores{color:var(--data);border-color:#ffb44340}
+.k-publishes{color:var(--bus);border-color:#f0708a40}
+.k-consumes{color:var(--bus);border-color:#f0708a40}
+.k-replicates{color:var(--cdc);border-color:#a78bfa40}
 
 .allgood{text-align:center;padding:26px 0;color:var(--muted);font-size:12.5px;line-height:1.7}
 .allgood .tick{font-size:26px;color:var(--ok);margin-bottom:6px}

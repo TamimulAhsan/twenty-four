@@ -1,0 +1,215 @@
+syntax = "proto3";
+
+package twentyfour.bookings.v1;
+
+import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
+
+// BookingsService is the calendar: who is coming, when, and to whom.
+//
+// The one thing this service exists to guarantee is that a resource cannot be
+// promised twice. Everything else here is bookkeeping around that: availability
+// is a question about it, a slot search is a way of asking it in bulk, and a
+// reschedule is it asked again about a different time.
+//
+// Trade-neutral throughout, and it takes work to keep it so. A salon books a
+// person, a hotel books a room, a clinic books both, and a restaurant books a
+// table. They are all a resource with an opening pattern, so this service has
+// resources rather than staff and rooms, and the industry profile decides what
+// a merchant sees them called.
+service BookingsService {
+  // What can be booked: a person, a room, a chair, a table.
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+  rpc PutResource(PutResourceRequest) returns (PutResourceResponse);
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
+
+  // Free times for a catalog item on a day. The question a customer asks, and
+  // the only honest way to answer it: derived from the opening pattern minus
+  // what is already booked, never from a stored list of free slots that
+  // something has to keep up to date.
+  rpc Availability(AvailabilityRequest) returns (AvailabilityResponse);
+
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc List(ListRequest) returns (ListResponse);
+  // Move it. The same double-booking check as creating one, because that is
+  // exactly what it is.
+  rpc Reschedule(RescheduleRequest) returns (RescheduleResponse);
+  // Arrived, completed, cancelled, no-show. A state machine rather than a free
+  // field, because "cancelled then completed" is not a thing that happened.
+  rpc SetStatus(SetStatusRequest) returns (SetStatusResponse);
+}
+
+enum BookingStatus {
+  BOOKING_STATUS_UNSPECIFIED = 0;
+  BOOKING_STATUS_CONFIRMED = 1;
+  BOOKING_STATUS_ARRIVED = 2;
+  BOOKING_STATUS_COMPLETED = 3;
+  BOOKING_STATUS_CANCELLED = 4;
+  // They did not come and did not say. Recorded separately from cancelled
+  // because it is a fact about the customer rather than about the booking, and
+  // it is the one a deposit policy turns on.
+  BOOKING_STATUS_NO_SHOW = 5;
+}
+
+// What is being booked. Not "staff" and not "room": a salon books a person, a
+// hotel books a room, a clinic books both. They are the same shape, and naming
+// the shape after one trade is how a service stops working for the other forty.
+message Resource {
+  string id = 1;
+  string name = 2;
+  // The Staff service's user id, when this resource is a person. Empty for a
+  // room or a table. It is what lets a rota and a calendar agree.
+  string staff_id = 3;
+  // How many bookings this resource can hold at once. One for a chair, more
+  // for a class or a table that seats six.
+  int32 capacity = 4;
+  bool active = 5;
+  // When it is open, one entry per weekday it works.
+  repeated OpeningWindow opening = 6;
+}
+
+message OpeningWindow {
+  // ISO weekday, 1 is Monday. Matching the analytics heatmap rather than Go's
+  // Sunday-is-zero, because one of them had to be chosen and this one is the
+  // standard.
+  int32 weekday = 1;
+  // Local to the tenant's own time zone, as HH:MM.
+  string opens = 2;
+  string closes = 3;
+}
+
+message Booking {
+  string id = 1;
+  // Short, human, and said out loud on the telephone.
+  string reference = 2;
+
+  // What was booked, from the catalog. The duration comes from the item, which
+  // is why a haircut and a colour take different amounts of the same chair.
+  string item_id = 3;
+  string item_name = 4;
+  string resource_id = 5;
+  // Carried for the dashboard, which draws the calendar by person.
+  string staff_id = 6;
+
+  string customer_name = 7;
+  string customer_phone = 8;
+  string customer_email = 9;
+
+  google.protobuf.Timestamp starts_at = 10;
+  google.protobuf.Timestamp ends_at = 11;
+  BookingStatus status = 12;
+
+  // Taken to hold the slot. Unset is not zero: no deposit asked for is a
+  // different thing from a deposit of nothing.
+  twentyfour.common.v1.Money deposit = 13;
+  string payment_id = 14;
+
+  string note = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp cancelled_at = 17;
+  string cancellation_reason = 18;
+}
+
+message ListResourcesRequest {
+  bool include_inactive = 1;
+}
+message ListResourcesResponse {
+  repeated Resource resources = 1;
+}
+
+message PutResourceRequest {
+  // Empty to create.
+  string id = 1;
+  string name = 2;
+  string staff_id = 3;
+  int32 capacity = 4;
+  bool active = 5;
+  repeated OpeningWindow opening = 6;
+}
+message PutResourceResponse {
+  Resource resource = 1;
+}
+
+message DeleteResourceRequest {
+  string id = 1;
+}
+message DeleteResourceResponse {}
+
+message AvailabilityRequest {
+  string item_id = 1;
+  // A single day, as YYYY-MM-DD in the tenant's own time zone. A calendar is
+  // read a day at a time, and a date is not an instant.
+  string date = 2;
+  // Optional: availability for one person rather than for anybody.
+  string resource_id = 3;
+  // The tenant's time zone. Required, never defaulted: a slot list computed in
+  // the wrong zone is a list of times that are all wrong by the same amount,
+  // which is exactly the error nobody notices in testing.
+  string time_zone = 4;
+}
+message Slot {
+  google.protobuf.Timestamp starts_at = 1;
+  google.protobuf.Timestamp ends_at = 2;
+  string resource_id = 3;
+  string resource_name = 4;
+}
+message AvailabilityResponse {
+  repeated Slot slots = 1;
+}
+
+message CreateRequest {
+  string item_id = 1;
+  // Optional. Empty means anybody who is free, which is what a customer
+  // booking online usually wants.
+  string resource_id = 2;
+  google.protobuf.Timestamp starts_at = 3;
+  string customer_name = 4;
+  string customer_phone = 5;
+  string customer_email = 6;
+  string note = 7;
+  twentyfour.common.v1.Money deposit = 8;
+  string payment_id = 9;
+  // A retried request with the same key books once. Without it a customer who
+  // double-taps has two bookings and one of them is invisible to them.
+  string idempotency_key = 10;
+}
+message CreateResponse {
+  Booking booking = 1;
+}
+
+message GetRequest {
+  string id = 1;
+}
+message GetResponse {
+  Booking booking = 1;
+}
+
+message ListRequest {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+  string resource_id = 3;
+  BookingStatus status = 4;
+  int32 page_size = 5;
+}
+message ListResponse {
+  repeated Booking bookings = 1;
+}
+
+message RescheduleRequest {
+  string id = 1;
+  google.protobuf.Timestamp starts_at = 2;
+  string resource_id = 3;
+}
+message RescheduleResponse {
+  Booking booking = 1;
+}
+
+message SetStatusRequest {
+  string id = 1;
+  BookingStatus status = 2;
+  string reason = 3;
+}
+message SetStatusResponse {
+  Booking booking = 1;
+}

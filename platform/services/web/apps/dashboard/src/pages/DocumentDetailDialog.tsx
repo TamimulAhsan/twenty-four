@@ -7,6 +7,7 @@ import {
   type BadgeTone,
 } from '@twentyfour/ui'
 import { useBootstrap } from '@twentyfour/runtime'
+import { PrintableDocument, printDocument } from '@twentyfour/shell'
 
 const REPORTING: Record<FiscalDocument['reportingStatus'], { label: string; tone: BadgeTone }> = {
   not_required: { label: 'Not reportable', tone: 'neutral' },
@@ -79,13 +80,23 @@ export function DocumentDetailDialog({
           {doc?.orderId && (
             <Button variant="outline" onClick={() => onOpenOrder(doc.orderId as string)}>The sale</Button>
           )}
-          <Button variant="outline" iconStart="Printer" onClick={() => window.print()}>Print</Button>
+          {/* Prints the document as it was issued, not this dialog. */}
+          <Button variant="outline" iconStart="Printer" onClick={() => printDocument()}>Print</Button>
           {doc && doc.kind !== 'credit_note' && !alreadyCorrected && mayCorrect && (
             <Button variant="danger" onClick={() => setCorrecting(true)}>Issue a correction</Button>
           )}
         </>
       }
     >
+      {/*
+        The document as it was issued, fetched from the service that stored it
+        rather than rebuilt from what is on this screen. An issued document has
+        to re-render exactly as issued, and composing it again from current
+        prices and the business's current name would answer a different
+        question convincingly enough that nobody would notice.
+      */}
+      {doc && <PrintableDocument document={doc} />}
+
       {doc && (
         <div className="flex flex-col gap-5">
           {/* Stated on the document itself, not only on the list page. This is

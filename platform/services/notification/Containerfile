@@ -1,0 +1,22 @@
+# Built from the workspace root because it imports the generated protobuf module
+# and the shared packages, both of which live outside its own directory.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+
+COPY gen/ ./gen/
+COPY packages/ ./packages/
+COPY services/notification/ ./services/notification/
+
+# A workspace containing only what this image needs. Reusing the repository's
+# go.work would pull in every other service and fail on the ones not copied.
+RUN go work init ./gen ./packages ./services/notification
+
+RUN go build -trimpath -ldflags="-s -w" -o /out/notificationd ./services/notification/cmd/notificationd
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/notificationd /notificationd
+# 9112 is the gRPC contract. 9113 is the development transport's desk, which is
+# not part of it and is not deployed anywhere real.
+EXPOSE 9112 9113
+USER nonroot:nonroot
+ENTRYPOINT ["/notificationd"]

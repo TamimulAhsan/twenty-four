@@ -4,17 +4,27 @@ use (
 	./gen
 	./packages
 	./services/admin
+	./services/analytics
+	./services/audit
 	./services/auth
+	./services/bookings
 	./services/catalog
 	./services/core
 	./services/dashboard
 	./services/gateway
 	./services/inventory
+	./services/invoicing
+	./services/kitchen
+	./services/ledger
+	./services/media
+	./services/notification
 	./services/payments
 	./services/pos
 	./services/provisioning
 	./services/rbac
 	./services/relay
+	./services/scheduler
 	./services/staff
+	./services/support
 	./services/tenant
 )

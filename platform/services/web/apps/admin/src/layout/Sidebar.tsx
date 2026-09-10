@@ -88,7 +88,7 @@ function Row({ item, count, urgent }: { item: Item; count?: number; urgent?: boo
 export function SidebarContent() {
   const session = useAdminSession()
   const environment = useEnvironment()
-  const { signOut, pending } = useSignOut()
+  const { signOut, pending, confirmation } = useSignOut()
 
   // Counts only. The screens fetch their own data; these two exist so a
   // specialist can see there is a run in trouble without opening the page.
@@ -162,6 +162,7 @@ export function SidebarContent() {
           />
           <span className="truncate">Sign out</span>
         </button>
+        {confirmation}
 
         <div className="mt-2.5 flex items-center gap-2.5 rounded-lg bg-surface-sunken p-2.5">
           <Avatar name={session.name} colour="#c98420" />

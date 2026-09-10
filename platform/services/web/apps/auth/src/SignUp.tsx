@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { useMutation } from '@tanstack/react-query'
-import { auth, HttpError, MIN_PASSWORD_LENGTH, type SignupInput } from '@twentyfour/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { auth, HttpError, PASSWORD_LENGTH_FALLBACK, type SignupInput } from '@twentyfour/api'
 import {
   CAPABILITIES, TIERS, industryProfile, profileCapabilities, tierModules, MODULES,
   type TierId, TIER_IDS,
@@ -96,6 +96,22 @@ export function SignUp() {
     setErrors((current) => (key in current ? { ...current, [key]: undefined } : current))
   }
 
+  /**
+   * The password rule this deployment actually enforces.
+   *
+   * Asked for rather than assumed, because the length is Auth's setting and
+   * differs between a development cluster and a real one. A form stating a
+   * number nobody enforces is a form that rejects passwords that would work,
+   * or promises ones that will not. If the call fails the fallback stands and
+   * the gateway still has the last word, per field.
+   */
+  const policy = useQuery({
+    queryKey: ['auth', 'policy'],
+    queryFn: () => auth.policy(),
+    staleTime: Infinity,
+  })
+  const minPassword = policy.data?.minPasswordLength ?? PASSWORD_LENGTH_FALLBACK
+
   const create = useMutation({
     mutationFn: (input: SignupInput) => auth.signup(input),
     onSuccess: () => {
@@ -119,7 +135,7 @@ export function SignUp() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const found = validate(step, draft)
+    const found = validate(step, draft, minPassword)
     if (Object.keys(found).length > 0) {
       setErrors(found)
       return
@@ -224,7 +240,7 @@ export function SignUp() {
               autoComplete="new-password"
               value={draft.password}
               onChange={(value) => set('password', value)}
-              hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+              hint={`At least ${minPassword} characters.`}
               error={errors.password}
             />
           </>
@@ -421,7 +437,7 @@ function Progress({ current }: { current: StepId }) {
 
 /* -------------------------------------------------------------- validation */
 
-function validate(step: StepId, draft: Draft): Errors {
+function validate(step: StepId, draft: Draft, minPassword: number): Errors {
   const errors: Errors = {}
   if (step === 'trade' && !industryProfile(draft.industry ?? undefined)) {
     errors.industry = 'Pick the nearest one. A specialist can adjust it later.'
@@ -434,8 +450,8 @@ function validate(step: StepId, draft: Draft): Errors {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
       errors.email = 'Enter an email address we can reach you on.'
     }
-    if (draft.password.length < MIN_PASSWORD_LENGTH) {
-      errors.password = `Use at least ${MIN_PASSWORD_LENGTH} characters.`
+    if (draft.password.length < minPassword) {
+      errors.password = `Use at least ${minPassword} characters.`
     }
   }
   return errors

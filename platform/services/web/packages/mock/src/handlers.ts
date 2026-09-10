@@ -10,7 +10,8 @@ import { money } from '@twentyfour/money'
 import { MockError, availableTenants, resetStore, storeFor } from './store'
 import { currentTenantId, isSignedIn, setCurrentTenantId, setSignedIn } from './session'
 import { wire } from './wire'
-import { fixtureForIndustry, readSignup } from './signup'
+import { MOCK_MIN_PASSWORD_LENGTH, fixtureForIndustry, readSignup } from './signup'
+import * as report from './analytics'
 import { adminStore } from './admin/store'
 
 /**
@@ -76,12 +77,38 @@ async function handle(work: () => unknown): Promise<Response> {
   }
 }
 
+/**
+ * The window a reporting call is asking about.
+ *
+ * The time zone is required rather than defaulted, the same way the real
+ * gateway requires it: it decides which day a sale belongs to, and a quiet
+ * default moves takings between days for every business trading in the evening.
+ */
+function periodOf(request: Request) {
+  const url = new URL(request.url)
+  const from = url.searchParams.get('from') ?? ''
+  const to = url.searchParams.get('to') ?? ''
+  const tz = url.searchParams.get('tz') ?? ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    throw new MockError(400, 'invalid', 'A period needs a from and a to, as YYYY-MM-DD.')
+  }
+  if (!tz) {
+    throw new MockError(400, 'invalid', 'A period needs the time zone its days are in.')
+  }
+  return { from, to, tz }
+}
+
 export const handlers: HttpHandler[] = [
   /* --------------------------------------------------------------- session */
 
   http.get('/api/auth/session', async () => {
     await delay()
     return isSignedIn() ? ok(store().session) : ok(null)
+  }),
+
+  http.get('/api/auth/policy', async () => {
+    await delay()
+    return ok({ minPasswordLength: MOCK_MIN_PASSWORD_LENGTH })
   }),
 
   http.post('/api/auth/login', async ({ request }) => {
@@ -352,6 +379,41 @@ export const handlers: HttpHandler[] = [
         to: url.searchParams.get('to') ?? undefined,
         status: url.searchParams.get('status') ?? undefined,
       })
+    }),
+  ),
+
+  /* ------------------------------------------------------------ analytics */
+
+  http.get('/api/analytics/summary', async ({ request }) =>
+    handle(() => {
+      requireSession()
+      return report.summary(store(), periodOf(request))
+    }),
+  ),
+
+  http.get('/api/analytics/series', async ({ request }) =>
+    handle(() => {
+      requireSession()
+      return report.series(store(), periodOf(request))
+    }),
+  ),
+
+  http.get('/api/analytics/breakdown', async ({ request }) =>
+    handle(() => {
+      requireSession()
+      const url = new URL(request.url)
+      const by = url.searchParams.get('by') ?? ''
+      if (!['method', 'category', 'item'].includes(by)) {
+        throw new MockError(400, 'invalid', 'Split the revenue by method, category or item.')
+      }
+      return report.breakdown(store(), periodOf(request), by, Number(url.searchParams.get('limit') ?? 0))
+    }),
+  ),
+
+  http.get('/api/analytics/heatmap', async ({ request }) =>
+    handle(() => {
+      requireSession()
+      return report.heatmap(store(), periodOf(request))
     }),
   ),
 

@@ -18,7 +18,7 @@ export function SettingsPage() {
   const environment = useEnvironment()
   const session = useAdminSession()
   const dates = useDateFormat()
-  const { signOut, pending } = useSignOut()
+  const { signOut, pending, confirmation } = useSignOut()
 
   const tiers = useQuery({ queryKey: adminKeys.tiers(), queryFn: adminPlatform.tiers })
 
@@ -81,8 +81,10 @@ export function SettingsPage() {
           <Button variant="outline" className="mt-4" loading={pending} iconStart="LogOut" onClick={signOut}>
             Sign out
           </Button>
+          {confirmation}
           <p className="mt-2 text-sm text-text-subtle">
-            Signing out revokes every support token this session is holding.
+            Signing out ends this console session. It does not end support access you have been
+            granted: a grant runs until it expires or is revoked on the tenant.
           </p>
         </Card>
       </div>

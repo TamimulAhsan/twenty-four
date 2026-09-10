@@ -1,0 +1,52 @@
+# Ledger: the double-entry journal for this environment's single legal entity.
+#
+# One ledger per deployment. One market, one entity, one currency, one set of
+# books, which is what makes it simple enough to be worth trusting: no
+# consolidation, no conversion, no multi-entity bookkeeping.
+#
+# It listens rather than being called. Nothing posts to it in the normal course
+# of business, so the books cannot become a second opinion about whether a sale
+# happened.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger
+  namespace: twentyfour
+  labels: { app: ledger, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ledger } }
+  template:
+    metadata: { labels: { app: ledger, tier: backend } }
+    spec:
+      containers:
+        - name: ledgerd
+          image: localhost:5000/twentyfour/ledger:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9118"
+            - "-brokers=kafka.twentyfour.svc.cluster.local:9092"
+            # This deployment's currency. Not a per-tenant setting and not a
+            # runtime branch: a second currency is a second deployment.
+            - "-currency=HUF"
+          ports: [{ containerPort: 9118, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: ledger } }
+          readinessProbe:
+            grpc: { port: 9118 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9118 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ledger, namespace: twentyfour }
+spec:
+  selector: { app: ledger }
+  ports: [{ port: 9118, targetPort: 9118, name: grpc }]

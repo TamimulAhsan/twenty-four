@@ -7,6 +7,7 @@
 @import 'tailwindcss';
 @import '../../tokens/src/theme.css';
 @import '../../tokens/src/base.css';
+@import '../../tokens/src/print.css';
 
 /* Tailwind scans from the importing file, so components living outside this
  * app have to be pointed at explicitly or their classes are never generated. */

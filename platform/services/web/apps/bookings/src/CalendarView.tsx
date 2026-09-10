@@ -23,33 +23,53 @@ function shiftDays(date: Date, days: number): Date {
 }
 
 /**
- * The day, as columns of people.
+ * The day, as columns of whatever is booked.
  *
- * A calendar's job is to answer "who is free and when" without scrolling, so
- * the whole trading day is on screen at once and a person is a column. Below
- * the tablet breakpoint that stops working, and it becomes a single ordered
- * list instead of a grid squeezed sideways.
+ * A calendar's job is to answer "what is free and when" without scrolling, so
+ * the whole trading day is on screen at once and each bookable thing is a
+ * column. Below the tablet breakpoint that stops working, and it becomes a
+ * single ordered list instead of a grid squeezed sideways.
+ *
+ * The columns are resources rather than staff, and the difference is the whole
+ * reason it is worth saying: a salon books a person, a hotel books a room and a
+ * restaurant books a table. Drawing columns of people gives a hotel a calendar
+ * with no columns at all, and the term set decides what a merchant sees them
+ * called.
  */
 export function CalendarView() {
   const terms = useTerms()
   const dates = useDateFormat()
   const [day, setDay] = useState(() => new Date())
   const [selected, setSelected] = useState<Booking | null>(null)
-  const [creating, setCreating] = useState<{ startsAt: string; staffId: string | null } | null>(null)
+  const [creating, setCreating] = useState<{ startsAt: string; resourceId: string | null } | null>(null)
 
   const date = iso(day)
   const list = useQuery({
     queryKey: queryKeys.bookings.range(date, date),
     queryFn: () => bookings.range(date, date),
   })
+  const resources = useQuery({
+    queryKey: queryKeys.bookings.resources(),
+    queryFn: () => bookings.resources(),
+  })
+  // Colours are the team's, so a person keeps the same colour on the rota and
+  // on the calendar. A resource that is not a person simply has none.
   const people = useQuery({ queryKey: queryKeys.staff.list(), queryFn: staff.list })
 
   const columns = useMemo(() => {
-    // Someone who cannot sign in cannot take an appointment, so they do not
-    // get a column. Their past bookings stay attributed to them.
-    const members = (people.data ?? []).filter((member) => member.status === 'active')
-    return members.length > 0 ? members : [{ id: '', name: 'Unassigned', colour: '#71717a' }]
-  }, [people.data])
+    const colours = new Map((people.data ?? []).map((member) => [member.id, member.colour]))
+    // Something switched off cannot take a booking, so it gets no column. Its
+    // past bookings stay attributed to it.
+    const active = (resources.data ?? []).filter((entry) => entry.active)
+    if (active.length === 0) {
+      return [{ id: '', name: 'Unassigned', colour: '#71717a' }]
+    }
+    return active.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      colour: (entry.staffId && colours.get(entry.staffId)) || '#71717a',
+    }))
+  }, [resources.data, people.data])
 
   const isToday = date === iso(new Date())
 
@@ -78,7 +98,7 @@ export function CalendarView() {
           onClick={() => {
             const start = new Date(day)
             start.setHours(OPENS + 1, 0, 0, 0)
-            setCreating({ startsAt: start.toISOString(), staffId: null })
+            setCreating({ startsAt: start.toISOString(), resourceId: null })
           }}
         >
           New {terms.t('booking', { case: 'lower' })}
@@ -129,7 +149,7 @@ export function CalendarView() {
                         onClick={() => {
                           const start = new Date(day)
                           start.setHours(OPENS + index, 0, 0, 0)
-                          setCreating({ startsAt: start.toISOString(), staffId: member.id || null })
+                          setCreating({ startsAt: start.toISOString(), resourceId: member.id || null })
                         }}
                         className="absolute inset-x-0 border-b border-border transition-colors hover:bg-accent-subtle"
                         style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT }}
@@ -137,7 +157,7 @@ export function CalendarView() {
                     ))}
 
                     {(list.data ?? [])
-                      .filter((entry) => (entry.staffId ?? '') === member.id && entry.status !== 'cancelled')
+                      .filter((entry) => entry.resourceId === member.id && entry.status !== 'cancelled')
                       .map((entry) => {
                         const start = new Date(entry.startsAt)
                         const end = new Date(entry.endsAt)
@@ -224,7 +244,7 @@ export function CalendarView() {
       <NewBookingDialog
         open={creating !== null}
         startsAt={creating?.startsAt ?? null}
-        staffId={creating?.staffId ?? null}
+        resourceId={creating?.resourceId ?? null}
         onClose={() => setCreating(null)}
       />
       <BookingDetailDialog booking={selected} onClose={() => setSelected(null)} />

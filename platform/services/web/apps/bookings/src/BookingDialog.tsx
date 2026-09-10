@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { HttpError, bookings, catalog, queryKeys, staff, type Booking } from '@twentyfour/api'
+import { HttpError, bookings, catalog, queryKeys, type Booking } from '@twentyfour/api'
 import { useTerms } from '@twentyfour/terms'
 import { Badge, Button, Dialog, Field, Input, MoneyText, Select, useDateFormat, useToast } from '@twentyfour/ui'
 
+/** The local date part of an instant, which is what availability is asked by. */
+function dayOf(iso: string): string {
+  const at = new Date(iso)
+  return new Date(at.getTime() - at.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+}
+
 export function NewBookingDialog({
-  open, startsAt, staffId, onClose,
-}: { open: boolean; startsAt: string | null; staffId: string | null; onClose: () => void }) {
+  open, startsAt, resourceId, onClose,
+}: { open: boolean; startsAt: string | null; resourceId: string | null; onClose: () => void }) {
   const terms = useTerms()
   const toast = useToast()
+  const dates = useDateFormat()
   const queryClient = useQueryClient()
 
   const [itemId, setItemId] = useState('')
-  const [person, setPerson] = useState(staffId ?? '')
+  const [resource, setResource] = useState(resourceId ?? '')
+  const [when, setWhen] = useState<string | null>(startsAt)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
@@ -21,23 +29,44 @@ export function NewBookingDialog({
     queryFn: () => catalog.items({ kind: 'service' }),
     enabled: open,
   })
-  const people = useQuery({ queryKey: queryKeys.staff.list(), queryFn: staff.list, enabled: open })
+  const resources = useQuery({
+    queryKey: queryKeys.bookings.resources(),
+    queryFn: () => bookings.resources(),
+    enabled: open,
+  })
+
+  const day = startsAt ? dayOf(startsAt) : ''
+  /**
+   * The free times, asked of the service rather than worked out here.
+   *
+   * That is the point of asking: availability is the opening pattern minus
+   * what is already booked, and a browser computing it would compute it from a
+   * list it fetched a moment ago. The service answers from the same rows it
+   * will lock against when the booking is written, so a slot it offers is a
+   * slot it can still honour.
+   */
+  const slots = useQuery({
+    queryKey: queryKeys.bookings.availability(itemId, day, resource || undefined),
+    queryFn: () => bookings.availability(itemId, day, resource || undefined),
+    enabled: open && Boolean(itemId) && Boolean(day),
+  })
 
   useEffect(() => {
     if (open) {
-      setPerson(staffId ?? '')
+      setResource(resourceId ?? '')
+      setWhen(startsAt)
       setItemId(services.data?.[0]?.id ?? '')
     }
-  }, [open, staffId, services.data])
+  }, [open, resourceId, startsAt, services.data])
 
   const create = useMutation({
     mutationFn: () =>
       bookings.create({
         itemId,
-        staffId: person || null,
+        resourceId: resource || null,
         customerName: name,
         customerPhone: phone,
-        startsAt: startsAt!,
+        startsAt: when!,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries()
@@ -59,7 +88,7 @@ export function NewBookingDialog({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button loading={create.isPending} disabled={!itemId || !name} onClick={() => create.mutate()}>
+          <Button loading={create.isPending} disabled={!itemId || !name || !when} onClick={() => create.mutate()}>
             Book it
           </Button>
         </>
@@ -84,13 +113,47 @@ export function NewBookingDialog({
           </Select>
         </Field>
 
-        <Field label={terms.t('staff_member')} htmlFor="person">
-          <Select id="person" value={person} onChange={(event) => setPerson(event.target.value)}>
+        <Field label={terms.t('staff_member')} htmlFor="resource">
+          <Select id="resource" value={resource} onChange={(event) => setResource(event.target.value)}>
             <option value="">Anyone available</option>
-            {(people.data ?? []).map((member) => (
-              <option key={member.id} value={member.id}>{member.name}</option>
+            {(resources.data ?? []).map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.name}</option>
             ))}
           </Select>
+        </Field>
+
+        <Field label="Time" htmlFor="slot">
+          {slots.isLoading && <p className="text-base text-text-subtle">Looking for free times...</p>}
+          {slots.data && slots.data.length === 0 && (
+            /* Closed and full are different answers and the service tells them
+               apart, but on this screen either way there is nothing to pick. */
+            <p className="text-base text-text-subtle">
+              Nothing free that day. Try another day or another {terms.t('staff_member', { case: 'lower' })}.
+            </p>
+          )}
+          {slots.data && slots.data.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {slots.data.map((slot) => (
+                <button
+                  key={`${slot.resourceId}-${slot.startsAt}`}
+                  type="button"
+                  onClick={() => {
+                    setWhen(slot.startsAt)
+                    // Taking the offered slot's resource too, so "anyone" turns
+                    // into the one that was actually free at that moment.
+                    setResource(slot.resourceId)
+                  }}
+                  className={
+                    when === slot.startsAt
+                      ? 'rounded-lg border border-accent bg-accent-subtle px-3 py-2 text-base text-text'
+                      : 'rounded-lg border border-border px-3 py-2 text-base text-text-muted hover:border-accent'
+                  }
+                >
+                  {dates.time(slot.startsAt)}
+                </button>
+              ))}
+            </div>
+          )}
         </Field>
 
         <Input label={`${terms.t('customer')} name`} required value={name} onChange={(event) => setName(event.target.value)} />

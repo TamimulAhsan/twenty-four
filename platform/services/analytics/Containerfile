@@ -1,0 +1,19 @@
+# Analytics: reporting figures out of ClickHouse. Built from the workspace root
+# because it imports the generated protobuf module and the shared packages,
+# both of which live outside its own directory.
+FROM docker.io/library/golang:1.26-alpine AS build
+WORKDIR /src
+
+COPY gen/ ./gen/
+COPY packages/ ./packages/
+COPY services/analytics/ ./services/analytics/
+
+RUN go work init ./gen ./packages ./services/analytics
+
+RUN go build -trimpath -ldflags="-s -w" -o /out/analyticsd ./services/analytics/cmd/analyticsd
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/analyticsd /analyticsd
+EXPOSE 9111
+USER nonroot:nonroot
+ENTRYPOINT ["/analyticsd"]

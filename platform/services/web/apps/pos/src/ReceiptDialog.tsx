@@ -1,8 +1,15 @@
 import type { Order } from '@twentyfour/api'
 import { useTerms } from '@twentyfour/terms'
 import { useState } from 'react'
-import { Button, Dialog, Input, MoneyText, useDateFormat, useToast } from '@twentyfour/ui'
-import { useBootstrap } from '@twentyfour/runtime'
+import { Button, Dialog, Input, Select, useToast } from '@twentyfour/ui'
+import {
+  PAPERS,
+  DEFAULT_PAPER,
+  PrintableReceipt,
+  ReceiptPreview,
+  printReceipt,
+  type PaperId,
+} from '@twentyfour/shell'
 
 /**
  * What the customer is handed.
@@ -14,10 +21,12 @@ import { useBootstrap } from '@twentyfour/runtime'
 export function ReceiptDialog({ order, onClose }: { order: Order | null; onClose: () => void }) {
   const terms = useTerms()
   const toast = useToast()
-  const dates = useDateFormat()
-  const { profile } = useBootstrap()
   const [emailing, setEmailing] = useState(false)
   const [address, setAddress] = useState('')
+  // Which roll is in the machine. A till setting rather than a per-sale one in
+  // the end, but a cashier who has just swapped to a handheld should not have
+  // to go and find a settings screen mid-queue.
+  const [paper, setPaper] = useState<PaperId>(DEFAULT_PAPER)
 
   const send = () => {
     // Through the Notification service, which owns the template and the
@@ -31,14 +40,6 @@ export function ReceiptDialog({ order, onClose }: { order: Order | null; onClose
     setAddress('')
   }
 
-  const bands = new Map<number, { net: number; tax: number }>()
-  for (const line of order?.lines ?? []) {
-    const row = bands.get(line.taxBasisPoints) ?? { net: 0, tax: 0 }
-    row.net += line.net.minor
-    row.tax += line.tax.minor
-    bands.set(line.taxBasisPoints, row)
-  }
-
   return (
     <Dialog
       open={order !== null}
@@ -47,7 +48,7 @@ export function ReceiptDialog({ order, onClose }: { order: Order | null; onClose
       size="sm"
       footer={
         <>
-          <Button variant="outline" size="lg" iconStart="Printer" onClick={() => window.print()}>
+          <Button variant="outline" size="lg" iconStart="Printer" onClick={() => printReceipt(paper)}>
             Print
           </Button>
           <Button
@@ -63,9 +64,9 @@ export function ReceiptDialog({ order, onClose }: { order: Order | null; onClose
       }
     >
       {order && (
-        <div className="font-mono text-sm">
+        <div className="flex flex-col gap-4">
           {emailing && (
-            <div className="mb-4 flex items-end gap-2 font-sans">
+            <div className="flex items-end gap-2">
               <Input
                 label="Send it where"
                 type="email"
@@ -77,67 +78,32 @@ export function ReceiptDialog({ order, onClose }: { order: Order | null; onClose
               <Button disabled={!address.includes('@')} onClick={send}>Send</Button>
             </div>
           )}
-          <div className="border-b border-dashed border-border pb-3 text-center">
-            <p className="text-base font-semibold">{profile.name}</p>
-            <p className="mt-1 text-text-muted">{terms.t('receipt')} {order.number}</p>
-            <p className="text-text-muted">{dates.dateTime(order.placedAt)}</p>
+
+          {PAPERS[paper] && (
+            <Select
+              label="Paper"
+              value={paper}
+              onChange={(event) => setPaper(event.target.value as PaperId)}
+              className="w-44"
+            >
+              {Object.values(PAPERS).map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.label}</option>
+              ))}
+            </Select>
+          )}
+
+          {/*
+            The same grid on screen as on paper, at the roll's real width, so
+            what a cashier checks before pressing print is what comes out of the
+            machine. The frame is the paper; the receipt inside it is the
+            document, and only that subtree survives the print stylesheet.
+          */}
+          <div className="flex justify-center rounded-lg bg-white p-3 text-black shadow-inner">
+            <ReceiptPreview order={order} paper={paper} />
           </div>
 
-          <ul className="flex flex-col gap-1.5 border-b border-dashed border-border py-3">
-            {order.lines.map((line) => (
-              <li key={line.id} className="flex justify-between gap-3">
-                <span className="min-w-0">
-                  <span className="tnum">{line.quantity}x </span>
-                  {line.name}
-                </span>
-                <span className="tnum shrink-0">
-                  <MoneyText value={line.gross} display="none" />
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <dl className="flex flex-col gap-1 border-b border-dashed border-border py-3">
-            <div className="flex justify-between">
-              <dt>Net</dt>
-              <dd className="tnum"><MoneyText value={order.net} display="none" /></dd>
-            </div>
-            {/* Printed per rate, because a receipt whose lines do not sum to
-                its own total fails an audit, and most regimes require the
-                bands separately in any case. */}
-            {[...bands.entries()].sort((a, b) => a[0] - b[0]).map(([rate, row]) => (
-              <div key={rate} className="flex justify-between text-text-muted">
-                <dt>Tax {rate / 100}%</dt>
-                <dd className="tnum">{row.tax}</dd>
-              </div>
-            ))}
-            <div className="mt-1 flex justify-between text-base font-semibold">
-              <dt>Total</dt>
-              <dd className="tnum"><MoneyText value={order.gross} /></dd>
-            </div>
-          </dl>
-
-          <dl className="flex flex-col gap-1 py-3">
-            {order.tenders.map((tender) => (
-              <div key={tender.id}>
-                <div className="flex justify-between capitalize">
-                  <dt>{tender.method}</dt>
-                  {/* What was handed over, not what was applied. A receipt
-                      reading "Cash 14 000 / Change 6 000" does not reconcile
-                      for the person holding it: they gave you 20 000. */}
-                  <dd className="tnum">
-                    <MoneyText value={tender.tendered ?? tender.amount} display="none" />
-                  </dd>
-                </div>
-                {tender.change && tender.change.minor > 0 && (
-                  <div className="flex justify-between font-semibold">
-                    <dt>Change</dt>
-                    <dd className="tnum"><MoneyText value={tender.change} display="none" /></dd>
-                  </div>
-                )}
-              </div>
-            ))}
-          </dl>
+          {/* The copy that prints, at the end of body rather than in here. */}
+          <PrintableReceipt order={order} paper={paper} />
         </div>
       )}
     </Dialog>

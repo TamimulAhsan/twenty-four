@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package twentyfour.media.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// MediaService is the only thing in the platform that holds object storage
+// credentials.
+//
+// It does not carry bytes. It issues permission: a caller asks for somewhere to
+// put a file and gets a signed URL, the browser uploads straight to the store,
+// and the caller comes back to say it finished. The same in reverse for
+// reading. That is the whole design, and it is why a merchant uploading a
+// hundred product photographs does not put a hundred photographs through the
+// API gateway.
+//
+// The consequence worth stating: the bytes are never inspected by this service,
+// so what it can enforce is what it agrees to sign for. A content type is
+// refused before a URL exists, not after a file arrives.
+service MediaService {
+  // Reserves a place for a file and signs a URL to put it there. The object
+  // does not exist yet, and the record is pending until Confirm.
+  rpc RequestUpload(RequestUploadRequest) returns (RequestUploadResponse);
+  // Says the upload finished. Until this is called the object is a reservation,
+  // and reservations are swept.
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (ConfirmUploadResponse);
+
+  // A signed URL to read one object. Short lived, because a signed URL is a
+  // capability: anyone holding it can read the file until it expires.
+  rpc GetDownloadUrl(GetDownloadUrlRequest) returns (GetDownloadUrlResponse);
+
+  rpc GetObject(GetObjectRequest) returns (GetObjectResponse);
+  rpc ListObjects(ListObjectsRequest) returns (ListObjectsResponse);
+  rpc DeleteObject(DeleteObjectRequest) returns (DeleteObjectResponse);
+}
+
+// What a file is for. Not a free string: the purpose decides which content
+// types are allowed and how long a read URL lives, and a caller that can invent
+// a purpose can invent one with no rules attached to it.
+enum Purpose {
+  PURPOSE_UNSPECIFIED = 0;
+  // A photograph of something in the catalog.
+  PURPOSE_CATALOG_IMAGE = 1;
+  // The business's own mark, which appears on documents and the storefront.
+  PURPOSE_BRAND_LOGO = 2;
+  // Imagery for the storefront and its pages.
+  PURPOSE_SITE_ASSET = 3;
+  // A document a person attached: a signed form, a supplier invoice.
+  PURPOSE_ATTACHMENT = 4;
+  // Generated creative for an advert. Written by the platform rather than
+  // uploaded by a person, and kept apart so it can be swept separately.
+  PURPOSE_AD_CREATIVE = 5;
+}
+
+message Object {
+  string id = 1;
+  Purpose purpose = 2;
+  // The name the person gave it, kept for display and for the download
+  // filename. It is never part of the storage key: two people uploading
+  // "logo.png" must not collide, and a filename is not a safe path component.
+  string filename = 3;
+  string content_type = 4;
+  int64 size_bytes = 5;
+  // Set once the upload is confirmed. A pending object has none of this.
+  bool ready = 6;
+
+  // What the file belongs to, so an item's photographs can be found without a
+  // second table. Semantic keys, never display terms: "catalog_item".
+  string subject_type = 7;
+  string subject_id = 8;
+
+  string uploaded_by = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp confirmed_at = 11;
+}
+
+message RequestUploadRequest {
+  Purpose purpose = 1;
+  string filename = 2;
+  string content_type = 3;
+  // Declared before the upload, and checked against the purpose's limit. The
+  // store enforces it again on the signed URL, because a declared size is a
+  // claim by the caller.
+  int64 size_bytes = 4;
+  string subject_type = 5;
+  string subject_id = 6;
+}
+message RequestUploadResponse {
+  Object object = 1;
+  // Where to PUT the bytes. Expires: a signed URL is a capability, not an
+  // address.
+  string upload_url = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message ConfirmUploadRequest {
+  string id = 1;
+}
+message ConfirmUploadResponse {
+  Object object = 1;
+}
+
+message GetDownloadUrlRequest {
+  string id = 1;
+}
+message GetDownloadUrlResponse {
+  string url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message GetObjectRequest {
+  string id = 1;
+}
+message GetObjectResponse {
+  Object object = 1;
+}
+
+message ListObjectsRequest {
+  Purpose purpose = 1;
+  string subject_type = 2;
+  string subject_id = 3;
+  // Pending objects are hidden by default: a reservation nobody completed is
+  // not a file, and showing it as one is how a merchant concludes an upload
+  // worked when it did not.
+  bool include_pending = 4;
+  int32 page_size = 5;
+}
+message ListObjectsResponse {
+  repeated Object objects = 1;
+}
+
+message DeleteObjectRequest {
+  string id = 1;
+}
+message DeleteObjectResponse {
+  Object object = 1;
+}

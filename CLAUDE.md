@@ -29,6 +29,7 @@ The platform itself is not built here yet.
 | `backend-plan.md` | **Backend build plan.** What the remaining nine services are, in what order, and why. Phase 1 is done. |
 | `frontend-plan.md` | Frontend build plan for the five applications across both planes. |
 | `admin-plan.md` | **One sign-in for both planes, and wiring the admin console to real services.** A1 and A2 are done and running. |
+| `deployment-plan.md` | **One codebase, two environments.** What differs between dev and production, and the phases to get there. Nothing is deployed to production yet. |
 | `.claude/settings.local.json` | Permission allowlist only. No project config. |
 
 ---

@@ -1,0 +1,191 @@
+syntax = "proto3";
+
+package twentyfour.kitchen.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// KitchenService drives the prep screens.
+//
+// It is a trade capability, not a sold module. Nobody buys it: the industry
+// profile switches it on for food service, and a candy shop buying the same POS
+// gets a till and no prep screen. That distinction is the reason POS still
+// means "register a sale" everywhere, and the reason this is a separate service
+// rather than a feature inside POS.
+//
+// It owns one thing POS does not: the state of the work. A sale is placed once
+// and is then history; a ticket is claimed, cooked, and passed, by different
+// people at different screens over ten minutes. Putting that in POS would put a
+// kitchen's workflow inside the till's transaction.
+//
+// It derives its tickets from order events rather than being called. The till
+// rings up a sale and knows nothing about a pass.
+service KitchenService {
+  // What is on now, for one station. The screen polls this.
+  rpc ListTickets(ListTicketsRequest) returns (ListTicketsResponse);
+  rpc GetTicket(GetTicketRequest) returns (GetTicketResponse);
+
+  // Somebody has started on it. Claiming is per line, not per ticket: a starter
+  // and a main are cooked by different people at different times.
+  rpc ClaimLine(ClaimLineRequest) returns (ClaimLineResponse);
+  rpc CompleteLine(CompleteLineRequest) returns (CompleteLineResponse);
+  // The whole ticket has gone out. Only possible once every line is done,
+  // because a ticket passed with a line still cooking is a table waiting for
+  // food nobody is making.
+  rpc PassTicket(PassTicketRequest) returns (PassTicketResponse);
+  // Something is not coming: out of stock, sent back, the table left.
+  rpc VoidLine(VoidLineRequest) returns (VoidLineResponse);
+
+  // Where work goes. A grill, a fryer, a bar, a pass.
+  rpc ListStations(ListStationsRequest) returns (ListStationsResponse);
+  rpc PutStation(PutStationRequest) returns (PutStationResponse);
+  rpc DeleteStation(DeleteStationRequest) returns (DeleteStationResponse);
+  // Which station makes which catalog item. Without this every ticket goes to
+  // every screen, which is a kitchen where nobody knows what is theirs.
+  rpc RouteItem(RouteItemRequest) returns (RouteItemResponse);
+}
+
+enum TicketState {
+  TICKET_STATE_UNSPECIFIED = 0;
+  // On the screen, nothing started.
+  TICKET_STATE_WAITING = 1;
+  // At least one line claimed.
+  TICKET_STATE_COOKING = 2;
+  // Every line done, not yet handed over.
+  TICKET_STATE_READY = 3;
+  TICKET_STATE_PASSED = 4;
+  TICKET_STATE_VOIDED = 5;
+}
+
+enum LineState {
+  LINE_STATE_UNSPECIFIED = 0;
+  LINE_STATE_WAITING = 1;
+  LINE_STATE_CLAIMED = 2;
+  LINE_STATE_DONE = 3;
+  LINE_STATE_VOIDED = 4;
+}
+
+message Station {
+  string id = 1;
+  string name = 2;
+  // Where the finished plates meet. A pass shows every ticket rather than only
+  // the lines routed to it, because that is the job: knowing when a table's
+  // whole order is ready.
+  bool is_pass = 3;
+  bool active = 4;
+}
+
+message TicketLine {
+  string id = 1;
+  string item_id = 2;
+  // Copied at the time. The catalog moves on and a ticket printed for a
+  // margherita is still a margherita when somebody renames the item.
+  string name = 3;
+  int32 quantity = 4;
+  string note = 5;
+  string station_id = 6;
+  string station_name = 7;
+  LineState state = 8;
+  // Who is cooking it. A person, so two cooks do not both start the same dish.
+  string claimed_by = 9;
+  google.protobuf.Timestamp claimed_at = 10;
+  google.protobuf.Timestamp done_at = 11;
+}
+
+message Ticket {
+  string id = 1;
+  string order_id = 2;
+  // What the till calls the sale, so a cook and a server say the same number.
+  string order_number = 3;
+  // Where it is going. Empty for a takeaway, which is why it is not required.
+  string table_label = 4;
+  TicketState state = 5;
+  repeated TicketLine lines = 6;
+  string note = 7;
+  // When the order was placed, not when this row was written. The screen sorts
+  // and colours by how long a table has been waiting, and that clock starts at
+  // the till.
+  google.protobuf.Timestamp placed_at = 8;
+  google.protobuf.Timestamp passed_at = 9;
+}
+
+message ListTicketsRequest {
+  // Empty means every station, which is what a pass screen wants.
+  string station_id = 1;
+  // Passed and voided tickets are off the screen by default: a kitchen screen
+  // is a list of work, not a history.
+  bool include_finished = 2;
+  int32 page_size = 3;
+}
+message ListTicketsResponse {
+  repeated Ticket tickets = 1;
+}
+
+message GetTicketRequest {
+  string id = 1;
+}
+message GetTicketResponse {
+  Ticket ticket = 1;
+}
+
+message ClaimLineRequest {
+  string line_id = 1;
+  // The person at the screen. Recorded so two cooks do not both start the same
+  // dish, which is the entire reason claiming exists.
+  string staff_id = 2;
+}
+message ClaimLineResponse {
+  Ticket ticket = 1;
+}
+
+message CompleteLineRequest {
+  string line_id = 1;
+}
+message CompleteLineResponse {
+  Ticket ticket = 1;
+}
+
+message PassTicketRequest {
+  string id = 1;
+}
+message PassTicketResponse {
+  Ticket ticket = 1;
+}
+
+message VoidLineRequest {
+  string line_id = 1;
+  string reason = 2;
+}
+message VoidLineResponse {
+  Ticket ticket = 1;
+}
+
+message ListStationsRequest {
+  bool include_inactive = 1;
+}
+message ListStationsResponse {
+  repeated Station stations = 1;
+}
+
+message PutStationRequest {
+  string id = 1;
+  string name = 2;
+  bool is_pass = 3;
+  bool active = 4;
+}
+message PutStationResponse {
+  Station station = 1;
+}
+
+message DeleteStationRequest {
+  string id = 1;
+}
+message DeleteStationResponse {}
+
+message RouteItemRequest {
+  string item_id = 1;
+  // Empty removes the routing, which sends the item to the default station
+  // rather than to nowhere: a dish that reaches no screen is a dish nobody
+  // cooks.
+  string station_id = 2;
+}
+message RouteItemResponse {}

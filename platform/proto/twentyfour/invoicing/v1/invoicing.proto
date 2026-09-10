@@ -1,0 +1,227 @@
+syntax = "proto3";
+
+package twentyfour.invoicing.v1;
+
+import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
+
+// InvoicingService issues fiscal documents, and charges the tenant for the
+// platform.
+//
+// Those were two services once. They are one because both issue a document
+// under a market's rules, both need numbering, layout, mandatory fields and
+// local tax treatment, and the only real difference is who the document is
+// addressed to: the merchant's customer, or the merchant. Two services meant
+// two implementations of the same numbering machinery in every market.
+//
+// The seam to keep clean, and the thing to watch: nothing outside this service
+// knows which kind of document it asked for. A caller asks for a customer
+// invoice or asks to run the billing cycle, and both come back as documents.
+// If dunning and cycle charging grow a life of their own, that is the signal to
+// split them back out.
+//
+// This pod is swapped per market. Everything here that could be a rule about
+// Hungary is a rule this implementation holds, and no caller can tell.
+service InvoicingService {
+  // Issue a document. Immutable the moment it exists.
+  rpc Issue(IssueRequest) returns (IssueResponse);
+  // Correct one. Never an edit: a credit note referencing the original, which
+  // is the only lawful way to change an issued document in either market.
+  rpc Correct(CorrectRequest) returns (CorrectResponse);
+
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+  // The stored artifact, exactly as issued. Never recomputed from current
+  // prices or current tax rates.
+  rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
+
+  // The tenant's own subscription: what they are on and what it costs.
+  rpc GetSubscription(GetSubscriptionRequest) returns (GetSubscriptionResponse);
+  rpc ChangeSubscription(ChangeSubscriptionRequest) returns (ChangeSubscriptionResponse);
+  // Issues the tenant's own invoice for the period. Driven by the scheduler,
+  // not by a person.
+  rpc RunBillingCycle(RunBillingCycleRequest) returns (RunBillingCycleResponse);
+}
+
+enum DocumentKind {
+  DOCUMENT_KIND_UNSPECIFIED = 0;
+  // Addressed to the merchant's customer.
+  DOCUMENT_KIND_INVOICE = 1;
+  DOCUMENT_KIND_RECEIPT = 2;
+  // Corrects an earlier document. The only lawful way to change one.
+  DOCUMENT_KIND_CREDIT_NOTE = 3;
+  // Addressed to the merchant: what TwentyFour charges them. The same
+  // machinery, a different addressee, which is the whole reason these are one
+  // service.
+  DOCUMENT_KIND_SUBSCRIPTION_INVOICE = 4;
+}
+
+// Whether the document has been reported to whatever this market requires.
+// Generic on purpose: no tax authority is named in shared code, and the
+// merchant plane must never learn which one this deployment talks to.
+enum ReportingStatus {
+  REPORTING_STATUS_UNSPECIFIED = 0;
+  // This market asks for nothing, or this kind of document is out of scope.
+  REPORTING_STATUS_NOT_REQUIRED = 1;
+  REPORTING_STATUS_QUEUED = 2;
+  REPORTING_STATUS_REPORTED = 3;
+  // Failed and will be tried again. Distinct from failed, because one is a
+  // problem and the other is a problem somebody has to act on.
+  REPORTING_STATUS_RETRYING = 4;
+  REPORTING_STATUS_FAILED = 5;
+}
+
+message DocumentLine {
+  string description = 1;
+  int32 quantity = 2;
+  twentyfour.common.v1.Money unit_price = 3;
+  twentyfour.common.v1.Money net = 4;
+  twentyfour.common.v1.Money tax = 5;
+  twentyfour.common.v1.Money gross = 6;
+  twentyfour.common.v1.TaxRate tax_rate = 7;
+}
+
+message Document {
+  string id = 1;
+  // Issued by this service, never by a caller and never client-side. Gapless
+  // per tenant per year, which is why it is allocated inside the transaction
+  // that issues the document rather than before it.
+  string number = 2;
+  DocumentKind kind = 3;
+
+  string order_id = 4;
+  string customer_name = 5;
+  // Free text, stored as given. An address is not a structure this platform
+  // has an opinion about, and imposing one would be imposing a country's.
+  string customer_address = 6;
+  // Whatever this market calls the number a business is registered under.
+  // Deliberately not named for one: no country logic, including in field names.
+  string customer_tax_id = 7;
+
+  repeated DocumentLine lines = 8;
+  twentyfour.common.v1.Money net = 9;
+  twentyfour.common.v1.Money tax = 10;
+  twentyfour.common.v1.Money gross = 11;
+
+  ReportingStatus reporting_status = 12;
+  string reporting_reference = 13;
+
+  // Set on a document a later one corrects, and on the credit note that does
+  // the correcting.
+  string corrected_by_id = 14;
+  string corrects_id = 15;
+
+  google.protobuf.Timestamp issued_at = 16;
+  google.protobuf.Timestamp due_at = 17;
+}
+
+message IssueRequest {
+  DocumentKind kind = 1;
+  string order_id = 2;
+  string customer_name = 3;
+  string customer_address = 4;
+  string customer_tax_id = 5;
+  repeated DocumentLine lines = 6;
+  // A retried issue with the same key produces one document. Without it a till
+  // that loses its network mid-checkout issues two invoices with two numbers,
+  // and neither can be withdrawn.
+  string idempotency_key = 7;
+  google.protobuf.Timestamp due_at = 8;
+}
+message IssueResponse {
+  Document document = 1;
+}
+
+message CorrectRequest {
+  string id = 1;
+  string reason = 2;
+  // Omit to credit the whole document. Present to credit part of it, which is
+  // what a partial return needs.
+  repeated DocumentLine lines = 3;
+}
+message CorrectResponse {
+  // The credit note. The original is unchanged and now points at it.
+  Document credit_note = 1;
+}
+
+message GetDocumentRequest {
+  string id = 1;
+}
+message GetDocumentResponse {
+  Document document = 1;
+}
+
+message ListDocumentsRequest {
+  DocumentKind kind = 1;
+  string order_id = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+  string next_page_token = 2;
+}
+
+message RenderDocumentRequest {
+  string id = 1;
+}
+message RenderDocumentResponse {
+  // The artifact as stored when the document was issued. Re-rendering from
+  // current data would answer a different question convincingly enough that
+  // nobody would notice it was the wrong one.
+  bytes body = 1;
+  string content_type = 2;
+  string filename = 3;
+}
+
+enum SubscriptionStatus {
+  SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
+  SUBSCRIPTION_STATUS_ACTIVE = 1;
+  SUBSCRIPTION_STATUS_PAST_DUE = 2;
+  SUBSCRIPTION_STATUS_CANCELLED = 3;
+}
+
+enum BillingPeriod {
+  BILLING_PERIOD_UNSPECIFIED = 0;
+  BILLING_PERIOD_MONTHLY = 1;
+  BILLING_PERIOD_ANNUAL = 2;
+}
+
+message Subscription {
+  string tier = 1;
+  SubscriptionStatus status = 2;
+  BillingPeriod period = 3;
+  twentyfour.common.v1.Money amount = 4;
+  google.protobuf.Timestamp current_period_start = 5;
+  google.protobuf.Timestamp renews_at = 6;
+  // Cancelled at the end of the paid period rather than immediately, which is
+  // what a merchant expects from something they have already paid for.
+  google.protobuf.Timestamp cancels_at = 7;
+}
+
+message GetSubscriptionRequest {}
+message GetSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message ChangeSubscriptionRequest {
+  string tier = 1;
+  BillingPeriod period = 2;
+  bool cancel = 3;
+}
+message ChangeSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message RunBillingCycleRequest {
+  // Bill everything due on or before this. Passed in rather than read from the
+  // clock so a cycle can be re-run for a date it failed on, which is the whole
+  // reason a scheduled job needs a parameter at all.
+  google.protobuf.Timestamp through = 1;
+}
+message RunBillingCycleResponse {
+  repeated Document invoices = 1;
+  int32 skipped = 2;
+}

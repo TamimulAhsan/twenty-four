@@ -8,6 +8,13 @@ const ROLE: Record<string, string> = {
 }
 const EDGE: Record<string, string> = {
   routes: 'var(--ingress)', selects: '#4a5570', depends: 'var(--app)',
+  stores: 'var(--data)', publishes: 'var(--bus)', consumes: 'var(--bus)',
+  replicates: 'var(--cdc)',
+}
+// The bus is drawn dashed in both directions, so an event flow is
+// distinguishable from a call at a glance rather than by reading the colour.
+const DASHED: Record<string, string> = {
+  selects: '5 5', publishes: '2 4', consumes: '2 4', replicates: '8 3',
 }
 const MIN_K = 0.25, MAX_K = 2.5
 const clampK = (k: number) => Math.min(MAX_K, Math.max(MIN_K, k))
@@ -133,7 +140,7 @@ export function Topology({ g, sel, onSelect, onBackground }: {
             return (
               <g key={i} opacity={sel !== null && !on ? 0.1 : 1}>
                 <path d={d} fill="none" stroke={EDGE[e.kind]} strokeWidth={on ? 2.2 : 1.3}
-                      strokeDasharray={e.kind === 'selects' ? '5 5' : undefined}
+                      strokeDasharray={DASHED[e.kind]}
                       markerEnd={`url(#ar-${e.kind})`} />
                 {on && <circle r="3.5" fill={EDGE[e.kind]}>
                   <animateMotion dur="1.5s" repeatCount="indefinite" path={d} />

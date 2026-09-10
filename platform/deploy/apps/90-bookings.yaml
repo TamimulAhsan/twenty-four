@@ -1,0 +1,51 @@
+# Bookings: the calendar.
+#
+# One guarantee, and everything is arranged around it: a resource cannot be
+# promised twice. The capacity check runs inside a lock on the resource, because
+# the gap between "the page said it was free" and "the button was pressed" is
+# where a double booking lives.
+#
+# Resources, not staff and not rooms. A salon books a person, a hotel books a
+# room, a restaurant books a table; they are one shape, and the industry profile
+# decides what a merchant sees them called.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookings
+  namespace: twentyfour
+  labels: { app: bookings, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: bookings } }
+  template:
+    metadata: { labels: { app: bookings, tier: backend } }
+    spec:
+      containers:
+        - name: bookingsd
+          image: localhost:5000/twentyfour/bookings:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9120"
+            - "-catalog=catalog.twentyfour.svc.cluster.local:9103"
+            - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
+          ports: [{ containerPort: 9120, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: bookings } }
+          readinessProbe:
+            grpc: { port: 9120 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9120 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: bookings, namespace: twentyfour }
+spec:
+  selector: { app: bookings }
+  ports: [{ port: 9120, targetPort: 9120, name: grpc }]

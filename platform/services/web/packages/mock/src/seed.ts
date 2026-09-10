@@ -210,6 +210,12 @@ function profileFor(
     locale: 'hu-HU',
     currency: HUF,
     timezone: 'Europe/Budapest',
+    // A receipt has to say who issued it, so the fixture carries the same
+    // three fields a real tenant does rather than leaving the header blank
+    // and making the print look broken in development.
+    address: 'Bajcsy-Zsilinszky ut 12',
+    city: '1051 Budapest',
+    taxId: 'HU12345678',
     taxRates: TAX_RATES,
     openingHours: WEEK,
     pricesIncludeTax: true,

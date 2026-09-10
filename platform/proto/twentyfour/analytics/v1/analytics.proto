@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+package twentyfour.analytics.v1;
+
+import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
+
+// AnalyticsService answers questions about the business, over ClickHouse.
+//
+// It owns no data. Every row it reads arrived there by CDC off the services
+// that do own it, which is why this service has no writes, no outbox and no
+// migrations against an operational store. A reporting query against the
+// database that is taking payments is how a busy Saturday becomes an outage.
+//
+// Two consequences of reading a projection rather than the source, both
+// deliberate and both visible in the answers:
+//
+// It is behind. Replication is seconds, not zero, so a sale rung up while
+// somebody is looking at a chart is not on it yet. Every response says what it
+// includes, so a screen can state that rather than quietly disagree with the
+// till.
+//
+// It answers, it does not decide. There is no "is this good" anywhere in this
+// contract: no targets, no alerts, no health verdicts. Those belong to whoever
+// is asking, because the same number is fine for a bakery and alarming for a
+// jeweller.
+service AnalyticsService {
+  // Totals for a period, and the equal-length period before it. Both in one
+  // call, because a figure without its comparison is the commonest way a
+  // dashboard lies, and two round trips is two chances to compare windows
+  // that were never the same length.
+  rpc Summary(SummaryRequest) returns (SummaryResponse);
+  // One point per day, including the days with nothing in them. A gap in a
+  // line chart reads as no data rather than no trade.
+  rpc Series(SeriesRequest) returns (SeriesResponse);
+  // Revenue split by one dimension: payment method, category, item, staff.
+  rpc Breakdown(BreakdownRequest) returns (BreakdownResponse);
+  // Trade by weekday and hour, for staffing and opening hours.
+  rpc Heatmap(HeatmapRequest) returns (HeatmapResponse);
+}
+
+// A period is inclusive at both ends and expressed in the tenant's own days,
+// which is why the time zone travels with it. A sale rung up at half past
+// midnight belongs to the day the merchant thinks it does, and bucketing in
+// UTC moves takings between days for every business that trades in the
+// evening.
+message Period {
+  // YYYY-MM-DD, inclusive.
+  string from = 1;
+  // YYYY-MM-DD, inclusive.
+  string to = 2;
+  // IANA name, e.g. "Europe/Budapest". Required: there is no sensible default,
+  // and UTC as a fallback is a silent wrong answer rather than a loud one.
+  string time_zone = 3;
+}
+
+// What every figure here excludes: voided sales. A void is the record of a
+// sale that did not happen, and counting it as revenue that was later removed
+// would double the correction.
+message Totals {
+  twentyfour.common.v1.Money gross = 1;
+  twentyfour.common.v1.Money net = 2;
+  twentyfour.common.v1.Money tax = 3;
+  twentyfour.common.v1.Money discount = 4;
+
+  // What actually went back, not the value of the orders it went back
+  // against. A customer returning one item out of four refunded one item.
+  twentyfour.common.v1.Money refunded = 5;
+
+  // Cost and margin are unset rather than zero when any line in the period
+  // has no recorded cost. An item nobody costed has no margin; reporting one
+  // of a hundred percent is a number a merchant would act on.
+  optional twentyfour.common.v1.Money cost = 6;
+  optional twentyfour.common.v1.Money margin = 7;
+
+  int64 orders = 8;
+  // Sales to a known customer. Walk-ins are most sales in most trades and are
+  // counted in orders, never here.
+  int64 customers = 9;
+  twentyfour.common.v1.Money average_basket = 10;
+  // How many lines an average sale carries, in thousandths, because a basket
+  // of 2.4 items is a real answer and an integer cannot say it.
+  int64 average_lines_per_order_milli = 11;
+}
+
+message SummaryRequest {
+  Period period = 1;
+}
+message SummaryResponse {
+  Totals current = 1;
+  // The equal-length window immediately before, so a screen never has to
+  // work out what to compare against.
+  Totals previous = 2;
+  Period previous_period = 3;
+  Freshness freshness = 4;
+}
+
+// What this answer includes.
+//
+// Reported rather than hidden, because the alternative is a merchant seeing a
+// figure that disagrees with the sale they just rang up and concluding the
+// system is wrong. It is a projection, and saying so costs one line on a
+// screen.
+//
+// A high-water mark rather than a lag in seconds, because a lag cannot be
+// measured from the data: a shop that has sold nothing since lunch is not four
+// hours behind, it is up to date and quiet. "Includes everything through
+// 18:04" is true in both cases.
+message Freshness {
+  // The newest change this answer includes, as the source recorded it. Unset
+  // when the projection holds nothing for this tenant at all, which is not the
+  // same as being current.
+  optional google.protobuf.Timestamp through = 1;
+}
+
+message DayPoint {
+  // YYYY-MM-DD in the requested time zone.
+  string date = 1;
+  twentyfour.common.v1.Money gross = 2;
+  twentyfour.common.v1.Money net = 3;
+  twentyfour.common.v1.Money tax = 4;
+  optional twentyfour.common.v1.Money margin = 5;
+  int64 orders = 6;
+  int64 customers = 7;
+}
+
+message SeriesRequest {
+  Period period = 1;
+}
+message SeriesResponse {
+  repeated DayPoint points = 1;
+  Freshness freshness = 2;
+}
+
+// There is deliberately no dimension for staff. Splitting revenue by who rang
+// it up needs a person's name, names live in Auth, and Auth is not in this
+// projection. An enum value that could only ever answer with a UUID would be a
+// promise this cannot keep.
+enum Dimension {
+  DIMENSION_UNSPECIFIED = 0;
+  // By how it was paid for. A sale settled half in cash and half on a card
+  // counts in both, for what each actually took: attributing the whole sale to
+  // the first tender is how a drawer stops reconciling.
+  DIMENSION_METHOD = 1;
+  DIMENSION_CATEGORY = 2;
+  DIMENSION_ITEM = 3;
+}
+
+message Slice {
+  // The stable identifier: a method key, a category id, an item id. Empty for
+  // the folded remainder, and empty for the items in no category, which is a
+  // real group rather than a missing value.
+  string key = 1;
+  // What to put on screen. A category's name, an item's name. Never a key
+  // dressed up as a label, and never a label used as a key. Empty where there
+  // is no name to give, so the word for "no category" is chosen by whoever is
+  // rendering it, in their own language and their own trade's vocabulary.
+  string label = 2;
+  twentyfour.common.v1.Money gross = 3;
+  int64 orders = 4;
+  // Share of the period's gross, in basis points. Integers, for the same
+  // reason money is: a percentage that has been through a float disagrees
+  // with the total it came from.
+  int32 share_basis_points = 5;
+}
+
+message BreakdownRequest {
+  Period period = 1;
+  Dimension dimension = 2;
+  // Everything past this is folded into one remainder row rather than shown as
+  // a tail nobody reads. Zero means no limit.
+  int32 limit = 3;
+}
+message BreakdownResponse {
+  repeated Slice slices = 1;
+  // The folded remainder, unset when nothing was folded. Separate from the
+  // list so a caller can render it differently, and so it cannot be sorted
+  // into the middle of the ranking.
+  optional Slice other = 2;
+  Freshness freshness = 3;
+}
+
+message HeatCell {
+  // 1 is Monday, 7 is Sunday. ISO order, not the locale's, because the wire
+  // format is not a presentation choice.
+  int32 weekday = 1;
+  // 0 to 23, in the requested time zone.
+  int32 hour = 2;
+  int64 orders = 3;
+  twentyfour.common.v1.Money gross = 4;
+}
+
+message HeatmapRequest {
+  Period period = 1;
+}
+message HeatmapResponse {
+  // Every cell, including the empty ones. A caller rendering a grid should not
+  // have to invent the hours nobody traded in.
+  repeated HeatCell cells = 1;
+  Freshness freshness = 2;
+}

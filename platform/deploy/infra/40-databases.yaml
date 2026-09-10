@@ -1,6 +1,14 @@
 # Each service owns a private database, so no service can read another's tables
 # even by accident. Postgres only runs its init scripts on a fresh volume, so
 # this Job exists to create them idempotently on an existing one too.
+#
+# Which databases to create is not written here. It is read from the keys of the
+# service-dsn Secret, which is itself derived from which services own a
+# migrations directory. One source, three readers: this Job, the pods that mount
+# their own DSN, and the relay that drains whichever of them grew an outbox.
+# A list written down here would be a fourth copy, and the copy that is wrong is
+# always the one nobody looks at: a service whose DSN exists and whose database
+# does not starts, fails to migrate, and takes a restart loop to notice.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,6 +20,9 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      volumes:
+        - name: dsn
+          secret: { secretName: service-dsn }
       containers:
         - name: psql
           image: docker.io/library/postgres:18-alpine
@@ -21,13 +32,16 @@ spec:
             - { name: PGDATABASE, value: twentyfour }
             - name: PGPASSWORD
               valueFrom: { secretKeyRef: { name: postgres, key: POSTGRES_PASSWORD } }
+          volumeMounts:
+            - { name: dsn, mountPath: /etc/dsn, readOnly: true }
           command:
             - sh
             - -c
             - |
               set -e
               until pg_isready -q; do sleep 2; done
-              for db in rbac auth catalog inventory staff payments pos tenant provisioning; do
+              for f in /etc/dsn/*; do
+                db=$(basename "$f")
                 # CREATE DATABASE has no IF NOT EXISTS, so ask first.
                 if ! psql -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1; then
                   psql -c "CREATE DATABASE \"$db\""

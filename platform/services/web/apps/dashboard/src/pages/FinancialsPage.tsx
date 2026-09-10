@@ -1,12 +1,6 @@
 import { useMemo, useState } from 'react'
-import {
-  change,
-  dayCount,
-  financialSummary,
-  hourlyHeatmap,
-  revenueBy,
-  revenueByDay,
-} from '@twentyfour/analytics'
+import { change, dayCount } from '@twentyfour/analytics'
+import type { ReportSlice, ReportTotals } from '@twentyfour/api'
 import { money, type Money } from '@twentyfour/money'
 import {
   Badge, Card, CardHeader, ErrorState, Heatmap, Icon, MoneyText, PageHeader, RankBars,
@@ -15,6 +9,7 @@ import {
 } from '@twentyfour/ui'
 import { OrderDetailDialog } from '../components/OrderDetailDialog'
 import { useTradeData } from '../analytics/useTradeData'
+import { useReport } from '../analytics/useReport'
 import { PeriodPicker, usePeriod } from '../analytics/PeriodPicker'
 import { Delta } from '../analytics/Delta'
 
@@ -26,53 +21,74 @@ export function FinancialsPage() {
   const dates = useDateFormat()
   const [showAll, setShowAll] = useState(false)
 
+  // The figures come from the analytics service, which computes them over a
+  // projection of the operational stores. They were computed here, in the
+  // browser, over every order in the period: correct at eight sales a day and
+  // hopeless at eight hundred. The sales table below still reads orders,
+  // because listing sales is not an aggregate.
+  const report = useReport(period, comparison)
+
   const analysis = useMemo(() => {
-    const now = financialSummary(data.orders)
-    const before = financialSummary(data.previousOrders)
-    const days = dayCount(period)
-    const series = revenueByDay(data.orders, period)
-    const priorSeries = revenueByDay(data.previousOrders, comparison)
-
-    const categories = new Map(data.items.map((item) => [item.id, item.categoryId ?? 'Uncategorised']))
-    const byCategory = new Map<string, number>()
-    for (const order of data.orders) {
-      for (const line of order.lines) {
-        const key = categories.get(line.itemId) ?? 'Uncategorised'
-        byCategory.set(key, (byCategory.get(key) ?? 0) + line.grossMinor)
-      }
+    const zeroMoney: Money = money(0, currency)
+    const empty: ReportTotals = {
+      gross: zeroMoney, net: zeroMoney, tax: zeroMoney, discount: zeroMoney,
+      refunded: zeroMoney, cost: null, margin: null, orders: 0, customers: 0,
+      averageBasket: zeroMoney, averageLinesPerOrderMilli: 0,
     }
-
+    const now = report.summary?.current ?? empty
+    const before = report.summary?.previous ?? empty
     return {
       now,
       before,
-      days,
-      series,
-      priorSeries,
-      byMethod: revenueBy(data.orders, (order) => order.method, { limit: 4 }),
-      byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
-      heat: hourlyHeatmap(data.orders),
+      days: dayCount(period),
+      series: report.series?.points ?? [],
+      priorSeries: report.previousSeries?.points ?? [],
+      byMethod: report.byMethod,
+      byCategory: report.byCategory,
+      heat: report.heatmap?.cells ?? [],
+      // Null when no line in the period has a cost, which is not a rate of
+      // zero: the question has no answer rather than an answer of nothing.
+      marginRate:
+        now.margin === null || now.net.minor === 0
+          ? null
+          : now.margin.minor / now.net.minor,
     }
-  }, [data.orders, data.previousOrders, data.items, period, comparison])
+  }, [report, period, currency])
 
   const zero = money(0, currency)
   const amount = (minor: number | null): Money => (minor === null ? zero : money(minor, currency))
   const compact = (value: number) =>
     new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 
-  if (data.isError) {
+  if (data.isError || report.isError) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Financials" />
-        <ErrorState onRetry={data.refetch} />
+        <ErrorState
+          onRetry={() => {
+            data.refetch()
+            report.refetch()
+          }}
+        />
       </div>
     )
   }
 
   const { now, before } = analysis
-  const categoryName = (id: string) =>
-    data.items.find((item) => item.categoryId === id)?.categoryId === id
-      ? (id.split('-').pop() ?? id).replace(/_/g, ' ')
-      : id
+
+  // The remainder rides at the end of the bar rather than being dropped, so
+  // the shares still add up to the revenue figure shown above them.
+  const methodSegments = [
+    ...(analysis.byMethod?.slices ?? []).map((row) => ({
+      key: row.key,
+      label: row.label.charAt(0).toUpperCase() + row.label.slice(1),
+      gross: row.gross,
+      shareBasisPoints: row.shareBasisPoints,
+    })),
+    ...(analysis.byMethod?.other
+      ? [{ key: 'other', label: 'Other', ...pick(analysis.byMethod.other) }]
+      : []),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,7 +97,10 @@ export function FinancialsPage() {
         description="What the business took, what it kept, and where both came from."
       />
 
-      <PeriodPicker preset={preset} onChange={setPreset} comparison={comparison} />
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <PeriodPicker preset={preset} onChange={setPreset} comparison={comparison} />
+        <Freshness through={report.through} loading={report.isPending} />
+      </div>
 
       {/* Gross, net and margin are three different questions and a merchant
           needs all three at once. Tax is shown separately and never inside a
@@ -90,32 +109,36 @@ export function FinancialsPage() {
         <FigureTile
           label="Revenue taken"
           hint="Everything customers paid, tax included"
-          value={amount(now.grossMinor)}
-          delta={change(now.grossMinor, before.grossMinor)}
-          loading={data.isPending}
+          value={now.gross}
+          delta={change(now.gross.minor, before.gross.minor)}
+          loading={report.isPending}
         />
         <FigureTile
           label="Gross margin"
           hint="Net less what the goods cost"
-          value={amount(now.marginMinor)}
-          secondary={now.marginRate === null ? 'no cost recorded' : `${(now.marginRate * 100).toFixed(1)}% of net`}
-          delta={change(now.marginMinor ?? 0, before.marginMinor ?? 0)}
-          loading={data.isPending}
+          value={now.margin ?? zero}
+          secondary={
+            analysis.marginRate === null
+              ? 'no cost recorded'
+              : `${(analysis.marginRate * 100).toFixed(1)}% of net`
+          }
+          delta={change(now.margin?.minor ?? 0, before.margin?.minor ?? 0)}
+          loading={report.isPending}
         />
         <FigureTile
           label="Average basket"
           hint={`Across ${now.orders} sales`}
-          value={amount(now.averageBasketMinor)}
-          delta={change(now.averageBasketMinor, before.averageBasketMinor)}
-          loading={data.isPending}
+          value={now.averageBasket}
+          delta={change(now.averageBasket.minor, before.averageBasket.minor)}
+          loading={report.isPending}
         />
         <FigureTile
           label="Given away"
           hint="Discounts, before refunds"
-          value={amount(now.discountMinor)}
-          delta={change(now.discountMinor, before.discountMinor)}
+          value={now.discount}
+          delta={change(now.discount.minor, before.discount.minor)}
           goodWhenUp={false}
-          loading={data.isPending}
+          loading={report.isPending}
         />
       </div>
 
@@ -127,12 +150,12 @@ export function FinancialsPage() {
           formatLabel={(label) => dates.date(label)}
           formatValue={(value) => compact(value)}
           series={[
-            { key: 'now', label: 'This period', values: analysis.series.map((point) => point.grossMinor) },
+            { key: 'now', label: 'This period', values: analysis.series.map((point) => point.gross.minor) },
             {
               key: 'before',
               label: 'Previous period',
               comparison: true,
-              values: analysis.priorSeries.map((point) => point.grossMinor),
+              values: analysis.priorSeries.map((point) => point.gross.minor),
             },
           ]}
           height={260}
@@ -156,40 +179,40 @@ export function FinancialsPage() {
                 </tr>
               </thead>
               <tbody>
-                <LedgerRow label="Revenue taken" hint="Gross, as the customer paid" value={amount(now.grossMinor)} />
+                <LedgerRow label="Revenue taken" hint="Gross, as the customer paid" value={now.gross} />
                 <LedgerRow
                   label="Tax collected"
                   hint="Owed onward. Never yours."
-                  value={amount(-now.taxMinor)}
+                  value={amount(-now.tax.minor)}
                   muted
                 />
-                <LedgerRow label="Net revenue" value={amount(now.netMinor)} emphasis share={1} netMinor={now.netMinor} />
+                <LedgerRow label="Net revenue" value={now.net} emphasis share={1} netMinor={now.net.minor} />
                 <LedgerRow
                   label="Cost of goods"
-                  hint={now.costMinor === null ? 'Not recorded on every item' : undefined}
-                  value={now.costMinor === null ? null : amount(-now.costMinor)}
-                  netMinor={now.netMinor}
-                  share={now.costMinor === null ? null : -now.costMinor / now.netMinor}
+                  hint={now.cost === null ? 'Not recorded on every item' : undefined}
+                  value={now.cost === null ? null : amount(-now.cost.minor)}
+                  netMinor={now.net.minor}
+                  share={now.cost === null ? null : -now.cost.minor / now.net.minor}
                   muted
                 />
                 <LedgerRow
                   label="Gross margin"
-                  value={now.marginMinor === null ? null : amount(now.marginMinor)}
-                  netMinor={now.netMinor}
-                  share={now.marginRate}
+                  value={now.margin}
+                  netMinor={now.net.minor}
+                  share={analysis.marginRate}
                   emphasis
                 />
                 <LedgerRow
                   label="Refunded"
-                  value={amount(-now.refundedMinor)}
-                  netMinor={now.netMinor}
-                  share={now.netMinor === 0 ? null : -now.refundedMinor / now.netMinor}
+                  value={amount(-now.refunded.minor)}
+                  netMinor={now.net.minor}
+                  share={now.net.minor === 0 ? null : -now.refunded.minor / now.net.minor}
                   muted
                 />
               </tbody>
             </Table>
           </TableScroll>
-          {now.costMinor === null && (
+          {now.cost === null && (
             <p className="flex items-start gap-2 border-t border-border p-4 text-sm text-text-muted">
               <Icon name="Info" size="sm" className="mt-0.5 shrink-0" />
               Some items have no cost recorded, so margin cannot be calculated for the whole
@@ -203,11 +226,11 @@ export function FinancialsPage() {
             <CardHeader title="How people paid" description="Whatever this market's rails answered with." />
             <ShareBar
               className="mt-4"
-              segments={analysis.byMethod.map((row) => ({
+              segments={methodSegments.map((row) => ({
                 key: row.key,
-                label: row.key.charAt(0).toUpperCase() + row.key.slice(1),
-                value: row.grossMinor,
-                display: `${Math.round(row.share * 100)}%`,
+                label: row.label,
+                value: row.gross.minor,
+                display: `${Math.round(row.shareBasisPoints / 100)}%`,
               }))}
             />
           </Card>
@@ -216,12 +239,15 @@ export function FinancialsPage() {
             <CardHeader title="Where the money came from" description="Revenue by category." />
             <RankBars
               className="mt-4"
-              rows={analysis.byCategory.slice(0, 6).map(([id, value]) => ({
-                key: id,
-                label: categoryName(id),
-                value,
-                display: <MoneyText value={money(value, currency)} display="none" />,
-                meta: `${Math.round((value / Math.max(now.grossMinor, 1)) * 100)}%`,
+              rows={(analysis.byCategory?.slices ?? []).map((row) => ({
+                key: row.key || 'uncategorised',
+                // The service returns no label for the items in no category,
+                // because what to call that group is a decision about language
+                // and trade vocabulary rather than about data.
+                label: row.label || 'Uncategorised',
+                value: row.gross.minor,
+                display: <MoneyText value={row.gross} display="none" />,
+                meta: `${Math.round(row.shareBasisPoints / 100)}%`,
               }))}
             />
           </Card>
@@ -233,9 +259,11 @@ export function FinancialsPage() {
           title="When the money comes in"
           caption="Revenue by hour and weekday. This is the shape that decides a rota."
           cells={analysis.heat.map((cell) => ({
-            weekday: cell.weekday,
+            // The API speaks ISO weekdays, Monday 1 to Sunday 7. The grid is
+            // indexed the way Date.getDay is, with Sunday at 0.
+            weekday: cell.weekday === 7 ? 0 : cell.weekday,
             hour: cell.hour,
-            value: cell.grossMinor,
+            value: cell.gross.minor,
             detail: <p className="tnum mt-0.5 text-text-subtle">{cell.orders} sales</p>,
           }))}
           formatValue={(value) => (value === 0 ? 'Nothing' : compact(value))}
@@ -390,5 +418,29 @@ function LedgerRow({
           : `${(share * 100).toFixed(1)}%`}
       </Td>
     </Tr>
+  )
+}
+
+/** The two fields a share bar segment needs off a slice. */
+function pick(slice: ReportSlice) {
+  return { gross: slice.gross, shareBasisPoints: slice.shareBasisPoints }
+}
+
+/**
+ * How current these figures are.
+ *
+ * The numbers come from a projection kept a few seconds behind the till, so a
+ * sale rung up thirty seconds ago may not be in them yet. Saying so is what
+ * stops a merchant who can see both screens concluding one of them is broken;
+ * hiding it would not make the delay go away, only the explanation.
+ */
+function Freshness({ through, loading }: { through: string | null; loading: boolean }) {
+  const dates = useDateFormat()
+  if (loading || through === null) return null
+  return (
+    <p className="flex items-center gap-1.5 text-sm text-text-subtle">
+      <Icon name="RefreshCw" size="sm" />
+      Includes sales up to {dates.dateTime(through)}
+    </p>
   )
 }

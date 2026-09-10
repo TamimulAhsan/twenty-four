@@ -5,6 +5,7 @@ import {
   PageBody, Badge, Button, Card, CardHeader, ErrorState, MoneyText, Skeleton, StatTile, Table,
   TableScroll, Td, Th, Tr, cn, useDateFormat, useFormat, useToast,
 } from '@twentyfour/ui'
+import { DEFAULT_PAPER, PrintableDayReport, printReceipt } from '@twentyfour/shell'
 import { money, parseDecimalInput, serialiseMoney, toDecimalString } from '@twentyfour/money'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -116,10 +117,19 @@ export function DayClose() {
               size="lg"
               iconStart="Printer"
               className="self-start"
-              onClick={() => window.print()}
+              disabled={!takings.data}
+              onClick={() => printReceipt(DEFAULT_PAPER)}
             >
               Print the day report
             </Button>
+
+            {/*
+              The sheet that actually prints, on the same roll as the receipts
+              and rendered at the end of body rather than here. Without it
+              window.print() sends the whole application to the printer, which
+              is what it used to do.
+            */}
+            {takings.data && <PrintableDayReport takings={takings.data} date={today()} />}
           </>
         )}
       </div>

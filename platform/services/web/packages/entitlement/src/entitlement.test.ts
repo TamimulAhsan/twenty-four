@@ -372,3 +372,26 @@ describe('profile to vocabulary family', () => {
     expect(set.staff_member.other).toBe('Servers')
   })
 })
+
+describe('a nav item that needs a permission', () => {
+  it('carries it through so the sidebar can filter on it', () => {
+    // Entitlement answers what the tenant bought; it cannot answer who is
+    // looking. The books are the case that needs both: every tenant taking
+    // payments has a ledger, and only an owner or their accountant may read it.
+    const money = buildNav(tenant('growth', 'restaurant')).find((group) => group.id === 'money')
+    const books = money?.items.find((item) => item.id === 'books')
+    expect(books).toBeDefined()
+    expect(books?.permission).toBe('reports.financial')
+  })
+
+  it('leaves every other item ungated, because the module is the answer there', () => {
+    // A tenant that bought POS shows the till to everyone who works there, and
+    // the screen decides what they may do on it. Gating more than necessary
+    // would hide screens from the people who need them.
+    const gated = buildNav(tenant('growth', 'restaurant'))
+      .flatMap((group) => group.items)
+      .filter((item) => item.permission)
+      .map((item) => item.id)
+    expect(gated).toEqual(['books'])
+  })
+})

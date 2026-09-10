@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package twentyfour.scheduler.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SchedulerService is what makes something happen later.
+//
+// Two different things live here and it is worth saying why they are one
+// service. A schedule is a standing instruction that fires repeatedly: the
+// six-hour budget cycle, the nightly reconciliation. A reminder is a single
+// instruction that fires once: this booking, tomorrow morning. They look
+// different to a caller and are the same thing to a runner, which is a claim
+// about a due time and a promise not to run it twice.
+//
+// It does not do the work. It publishes an event saying the work is due, and
+// whichever service owns that work consumes it. That is the seam that keeps a
+// scheduler from slowly becoming the place every cron job's logic lives, and it
+// is why the scheduler has no idea what reconciliation involves.
+service SchedulerService {
+  // A standing instruction. Registering the same key again replaces it, so a
+  // service that declares its schedules at startup can be restarted.
+  rpc PutSchedule(PutScheduleRequest) returns (PutScheduleResponse);
+  rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
+  rpc DeleteSchedule(DeleteScheduleRequest) returns (DeleteScheduleResponse);
+  // Runs a schedule now, without disturbing when it was next going to run.
+  // What a specialist does when a nightly job needs to have happened by now.
+  rpc RunNow(RunNowRequest) returns (RunNowResponse);
+
+  // A single instruction, at a time.
+  rpc Schedule(ScheduleRequest) returns (ScheduleResponse);
+  // Called when the thing the reminder was about stops being true: the booking
+  // was cancelled, the invoice was paid. Cancelling is not deleting: the row
+  // stays, so "why did nobody get reminded" has an answer.
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+  rpc ListReminders(ListRemindersRequest) returns (ListRemindersResponse);
+}
+
+message Schedule {
+  // Chosen by the service that owns the work, and stable: "marketing.budget".
+  // Registering the same key again replaces the schedule rather than adding a
+  // second one, which is what lets a service declare its schedules on every
+  // start without accumulating duplicates.
+  string key = 1;
+  // The topic published when it fires.
+  string topic = 2;
+  // How often, in seconds. An interval rather than a cron expression: the work
+  // this platform schedules is "every six hours" and "once a day", and a cron
+  // parser is a dependency plus a class of bug for expressiveness nothing has
+  // asked for yet.
+  int64 every_seconds = 3;
+  // Which hour of the day a daily schedule fires, in the tenant's own time
+  // zone. Only meaningful when the interval is a day or longer: a nightly
+  // reconciliation that runs at whatever time the pod happened to start is a
+  // nightly reconciliation nobody can reason about.
+  optional int32 hour = 4;
+  string time_zone = 5;
+  bool paused = 6;
+  // Carried into the event, so the consumer knows what it was asked to do
+  // without a second lookup.
+  string payload = 7;
+  google.protobuf.Timestamp next_run_at = 8;
+  google.protobuf.Timestamp last_run_at = 9;
+  string last_error = 10;
+}
+
+message PutScheduleRequest {
+  string key = 1;
+  string topic = 2;
+  int64 every_seconds = 3;
+  optional int32 hour = 4;
+  string time_zone = 5;
+  string payload = 6;
+  bool paused = 7;
+}
+message PutScheduleResponse {
+  Schedule schedule = 1;
+}
+
+message ListSchedulesRequest {}
+message ListSchedulesResponse {
+  repeated Schedule schedules = 1;
+}
+
+message DeleteScheduleRequest {
+  string key = 1;
+}
+message DeleteScheduleResponse {}
+
+message RunNowRequest {
+  string key = 1;
+}
+message RunNowResponse {
+  Schedule schedule = 1;
+}
+
+enum ReminderState {
+  REMINDER_STATE_UNSPECIFIED = 0;
+  REMINDER_STATE_PENDING = 1;
+  REMINDER_STATE_FIRED = 2;
+  // Cancelled rather than deleted, so "why did nobody get reminded" has an
+  // answer that is not silence.
+  REMINDER_STATE_CANCELLED = 3;
+}
+
+message Reminder {
+  string id = 1;
+  string topic = 2;
+  google.protobuf.Timestamp due_at = 3;
+  ReminderState state = 4;
+  // What it is about, so cancelling everything for a booking does not need the
+  // caller to have kept the reminder ids.
+  string subject_type = 5;
+  string subject_id = 6;
+  string payload = 7;
+  google.protobuf.Timestamp fired_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ScheduleRequest {
+  string topic = 1;
+  google.protobuf.Timestamp due_at = 2;
+  string subject_type = 3;
+  string subject_id = 4;
+  string payload = 5;
+  // A retried request with the same key schedules once. Without it a booking
+  // saved twice reminds twice.
+  string idempotency_key = 6;
+}
+message ScheduleResponse {
+  Reminder reminder = 1;
+}
+
+message CancelRequest {
+  // Either one reminder, or everything still pending about one thing. The
+  // second is what a cancelled booking needs, and it does not require the
+  // caller to have kept the ids.
+  string id = 1;
+  string subject_type = 2;
+  string subject_id = 3;
+}
+message CancelResponse {
+  int32 cancelled = 1;
+}
+
+message ListRemindersRequest {
+  ReminderState state = 1;
+  string subject_type = 2;
+  string subject_id = 3;
+  int32 page_size = 4;
+}
+message ListRemindersResponse {
+  repeated Reminder reminders = 1;
+}

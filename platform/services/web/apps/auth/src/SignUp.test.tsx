@@ -132,6 +132,46 @@ describe('the signup form', () => {
     )
   })
 
+  /**
+   * The length is Auth's setting, not the form's. A development cluster and a
+   * real one enforce different numbers, and a form carrying its own copy is
+   * wrong on one of them without anybody finding out until a merchant is
+   * refused a password the hint said was long enough.
+   */
+  describe('the password rule', () => {
+    it('states the length this deployment enforces', async () => {
+      vi.spyOn(auth, 'policy').mockResolvedValue({ minPasswordLength: 14 })
+      renderForm()
+      press('Bakery')
+      press('Continue')
+      expect(await screen.findByText('At least 14 characters.')).toBeTruthy()
+    })
+
+    it('refuses against that length rather than its own', async () => {
+      vi.spyOn(auth, 'policy').mockResolvedValue({ minPasswordLength: 14 })
+      renderForm()
+      press('Bakery')
+      press('Continue')
+      await screen.findByText('At least 14 characters.')
+      fill(/business name/i, 'Kenyér és Kávé')
+      fill(/your name/i, 'Márta Nagy')
+      fill(/^email/i, 'marta@kenyeresk.hu')
+      // Twelve characters: long enough for the fallback, short here.
+      fill(/^password/i, 'twelve-chars')
+      press('Continue')
+      expect(screen.getByText('Use at least 14 characters.')).toBeTruthy()
+      expect(heading()).toContain('The business, and you')
+    })
+
+    it('falls back to the shorter rule when the policy cannot be read', async () => {
+      vi.spyOn(auth, 'policy').mockRejectedValue(new Error('offline'))
+      renderForm()
+      press('Bakery')
+      press('Continue')
+      expect(await screen.findByText('At least 10 characters.')).toBeTruthy()
+    })
+  })
+
   it('goes back to the step that owns a field the gateway refused', async () => {
     vi.spyOn(auth, 'signup').mockRejectedValue(
       new HttpError({

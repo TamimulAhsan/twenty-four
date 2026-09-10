@@ -19,6 +19,19 @@ export { CatalogList } from './CatalogList'
 export { CatalogItemDialog } from './CatalogItemDialog'
 export { TeamList } from './TeamList'
 export { BusinessTypeSelector } from './BusinessTypeSelector'
+// The receipt, here rather than in the till, because the dashboard reprints
+// one too: a customer who has lost theirs asks the person in the back office,
+// not the person on the register.
+export {
+  ReceiptPreview,
+  PrintableReceipt,
+  useReceiptLines,
+} from './receipt/Receipt'
+export { PrintableDayReport } from './receipt/DayReport'
+export { PrintableDocument } from './receipt/Document'
+export { PAPERS, DEFAULT_PAPER, type Paper, type PaperId } from './receipt/paper'
+export { printReceipt, printDocument } from './receipt/print'
+
 export {
   useOrderRefund,
   RefundActions,

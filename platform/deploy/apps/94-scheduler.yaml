@@ -1,0 +1,48 @@
+# Scheduler: what makes something happen later.
+#
+# It publishes an event saying work is due and never does the work. That seam is
+# what stops a scheduler becoming the place every recurring job's logic ends up
+# living.
+#
+# Safe to run more than once: the runner claims rows with SKIP LOCKED, so a
+# second replica takes different work rather than the same work twice. A
+# scheduler that has to be a singleton is a scheduler that stops when its node
+# does.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  namespace: twentyfour
+  labels: { app: scheduler, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: scheduler } }
+  template:
+    metadata: { labels: { app: scheduler, tier: backend } }
+    spec:
+      containers:
+        - name: schedulerd
+          image: localhost:5000/twentyfour/scheduler:dev
+          imagePullPolicy: Always
+          args: ["-addr=:9116"]
+          ports: [{ containerPort: 9116, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: scheduler } }
+          readinessProbe:
+            grpc: { port: 9116 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9116 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: scheduler, namespace: twentyfour }
+spec:
+  selector: { app: scheduler }
+  ports: [{ port: 9116, targetPort: 9116, name: grpc }]

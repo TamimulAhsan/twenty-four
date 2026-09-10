@@ -5,7 +5,7 @@
  * Swapping the mock for the real gateway is deleting the service worker; not
  * one line in this file changes.
  */
-import { idempotencyKey, request } from './http'
+import { HttpError, idempotencyKey, request } from './http'
 import {
   parseBooking,
   parseBootstrap,
@@ -16,9 +16,26 @@ import {
   parseCheckoutResult,
   parseOrder,
   parsePayment,
+  parseReportBreakdown,
+  parseReportHeatmap,
+  parseReportSeries,
+  parseReportSummary,
   parseSubscription,
   parseTakings,
+  parseTrialBalance,
+  parseJournalEntry,
 } from './parse'
+// The ledger shapes live beside their parsers, because that is where the wire
+// is turned into them and a second declaration here would be a second answer.
+import type {
+  AccountKind,
+  JournalEntry,
+  JournalLine,
+  LedgerAccount,
+  TrialBalance,
+  TrialBalanceRow,
+} from './parse'
+import type { Money } from '@twentyfour/money'
 import type {
   Booking,
   BusinessProfile,
@@ -39,6 +56,11 @@ import type {
   OnboardingState,
   Order,
   Payment,
+  ReportBreakdown,
+  ReportDimension,
+  ReportHeatmap,
+  ReportSeries,
+  ReportSummary,
   Session,
   StaffMember,
   StockLevel,
@@ -57,13 +79,25 @@ export interface Credentials {
 }
 
 /**
- * The shortest password the gateway will accept.
+ * What the form assumes until Auth says otherwise.
  *
- * Stated here rather than in the form, because the form is not the control and
- * the mock enforces the same number. Two copies of this rule drift, and the
- * one that drifts is always the one the merchant sees.
+ * The real number is Auth's and only Auth's: it is configurable per
+ * deployment, twelve by default and four in development, and it is fetched
+ * from `/auth/policy`. This constant is what the field shows in the moment
+ * before that answer arrives, or if it never does.
+ *
+ * It is deliberately lower than the default rather than equal to it. A
+ * fallback that is too high refuses a password the deployment would have
+ * accepted, and the person on the other side has no way to discover that; a
+ * fallback that is too low costs a round trip and comes back as an error under
+ * the field. Only one of those two is recoverable.
  */
-export const MIN_PASSWORD_LENGTH = 10
+export const PASSWORD_LENGTH_FALLBACK = 10
+
+/** Auth's password rules, as the gateway reports them. */
+export interface PasswordPolicy {
+  readonly minPasswordLength: number
+}
 
 export interface SignupInput {
   email: string
@@ -96,6 +130,8 @@ export interface LoginResult {
 
 export const auth = {
   session: () => request<Session | null>('/auth/session'),
+  /** The rules this deployment enforces, so the form states the same ones. */
+  policy: () => request<PasswordPolicy>('/auth/policy'),
   login: (input: Credentials) =>
     request<LoginResult>('/auth/login', { method: 'POST', body: input }),
   signup: (input: SignupInput) => request<Session>('/auth/signup', { method: 'POST', body: input }),
@@ -338,12 +374,66 @@ export const orders = {
 
 export interface BookingInput {
   itemId: string
-  staffId: string | null
+  /**
+   * What to book it on. Empty means anybody free, which is what a customer
+   * booking online usually wants and what the service resolves for them.
+   *
+   * A resource rather than a member of staff: a salon books a person, a hotel
+   * books a room, a restaurant books a table, and they are one shape.
+   */
+  resourceId: string | null
   customerName: string
   customerPhone: string
+  customerEmail?: string
   startsAt: string
   note?: string
-  deposit?: { minor: string; currency: string }
+  /** Minor units. Absent means no deposit was asked for, which is not zero. */
+  depositMinor?: number
+  idempotencyKey?: string
+}
+
+/** A free time, as the service worked it out from opening hours minus what is booked. */
+export interface Slot {
+  readonly startsAt: string
+  readonly endsAt: string
+  readonly resourceId: string
+  readonly resourceName: string
+}
+
+/** When a resource is open, as wall clock times in the tenant's own zone. */
+export interface OpeningWindow {
+  /** ISO weekday: 1 is Monday, matching the analytics heatmap. */
+  readonly weekday: number
+  readonly opens: string
+  readonly closes: string
+}
+
+/**
+ * Something that can be booked.
+ *
+ * Not "staff" and not "rooms". A salon books a person, a hotel books a room, a
+ * clinic books both and a restaurant books a table; naming the concept after
+ * one trade is how a calendar stops working for the other forty. What a
+ * merchant sees these called comes from the term set.
+ */
+export interface BookingResource {
+  readonly id: string
+  readonly name: string
+  /** Set when this resource is a person, so a rota and a calendar can agree. */
+  readonly staffId: string | null
+  /** How many bookings it holds at once. One for a chair, six for a table. */
+  readonly capacity: number
+  readonly active: boolean
+  readonly opening: readonly OpeningWindow[]
+}
+
+export interface ResourceInput {
+  id?: string
+  name: string
+  staffId?: string
+  capacity: number
+  active: boolean
+  opening: readonly OpeningWindow[]
 }
 
 export const bookings = {
@@ -363,6 +453,36 @@ export const bookings = {
     request<unknown>(`/bookings/${encodeURIComponent(id)}`, { method: 'PATCH', body: input }).then(
       parseBooking,
     ) as Promise<Booking>,
+
+  /**
+   * Free times for one item on one day.
+   *
+   * Asked rather than worked out here, and that is the point: availability is
+   * the opening pattern minus what is already booked, and a browser computing
+   * it would be computing it from a list it fetched a moment ago. The service
+   * answers from the same rows it will lock against when the booking is made.
+   */
+  availability: (itemId: string, date: string, resourceId?: string) =>
+    request<Slot[]>('/bookings/availability', { query: { itemId, date, resourceId } }),
+
+  resources: (includeInactive = false) =>
+    request<BookingResource[]>('/bookings/resources', {
+      query: includeInactive ? { includeInactive: 'true' } : {},
+    }),
+
+  /**
+   * Creates or replaces a resource, opening pattern and all.
+   *
+   * The pattern is replaced rather than merged, because a merge cannot express
+   * "we no longer work Saturdays": the absence of a window is the fact being
+   * stated, and a merge has no way to send an absence.
+   */
+  putResource: (input: ResourceInput) =>
+    request<BookingResource>('/bookings/resources', { method: 'PUT', body: input }),
+
+  /** Deactivates rather than deleting: bookings point at it. */
+  removeResource: (id: string) =>
+    request<void>(`/bookings/resources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
 
 /* -------------------------------------------------------------- inventory */
@@ -544,6 +664,29 @@ export const documents = {
     ) as Promise<FiscalDocument>,
 
   /**
+   * The stored artifact, as it was issued.
+   *
+   * Fetched directly rather than through request(), because it is a document
+   * download and not an API call: the body is text, there is no envelope to
+   * unwrap, and asking the JSON path to make an exception for one caller would
+   * put a content type into every other one.
+   */
+  artifact: async (id: string): Promise<string> => {
+    const response = await fetch(`/api${'/documents/'}${encodeURIComponent(id)}/artifact`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'text/plain' },
+    })
+    if (!response.ok) {
+      throw new HttpError({
+        status: response.status,
+        code: 'artifact_unavailable',
+        message: 'That document could not be read.',
+      })
+    }
+    return response.text()
+  },
+
+  /**
    * A correction is a new document referencing the original. There is no edit
    * and no delete: an issued document is immutable, and the original stays
    * exactly as it was issued.
@@ -575,5 +718,381 @@ export const billing = {
       method: 'PATCH',
       body: { tier, billingPeriod },
       idempotencyKey: idempotencyKey(),
+    }),
+}
+
+/* -------------------------------------------------------------- analytics */
+
+/**
+ * A window, in the merchant's own days.
+ *
+ * The time zone travels with it rather than being assumed anywhere downstream.
+ * It decides which day a sale belongs to, and the browser is the only
+ * participant that knows what the merchant's clock says: bucketing in UTC moves
+ * takings between days for every business that trades in the evening.
+ */
+export interface ReportPeriod {
+  /** Inclusive, YYYY-MM-DD. */
+  readonly from: string
+  /** Inclusive, YYYY-MM-DD. */
+  readonly to: string
+}
+
+const timeZone = (): string =>
+  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+const window = (period: ReportPeriod) => ({
+  from: period.from,
+  to: period.to,
+  tz: timeZone(),
+})
+
+/**
+ * Figures, computed where the data is.
+ *
+ * These read a projection kept by change capture off the operational stores,
+ * not the stores themselves. That is why they can aggregate a year without
+ * the till noticing, and why every answer carries how fresh it is.
+ */
+export const analytics = {
+  summary: (period: ReportPeriod) =>
+    request<unknown>('/analytics/summary', { query: window(period) })
+      .then(parseReportSummary) as Promise<ReportSummary>,
+
+  series: (period: ReportPeriod) =>
+    request<unknown>('/analytics/series', { query: window(period) })
+      .then(parseReportSeries) as Promise<ReportSeries>,
+
+  /** `limit` folds the tail into one remainder row rather than dropping it. */
+  breakdown: (period: ReportPeriod, by: ReportDimension, limit?: number) =>
+    request<unknown>('/analytics/breakdown', {
+      query: { ...window(period), by, ...(limit ? { limit: String(limit) } : {}) },
+    }).then(parseReportBreakdown) as Promise<ReportBreakdown>,
+
+  heatmap: (period: ReportPeriod) =>
+    request<unknown>('/analytics/heatmap', { query: window(period) })
+      .then(parseReportHeatmap) as Promise<ReportHeatmap>,
+}
+
+/* ------------------------------------------------------------------- media */
+
+/** What a file is for. The purpose decides what may be uploaded and who may. */
+export type MediaPurpose =
+  | 'catalog_image'
+  | 'brand_logo'
+  | 'site_asset'
+  | 'attachment'
+  | 'ad_creative'
+
+export interface MediaFile {
+  readonly id: string
+  readonly purpose: MediaPurpose
+  readonly filename: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  /**
+   * Whether the bytes are actually there. A record exists from the moment a
+   * URL is signed, which is before anything has been uploaded, so a file that
+   * is not ready is a reservation rather than a file.
+   */
+  readonly ready: boolean
+  readonly subjectType: string | null
+  readonly subjectId: string | null
+  readonly createdAt: string
+}
+
+export interface UploadTicket {
+  readonly file: MediaFile
+  /** Where to PUT the bytes. Expires: it is a capability, not an address. */
+  readonly uploadUrl: string
+  readonly expiresAt: string
+}
+
+/**
+ * Files, in three steps, because the bytes never pass through the API.
+ *
+ * Ask for somewhere to put it, PUT straight to storage, then say it finished.
+ * That shape is visible here on purpose: an endpoint that took a multipart body
+ * would be an endpoint every product photograph in the market passes through,
+ * and it would be the thing that falls over the day somebody uploads a video.
+ */
+export const media = {
+  list: (filters: { purpose?: MediaPurpose; subjectType?: string; subjectId?: string } = {}) =>
+    request<MediaFile[]>('/media', { query: filters }),
+
+  detail: (id: string) => request<MediaFile>(`/media/${encodeURIComponent(id)}`),
+
+  /** Step one. Nothing is stored yet. */
+  requestUpload: (input: {
+    purpose: MediaPurpose
+    filename: string
+    contentType: string
+    sizeBytes: number
+    subjectType?: string
+    subjectId?: string
+  }) => request<UploadTicket>('/media/uploads', { method: 'POST', body: input }),
+
+  /** Step three. The size is taken from the store, not from what we claimed. */
+  confirm: (id: string) =>
+    request<MediaFile>(`/media/${encodeURIComponent(id)}/confirm`, { method: 'POST' }),
+
+  /**
+   * A short-lived link to read one file. Fetched when it is needed rather than
+   * held, because it stops working: a signed URL is a capability, and one kept
+   * in a cache outlives its usefulness and then renders as a broken image.
+   */
+  url: (id: string) =>
+    request<{ url: string; expiresAt: string }>(`/media/${encodeURIComponent(id)}/url`),
+
+  remove: (id: string) => request<MediaFile>(`/media/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+}
+
+/**
+ * Uploads the bytes, then confirms.
+ *
+ * Step two is a plain PUT straight at object storage and deliberately does not
+ * go through `request`: it carries no session cookie, no credentials and no
+ * JSON, because the signature in the URL is the entire authorisation. Sending
+ * our cookie to a storage host would be sending it somewhere it does not belong.
+ */
+export async function uploadFile(
+  file: File,
+  input: { purpose: MediaPurpose; subjectType?: string; subjectId?: string },
+): Promise<MediaFile> {
+  const ticket = await media.requestUpload({
+    purpose: input.purpose,
+    filename: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+    subjectType: input.subjectType,
+    subjectId: input.subjectId,
+  })
+  const put = await fetch(ticket.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  })
+  if (!put.ok) {
+    throw new HttpError({
+      status: put.status,
+      code: 'upload_failed',
+      // Written for a merchant. The storage host's own error body is not, and
+      // it is not ours to pass on.
+      message: 'That file could not be uploaded. Try again.',
+    })
+  }
+  return media.confirm(ticket.file.id)
+}
+
+/* ------------------------------------------------------------------- audit */
+
+export type AuditActor = 'user' | 'staff' | 'system' | 'anonymous'
+
+export interface AuditEntry {
+  readonly id: string
+  readonly action: string
+  readonly actorKind: AuditActor
+  readonly actorId: string
+  /** The name whoever acted had at the time, not the name they have now. */
+  readonly actor: string
+  readonly subjectType: string
+  readonly subjectId: string
+  /** One sentence, written for a person. This is the point of the service. */
+  readonly summary: string
+  readonly source: string
+  readonly occurredAt: string
+  readonly detail?: unknown
+}
+
+export const audit = {
+  list: (filters: { action?: string; actorId?: string; pageToken?: string } = {}) =>
+    request<{ entries: AuditEntry[]; nextPageToken: string }>('/audit', { query: filters }),
+
+  /** Everything recorded about one thing, oldest first. */
+  trail: (subjectType: string, subjectId: string) =>
+    request<AuditEntry[]>(
+      `/audit/${encodeURIComponent(subjectType)}/${encodeURIComponent(subjectId)}`,
+    ),
+}
+
+/* ----------------------------------------------------------------- support */
+
+/** Live, stopped by the merchant, or run out on its own. Nobody approves one. */
+export type SupportState = 'live' | 'stopped' | 'expired'
+/** Read-only is the default, and acting is asked for separately. */
+export type SupportScope = 'read_only' | 'act_on_behalf'
+
+export interface SupportAccessRequest {
+  readonly id: string
+  /** Who looked, by name, and never a shared account. */
+  readonly specialist: string
+  readonly specialistId: string
+  readonly reason: string
+  readonly scope: SupportScope
+  readonly state: SupportState
+  readonly createdAt: string
+  /** When it stops working on its own, which is why a forgotten grant is safe. */
+  readonly expiresAt?: string
+}
+
+export interface SupportAccessSession {
+  readonly id: string
+  readonly specialist: string
+  readonly scope: SupportScope
+  readonly active: boolean
+  readonly startedAt: string
+  readonly expiresAt: string
+  readonly endedAt?: string
+}
+
+/**
+ * The merchant's side of impersonation: what has been looked at, and stopping
+ * one that is running.
+ *
+ * There is no approve. A specialist starts a session without asking, so what
+ * this offers is the record and the off switch, and both matter more for
+ * nobody having been prompted.
+ */
+export const support = {
+  requests: () => request<SupportAccessRequest[]>('/support/requests'),
+  sessions: () => request<SupportAccessSession[]>('/support/sessions'),
+
+  /**
+   * Take it back. Ends any session running under the grant, which is the point:
+   * a revocation that left somebody still reading would be one in name only.
+   */
+  revoke: (id: string) =>
+    request<{ request: SupportAccessRequest; sessionsEnded: number }>(
+      `/support/requests/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
+}
+
+/* ------------------------------------------------------------------ ledger */
+
+export type { AccountKind, JournalEntry, JournalLine, LedgerAccount, TrialBalance, TrialBalanceRow }
+
+export const ledger = {
+  accounts: () => request<LedgerAccount[]>('/ledger/accounts'),
+
+  // Through the parsers, like every other amount: the wire carries minor units
+  // as a string so an int64 does not lose digits in JSON, and typing it as
+  // Money without parsing would compile while holding the wrong thing.
+  trialBalance: (period: { from?: string; to?: string } = {}) =>
+    request<unknown>('/ledger/trial-balance', { query: period }).then(parseTrialBalance),
+
+  entries: (filters: { kind?: string; from?: string; to?: string; pageToken?: string } = {}) =>
+    request<{ entries: unknown[]; nextPageToken: string }>('/ledger/entries', {
+      query: filters,
+    }).then((data) => ({
+      entries: data.entries.map(parseJournalEntry),
+      nextPageToken: data.nextPageToken,
+    })),
+
+  account: (code: string, period: { from?: string; to?: string } = {}) =>
+    request<{
+      account: LedgerAccount
+      openingBalance: Money
+      closingBalance: Money
+      lines: ReadonlyArray<{
+        entryId: string
+        kind: string
+        memo: string
+        amount: Money
+        runningBalance: Money
+        occurredAt: string
+      }>
+    }>(`/ledger/accounts/${encodeURIComponent(code)}`, { query: period }),
+}
+
+/* ----------------------------------------------------------------- kitchen */
+
+export type TicketState = 'waiting' | 'cooking' | 'ready' | 'passed' | 'voided'
+export type LineState = 'waiting' | 'claimed' | 'done' | 'voided'
+
+export interface TicketLine {
+  readonly id: string
+  readonly itemId: string
+  /** Copied when the ticket was made: renaming the dish does not rewrite it. */
+  readonly name: string
+  readonly quantity: number
+  readonly note: string
+  readonly stationId: string
+  readonly stationName: string
+  readonly state: LineState
+  /** Who is cooking it. This is the whole reason claiming exists. */
+  readonly claimedBy: string | null
+}
+
+export interface Ticket {
+  readonly id: string
+  readonly orderId: string
+  /** What the till calls the sale, so a cook and a server say the same number. */
+  readonly orderNumber: string
+  readonly tableLabel: string
+  readonly state: TicketState
+  readonly note: string
+  readonly lines: readonly TicketLine[]
+  /**
+   * When it was rung up, not when the kitchen read it.
+   *
+   * The screen colours by how long a table has been waiting, and that clock
+   * starts at the till: measuring from when this service happened to consume
+   * the event would reset every ticket's age on a restart.
+   */
+  readonly placedAt: string
+  readonly passedAt?: string
+}
+
+export interface Station {
+  readonly id: string
+  readonly name: string
+  /** The pass sees every ticket, not only the lines routed to it. */
+  readonly isPass: boolean
+  readonly active: boolean
+}
+
+/**
+ * The prep screens.
+ *
+ * The ticket state lives on the server, which is the point of the service
+ * existing at all: two screens in one kitchen have to agree about what is
+ * already being cooked, and a bump held in one browser is a bump the other
+ * screen never sees.
+ */
+export const kitchen = {
+  tickets: (stationId?: string) =>
+    request<Ticket[]>('/kitchen/tickets', { query: stationId ? { stationId } : {} }),
+
+  /** Takes a dish. Refused if somebody already has it, which is the point. */
+  claim: (lineId: string) =>
+    request<Ticket>(`/kitchen/lines/${encodeURIComponent(lineId)}/claim`, { method: 'POST' }),
+
+  complete: (lineId: string) =>
+    request<Ticket>(`/kitchen/lines/${encodeURIComponent(lineId)}/done`, { method: 'POST' }),
+
+  voidLine: (lineId: string, reason: string) =>
+    request<Ticket>(`/kitchen/lines/${encodeURIComponent(lineId)}/void`, {
+      method: 'POST',
+      body: { reason },
+    }),
+
+  /** Refused while anything on the ticket is still cooking. */
+  pass: (ticketId: string) =>
+    request<Ticket>(`/kitchen/tickets/${encodeURIComponent(ticketId)}/pass`, { method: 'POST' }),
+
+  stations: () => request<Station[]>('/kitchen/stations'),
+
+  putStation: (input: { id?: string; name: string; isPass: boolean; active: boolean }) =>
+    request<Station>('/kitchen/stations', { method: 'PUT', body: input }),
+
+  removeStation: (id: string) =>
+    request<void>(`/kitchen/stations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** An empty station sends the dish to the pass rather than to nowhere. */
+  routeItem: (itemId: string, stationId: string) =>
+    request<void>(`/kitchen/routes/${encodeURIComponent(itemId)}`, {
+      method: 'PUT',
+      body: { stationId },
     }),
 }

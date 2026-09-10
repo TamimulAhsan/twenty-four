@@ -52,6 +52,16 @@ export interface BusinessProfile {
   /** ISO 4217. One per environment, because one environment is one market. */
   readonly currency: string
   readonly timezone: string
+  /**
+   * Where the business is and what it is registered as.
+   *
+   * A receipt without them is not a receipt in most markets: the document has
+   * to say who issued it. Free text rather than structured fields, because an
+   * address shape is a country's and this codebase holds no country logic.
+   */
+  readonly address: string
+  readonly city: string
+  readonly taxId: string
   readonly taxRates: readonly TaxRate[]
   readonly openingHours: readonly OpeningHours[]
   readonly pricesIncludeTax: boolean
@@ -260,6 +270,15 @@ export interface Booking {
   readonly itemName: string
   readonly customerName: string
   readonly customerPhone: string
+  /**
+   * What it was booked on: a person, a room, a chair, a table.
+   *
+   * The calendar draws columns from this rather than from staffId, because a
+   * hotel books rooms and a restaurant books tables and neither has a member
+   * of staff attached.
+   */
+  readonly resourceId: string
+  /** Set only when the resource is a person, so the rota and the calendar agree. */
   readonly staffId: string | null
   readonly startsAt: string
   readonly endsAt: string
@@ -574,4 +593,103 @@ export interface ProfileInput {
   pricesIncludeTax?: boolean
   openingHours?: OpeningHours[]
   taxRates?: TaxRate[]
+}
+
+/* -------------------------------------------------------------- analytics */
+
+/**
+ * What a reporting answer includes.
+ *
+ * The figures come from a projection fed by change capture off the operational
+ * stores, so they are seconds behind rather than live. A screen that says so is
+ * a screen a merchant trusts when it disagrees with the till they are standing
+ * at; one that pretends otherwise is a screen they stop believing.
+ *
+ * `through` is the newest change in the answer, not a lag: a shop that has sold
+ * nothing since lunch is not four hours behind, it is up to date and quiet.
+ * Null means the projection holds nothing for this business at all.
+ */
+export interface Freshness {
+  readonly through: string | null
+}
+
+/**
+ * Money that may be absent, which is not money that is zero.
+ *
+ * Cost and margin are null when any line in the period has no recorded cost.
+ * An item nobody costed has no margin; showing one of a hundred percent is a
+ * number a merchant would act on.
+ */
+export interface ReportTotals {
+  readonly gross: Money
+  readonly net: Money
+  readonly tax: Money
+  readonly discount: Money
+  readonly refunded: Money
+  readonly cost: Money | null
+  readonly margin: Money | null
+  readonly orders: number
+  /** Sales to a known customer. Walk-ins count in `orders` and never here. */
+  readonly customers: number
+  readonly averageBasket: Money
+  /** Thousandths, because a basket of 2.4 items is a real answer. */
+  readonly averageLinesPerOrderMilli: number
+}
+
+export interface ReportSummary {
+  readonly current: ReportTotals
+  readonly previous: ReportTotals
+  readonly previousPeriod: { readonly from: string; readonly to: string }
+  readonly freshness: Freshness
+}
+
+export interface ReportDay {
+  readonly date: string
+  readonly gross: Money
+  readonly net: Money
+  readonly tax: Money
+  readonly margin: Money | null
+  readonly orders: number
+  readonly customers: number
+}
+
+export interface ReportSeries {
+  readonly points: readonly ReportDay[]
+  readonly freshness: Freshness
+}
+
+export type ReportDimension = 'method' | 'category' | 'item'
+
+export interface ReportSlice {
+  /** A method key, a category id, an item id. Empty for the remainder, and
+   *  empty for the items in no category, which is a group and not a gap. */
+  readonly key: string
+  /** Empty where there is no name to give, so the word for "no category" is
+   *  chosen here rather than by a service that does not know the language. */
+  readonly label: string
+  readonly gross: Money
+  /** Basis points, so 12.5% is 1250. Integers, for the same reason money is. */
+  readonly shareBasisPoints: number
+  readonly orders: number
+}
+
+export interface ReportBreakdown {
+  readonly slices: readonly ReportSlice[]
+  /** Everything past the limit, folded into one. Separate from the list so it
+   *  cannot be sorted into the middle of a ranking. */
+  readonly other: ReportSlice | null
+  readonly freshness: Freshness
+}
+
+export interface ReportHeatCell {
+  /** 1 is Monday, 7 is Sunday. */
+  readonly weekday: number
+  readonly hour: number
+  readonly orders: number
+  readonly gross: Money
+}
+
+export interface ReportHeatmap {
+  readonly cells: readonly ReportHeatCell[]
+  readonly freshness: Freshness
 }

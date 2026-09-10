@@ -2,6 +2,7 @@ import { NavLink } from 'react-router'
 import { FOOTER_NAV, useEntitlement, type NavItem, type NavLabel } from '@twentyfour/entitlement'
 import { useTerms } from '@twentyfour/terms'
 import { BrandMark, useBootstrap, Wordmark } from '@twentyfour/runtime'
+import { useSessionRole, type PermissionId } from '@twentyfour/rbac'
 import { useSignOut } from '@twentyfour/shell'
 import { Avatar, Badge, Icon, IconButton, cn, isIconName } from '@twentyfour/ui'
 import { formatRemaining, useOnboarding } from '../onboarding/useOnboarding'
@@ -124,24 +125,27 @@ function NavRow({
  * ends a session, it does not go to a page.
  */
 function SignOutRow({ collapsed }: { collapsed?: boolean }) {
-  const { signOut, pending } = useSignOut()
+  const { signOut, pending, confirmation } = useSignOut()
 
   return (
-    <button
-      type="button"
-      onClick={signOut}
-      disabled={pending}
-      className={cn(
-        ROW,
-        collapsed ? 'justify-center px-0' : 'px-2.5',
-        'w-full text-text-muted hover:bg-surface-hover hover:text-text',
-        'disabled:cursor-default disabled:opacity-60',
-      )}
-      {...(collapsed ? { title: 'Sign out', 'aria-label': 'Sign out' } : {})}
-    >
-      <Icon name={pending ? 'LoaderCircle' : 'LogOut'} size="lg" className={cn('shrink-0', pending && 'animate-spin')} />
-      {!collapsed && <span className="truncate">Sign out</span>}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={signOut}
+        disabled={pending}
+        className={cn(
+          ROW,
+          collapsed ? 'justify-center px-0' : 'px-2.5',
+          'w-full text-text-muted hover:bg-surface-hover hover:text-text',
+          'disabled:cursor-default disabled:opacity-60',
+        )}
+        {...(collapsed ? { title: 'Sign out', 'aria-label': 'Sign out' } : {})}
+      >
+        <Icon name={pending ? 'LoaderCircle' : 'LogOut'} size="lg" className={cn('shrink-0', pending && 'animate-spin')} />
+        {!collapsed && <span className="truncate">Sign out</span>}
+      </button>
+      {confirmation}
+    </>
   )
 }
 
@@ -201,6 +205,11 @@ export function SidebarContent({
   onNavigate?: () => void
 }) {
   const { nav, record, seatsLeft } = useEntitlement()
+  // Entitlement says what the tenant bought; this says what this person may
+  // open. Both have to agree before a link is worth showing, because a link
+  // that answers 403 reads as broken rather than as not-for-you.
+  const { can } = useSessionRole()
+  const allowed = (item: { permission?: PermissionId }) => !item.permission || can(item.permission)
   const { profile, session } = useBootstrap()
   const tier = record.tier.charAt(0).toUpperCase() + record.tier.slice(1)
 
@@ -242,7 +251,7 @@ export function SidebarContent({
                 </p>
               ))}
             <div className="flex flex-col gap-0.5">
-              {group.items.map((item) => (
+              {group.items.filter(allowed).map((item) => (
                 <NavRow key={item.id} item={item} collapsed={collapsed} onNavigate={onNavigate} />
               ))}
             </div>
@@ -252,7 +261,7 @@ export function SidebarContent({
 
       <div className={cn('shrink-0 border-t border-border py-2.5', collapsed ? 'px-2' : 'px-2.5')}>
         <div className="flex flex-col gap-0.5">
-          {FOOTER_NAV.map((item) => (
+          {FOOTER_NAV.filter(allowed).map((item) => (
             <NavRow key={item.id} item={item} collapsed={collapsed} onNavigate={onNavigate} />
           ))}
           <SignOutRow collapsed={collapsed} />

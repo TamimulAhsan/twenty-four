@@ -1,0 +1,42 @@
+{{define "message.html"}}
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{if .Message.Subject}}{{.Message.Subject}}{{else}}Message{{end}} · TwentyFour</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b0d11; --card:#151922; --ink:#e5e7eb; --muted:#9ca3af; --line:#252b36 }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); padding:32px;
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif }
+  main { max-width:640px; margin:0 auto }
+  a.back { color:var(--muted); text-decoration:none; font-size:13px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:24px; margin-top:16px }
+  h1 { font-size:19px; margin:0 0 12px }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 18px; margin:0 0 20px;
+       font-size:13px; color:var(--muted) }
+  dt { font-weight:600 } dd { margin:0 }
+  pre { white-space:pre-wrap; word-wrap:break-word; margin:0; padding-top:18px;
+        border-top:1px solid var(--line); font:14px/1.6 ui-sans-serif,system-ui,sans-serif }
+  .why { margin-top:18px; font-size:13px; color:var(--muted) }
+</style>
+<main>
+  <a class="back" href="{{.Base}}/">Back to the desk</a>
+  <div class="card">
+    <h1>{{if .Message.Subject}}{{.Message.Subject}}{{else}}{{.Message.TemplateKey}}{{end}}</h1>
+    <dl>
+      <dt>To</dt><dd>{{.Message.Recipient}}</dd>
+      <dt>Channel</dt><dd>{{.Message.Channel}}</dd>
+      <dt>Template</dt><dd>{{.Message.TemplateKey}}</dd>
+      <dt>Category</dt><dd>{{.Message.Category}}</dd>
+      <dt>Status</dt><dd>{{.Message.StatusLabel}}</dd>
+      {{if .Message.ReferenceID}}<dt>About</dt><dd>{{.Message.ReferenceType}} {{.Message.ReferenceID}}</dd>{{end}}
+    </dl>
+    <pre>{{.Message.Body}}</pre>
+    {{if .Message.FailureReason}}<p class="why">{{.Message.FailureReason}}</p>{{end}}
+  </div>
+</main>
+{{end}}

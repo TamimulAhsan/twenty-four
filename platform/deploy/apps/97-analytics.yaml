@@ -1,0 +1,47 @@
+# Analytics: reporting figures out of ClickHouse.
+#
+# The only service here with no database of its own and no DATABASE_URL. Every
+# row it reads was put into ClickHouse by the CDC connectors off the services
+# that own it, which is what keeps a reporting query off the database that is
+# taking payments.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics
+  namespace: twentyfour
+  labels: { app: analytics, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: analytics } }
+  template:
+    metadata: { labels: { app: analytics, tier: backend } }
+    spec:
+      containers:
+        - name: analyticsd
+          image: localhost:5000/twentyfour/analytics:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9111"
+            - "-clickhouse=http://clickhouse.twentyfour.svc.cluster.local:8123"
+            # One environment is one market, so one currency. Read from Tenant
+            # & Business Profile once that service owns it.
+            - "-currency=HUF"
+          ports: [{ containerPort: 9111, name: grpc }]
+          envFrom: [{ secretRef: { name: clickhouse } }]
+          readinessProbe:
+            grpc: { port: 9111 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9111 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: analytics, namespace: twentyfour }
+spec:
+  selector: { app: analytics }
+  ports: [{ port: 9111, targetPort: 9111, name: grpc }]

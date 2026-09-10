@@ -1,0 +1,56 @@
+# Media: the only thing in the platform that holds object storage credentials.
+#
+# It signs URLs and never carries bytes. Nothing else in the cluster has the
+# keys, which is what makes the tenant prefix on a storage key an isolation
+# boundary rather than a convention: there is nothing else that could address an
+# object even if it wanted to.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media
+  namespace: twentyfour
+  labels: { app: media, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: media } }
+  template:
+    metadata: { labels: { app: media, tier: backend } }
+    spec:
+      containers:
+        - name: mediad
+          image: localhost:5000/twentyfour/media:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9115"
+            - "-endpoint=minio.twentyfour.svc.cluster.local:9000"
+            # A signature covers the host, so this is the host a browser will
+            # use rather than the one this pod dials.
+            - "-public-endpoint=media.twentyfour.localhost"
+            - "-public-tls=false"
+          ports: [{ containerPort: 9115, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: media } }
+            - name: MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: minio, key: MINIO_ROOT_USER } }
+            - name: MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: minio, key: MINIO_ROOT_PASSWORD } }
+            - name: MEDIA_BUCKET
+              valueFrom: { secretKeyRef: { name: minio, key: bucket } }
+          readinessProbe:
+            grpc: { port: 9115 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9115 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: media, namespace: twentyfour }
+spec:
+  selector: { app: media }
+  ports: [{ port: 9115, targetPort: 9115, name: grpc }]

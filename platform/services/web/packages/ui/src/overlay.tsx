@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { cn } from './cn'
-import { IconButton } from './button'
+import type { IconName } from './icon'
+import { Button, IconButton, type ButtonVariant } from './button'
 
 export interface DialogProps {
   open: boolean
@@ -90,5 +91,71 @@ export function Dialog({ open, onClose, title, description, children, footer, si
         )}
       </div>
     </dialog>
+  )
+}
+
+export interface ConfirmDialogProps {
+  open: boolean
+  onCancel: () => void
+  onConfirm: () => void
+  title: string
+  /** What the person is agreeing to, in a sentence. Not a restatement of the
+   *  title: if it says nothing the title did not, leave it out. */
+  description?: ReactNode
+  /** Names the action, never "OK". A button that says what it does is the
+   *  difference between reading the dialog and dismissing it. */
+  confirmLabel: string
+  cancelLabel?: string
+  confirmVariant?: ButtonVariant
+  confirmIcon?: IconName
+  pending?: boolean
+  children?: ReactNode
+}
+
+/**
+ * A modal that asks before doing something the person cannot undo by clicking
+ * again.
+ *
+ * Built on Dialog rather than beside it, so the focus trap, the Escape key and
+ * the backdrop behave the same as every other modal in the product.
+ *
+ * Cancel is the safe side and is focused on open: Enter and Escape both back
+ * out, and confirming is the deliberate act. Nothing here auto-focuses the
+ * confirm button, which would turn a stray keypress into the very thing the
+ * dialog exists to prevent.
+ */
+export function ConfirmDialog({
+  open,
+  onCancel,
+  onConfirm,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  confirmVariant = 'primary',
+  confirmIcon,
+  pending,
+  children,
+}: ConfirmDialogProps) {
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onCancel} disabled={pending}>
+            {cancelLabel}
+          </Button>
+          <Button variant={confirmVariant} iconStart={confirmIcon} loading={pending} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      {description && <p className="text-base text-text-muted">{description}</p>}
+      {children}
+    </Dialog>
   )
 }

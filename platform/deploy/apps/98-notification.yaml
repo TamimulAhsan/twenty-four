@@ -1,0 +1,50 @@
+# Notification: the one place a message to a person is composed and recorded.
+#
+# Two ports on purpose, the same shape Payments uses. 9112 is the market-neutral
+# gRPC contract every caller speaks. 9113 is the development transport's desk,
+# which is outside that contract and shows every tenant's messages, so it is
+# never exposed through an Ingress and never deployed anywhere real.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+  namespace: twentyfour
+  labels: { app: notification, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: notification } }
+  template:
+    metadata: { labels: { app: notification, tier: backend } }
+    spec:
+      containers:
+        - name: notificationd
+          image: localhost:5000/twentyfour/notification:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9112"
+            - "-desk-addr=:9113"
+          ports:
+            - { containerPort: 9112, name: grpc }
+            - { containerPort: 9113, name: desk }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: notification } }
+          readinessProbe:
+            grpc: { port: 9112 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9112 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: notification, namespace: twentyfour }
+spec:
+  selector: { app: notification }
+  ports:
+    - { port: 9112, targetPort: 9112, name: grpc }
+    - { port: 9113, targetPort: 9113, name: desk }

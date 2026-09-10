@@ -17,6 +17,7 @@
  */
 import type { CapabilityId } from './profiles'
 import type { ModuleId } from './modules'
+import type { PermissionId } from '@twentyfour/rbac'
 import { hasModule, isPending, type EntitlementRecord } from './resolve'
 
 export type NavLabel =
@@ -38,6 +39,15 @@ export interface NavItem {
   readonly summary?: string
   /** Held but still provisioning: shown, labelled, and not yet usable. */
   readonly pending?: boolean
+  /**
+   * A permission this needs on top of the module, when entitlement alone is
+   * not the whole answer.
+   *
+   * Carried through to the rendered item rather than resolved here, because
+   * the two questions have different owners: entitlement knows what the tenant
+   * bought, and only the signed-in session knows who is looking.
+   */
+  readonly permission?: PermissionId
 }
 
 export interface NavGroup {
@@ -198,6 +208,20 @@ const SPEC: ReadonlyArray<{ id: string; label?: string; items: readonly NavSpec[
         icon: 'Wallet',
         module: 'payments',
       },
+      {
+        id: 'books',
+        to: '/books',
+        label: { kind: 'static', text: 'Books' },
+        icon: 'ReceiptText',
+        // Under payments rather than its own module: the ledger is derived
+        // from what the till and the payment service announced, so a tenant
+        // that can take money has books whether or not anybody reads them.
+        module: 'payments',
+        // Owners and their accountant. A manager runs the shop and does not
+        // read the journal, and the RBAC vocabulary already says so: nobody
+        // but those two holds ledger:report:read.
+        permission: 'reports.financial',
+      },
     ],
   },
   {
@@ -252,6 +276,14 @@ const SPEC: ReadonlyArray<{ id: string; label?: string; items: readonly NavSpec[
 ]
 
 export const FOOTER_NAV: readonly NavItem[] = [
+  {
+    // No module gate, and none is needed: the audit trail is always on, so
+    // every tenant has one whether or not they ever open it.
+    id: 'activity',
+    to: '/activity',
+    label: { kind: 'static', text: 'Activity' },
+    icon: 'FileClock',
+  },
   {
     id: 'subscription',
     to: '/subscription',

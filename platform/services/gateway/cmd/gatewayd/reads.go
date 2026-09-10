@@ -39,11 +39,8 @@ func (g *gateway) registerReadStubs(mux *http.ServeMux) {
 	// Collections. The permission on each is the real one from the RBAC
 	// vocabulary, so a staff member already sees a narrower dashboard than an
 	// owner even before the services behind these exist.
-	// Catalog is real now and registers its own routes; see catalog.go.
-	mux.Handle("GET /api/bookings", empty("bookings:booking:read"))
-	// Catalog, Staff, Inventory, Payments and POS are all real now. Their
-	// routes live in catalog.go, team.go, payments.go, orders.go and day.go.
-	mux.Handle("GET /api/documents", empty("invoice:document:read"))
+	// Catalog, Staff, Inventory, Payments, POS, Invoicing, Media, Audit and
+	// the Ledger are all real now. Their routes live in their own files.
 	mux.Handle("GET /api/customers", empty("crm:contact:read"))
 	mux.Handle("GET /api/discounts", empty("catalog:item:read"))
 	mux.Handle("GET /api/loyalty/members", empty("crm:contact:read"))

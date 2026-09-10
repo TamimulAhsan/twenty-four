@@ -49,12 +49,20 @@ preflight: ## Check toolchain, cluster and registry
 registry: ## Start the local image registry (podman)
 	@./scripts/registry.sh
 
-infra: ## Deploy Postgres, Redis and Kafka into the cluster
+infra: ## Deploy Postgres, Redis, Kafka, ClickHouse and the CDC pipeline
+	@./scripts/connect-image.sh
+	@kubectl apply -f deploy/infra/00-namespace.yaml >/dev/null
+	@./scripts/system.sh secrets
+# A Job's spec is immutable, and this one has to run again whenever a service is
+# added: the databases it creates are read from the secret written above.
+	@kubectl -n $(NS) delete job ensure-databases --ignore-not-found >/dev/null
 	@kubectl apply -f deploy/infra/
 	@echo "waiting for infra to become ready..."
-	@kubectl -n $(NS) rollout status statefulset/postgres --timeout=180s
-	@kubectl -n $(NS) rollout status deployment/redis    --timeout=180s
-	@kubectl -n $(NS) rollout status statefulset/kafka   --timeout=240s
+	@kubectl -n $(NS) rollout status statefulset/postgres   --timeout=180s
+	@kubectl -n $(NS) rollout status deployment/redis       --timeout=180s
+	@kubectl -n $(NS) rollout status statefulset/kafka      --timeout=240s
+	@kubectl -n $(NS) rollout status statefulset/clickhouse --timeout=300s
+	@kubectl -n $(NS) rollout status deployment/connect     --timeout=300s
 
 infra-check: ## Prove Postgres, Redis and Kafka actually work
 	@./scripts/infra-check.sh

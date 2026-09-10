@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package twentyfour.audit.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AuditService keeps the plain-language record of what the platform did.
+//
+// The architecture calls it "a plain-language record of every automated
+// decision", and the adjective is the requirement. A log of topic names and
+// UUIDs is something an engineer can read during an incident; it is not what a
+// merchant asking "why was this refunded" or a specialist reconstructing a
+// disputed shift needs, and it is not what an auditor will accept.
+//
+// It writes nothing back and decides nothing. Everything here is a record of a
+// decision taken elsewhere, which is what lets it be read without any risk of
+// changing what it describes.
+service AuditService {
+  // Records a decision that has no event of its own: an override a specialist
+  // typed, a permission granted by hand, an impersonation begun. Anything that
+  // already publishes an event should publish the event and let the trail pick
+  // it up, because two records of one act eventually disagree.
+  rpc Record(RecordRequest) returns (RecordResponse);
+
+  rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
+  rpc GetEntry(GetEntryRequest) returns (GetEntryResponse);
+
+  // Everything recorded about one thing, in order: this order, this booking,
+  // this staff member. The question the trail is usually opened to answer.
+  rpc Trail(TrailRequest) returns (TrailResponse);
+}
+
+// Who acted. Not a free string, because "system" and a person's name being the
+// same kind of value is how an automated decision ends up attributed to
+// whoever happened to be signed in.
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  // A person on the merchant plane.
+  ACTOR_KIND_USER = 1;
+  // A TwentyFour specialist, acting through the admin plane. Recorded
+  // separately from a merchant user on purpose: "someone at the vendor did
+  // this" is a materially different sentence.
+  ACTOR_KIND_STAFF = 2;
+  // The platform itself: a scheduler, a saga step, a consumer reacting to an
+  // event. Most of the trail is this, which is why it is called an automated
+  // decision rather than an action.
+  ACTOR_KIND_SYSTEM = 3;
+  // Somebody who is not signed in: a customer at the payment desk, a link
+  // followed from an email.
+  ACTOR_KIND_ANONYMOUS = 4;
+}
+
+message Entry {
+  string id = 1;
+  // The event this came from, when it came from one. Empty for a decision
+  // recorded directly.
+  string event_id = 2;
+  // Semantic, and never a display term: "catalog_item", not "room".
+  string action = 3;
+  ActorKind actor_kind = 4;
+  string actor_id = 5;
+  // Resolved at write time and stored, because the name a person had when they
+  // acted is the name the record should show, even after they are renamed or
+  // leave. This is the same reason an issued invoice is stored rather than
+  // recomputed.
+  string actor_label = 6;
+
+  // What was acted on.
+  string subject_type = 7;
+  string subject_id = 8;
+
+  // One sentence, written for a person. This is the whole point of the service.
+  string summary = 9;
+  // The event body or the recorded detail, as JSON, for the cases where the
+  // sentence is not enough. Kept beside the sentence rather than instead of it.
+  string detail = 10;
+
+  // Which service announced it, so an unfamiliar action can be traced back.
+  string source = 11;
+  google.protobuf.Timestamp occurred_at = 12;
+}
+
+message RecordRequest {
+  string action = 1;
+  ActorKind actor_kind = 2;
+  string actor_id = 3;
+  string actor_label = 4;
+  string subject_type = 5;
+  string subject_id = 6;
+  string summary = 7;
+  string detail = 8;
+  // A repeated record with the same key is written once, so a retried
+  // provisioning step does not double the trail.
+  string idempotency_key = 9;
+}
+message RecordResponse {
+  Entry entry = 1;
+}
+
+message ListEntriesRequest {
+  // All optional, combined with AND.
+  string action = 1;
+  ActorKind actor_kind = 2;
+  string actor_id = 3;
+  google.protobuf.Timestamp from = 4;
+  google.protobuf.Timestamp to = 5;
+  int32 page_size = 6;
+  string page_token = 7;
+}
+message ListEntriesResponse {
+  repeated Entry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetEntryRequest {
+  string id = 1;
+}
+message GetEntryResponse {
+  Entry entry = 1;
+}
+
+message TrailRequest {
+  string subject_type = 1;
+  string subject_id = 2;
+  int32 page_size = 3;
+}
+message TrailResponse {
+  // Oldest first. A trail read backwards is a story told backwards.
+  repeated Entry entries = 1;
+}

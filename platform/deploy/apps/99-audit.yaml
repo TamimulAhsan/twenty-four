@@ -1,0 +1,45 @@
+# Audit: the plain-language record of what the platform did.
+#
+# A consumer first and an API second. Most of the trail is written by watching
+# the bus rather than by anybody calling it, which is what makes the record
+# complete without every service having to remember to file one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit
+  namespace: twentyfour
+  labels: { app: audit, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: audit } }
+  template:
+    metadata: { labels: { app: audit, tier: backend } }
+    spec:
+      containers:
+        - name: auditd
+          image: localhost:5000/twentyfour/audit:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9114"
+            - "-brokers=kafka.twentyfour.svc.cluster.local:9092"
+          ports: [{ containerPort: 9114, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: audit } }
+          readinessProbe:
+            grpc: { port: 9114 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9114 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: audit, namespace: twentyfour }
+spec:
+  selector: { app: audit }
+  ports: [{ port: 9114, targetPort: 9114, name: grpc }]

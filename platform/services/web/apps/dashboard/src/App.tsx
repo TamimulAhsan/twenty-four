@@ -7,6 +7,8 @@ import { OrdersPage } from './pages/OrdersPage'
 import { StaffPage } from './pages/StaffPage'
 import { PaymentsPage } from './pages/PaymentsPage'
 import { DocumentsPage } from './pages/DocumentsPage'
+import { BooksPage } from './pages/BooksPage'
+import { ActivityPage } from './pages/ActivityPage'
 import { SubscriptionPage } from './pages/SubscriptionPage'
 import { FinancialsPage } from './pages/FinancialsPage'
 import { ProductsPage } from './pages/ProductsPage'
@@ -48,6 +50,8 @@ export function App() {
             <Route path="staff" element={<StaffPage />} />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="documents" element={<DocumentsPage />} />
+            <Route path="books" element={<BooksPage />} />
+            <Route path="activity" element={<ActivityPage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
 
             {/* Routed now so no navigation entry is ever a dead link, and each

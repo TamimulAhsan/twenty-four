@@ -26,6 +26,56 @@ export const queryKeys = {
   bookings: {
     range: (from: string, to: string) => ['bookings', 'range', from, to] as const,
     detail: (id: string) => ['bookings', 'detail', id] as const,
+    // The date is part of the key, and so is the resource: asking about
+    // Tuesday for anybody is a different question from asking about Tuesday
+    // for one chair, not the same one refetched.
+    availability: (itemId: string, date: string, resourceId?: string) =>
+      ['bookings', 'availability', itemId, date, resourceId ?? ''] as const,
+    resources: () => ['bookings', 'resources'] as const,
+  },
+
+  // One key per question, and the period is part of it. Two screens asking for
+  // the same window share an answer; changing the window is a different
+  // question rather than the same one refetched.
+  media: {
+    list: (filters?: Record<string, unknown>) => ['media', 'list', filters ?? {}] as const,
+    // The signed URL is keyed separately and never cached long: it expires, and
+    // a stale one renders as a broken image rather than as an error.
+    url: (id: string) => ['media', 'url', id] as const,
+  },
+
+  audit: {
+    list: (filters?: Record<string, unknown>) => ['audit', 'list', filters ?? {}] as const,
+    trail: (subjectType: string, subjectId: string) =>
+      ['audit', 'trail', subjectType, subjectId] as const,
+  },
+
+  support: {
+    requests: () => ['support', 'requests'] as const,
+    sessions: () => ['support', 'sessions'] as const,
+  },
+
+  ledger: {
+    accounts: () => ['ledger', 'accounts'] as const,
+    trialBalance: (from?: string, to?: string) => ['ledger', 'trial-balance', from, to] as const,
+    entries: (filters?: Record<string, unknown>) => ['ledger', 'entries', filters ?? {}] as const,
+    account: (code: string, from?: string, to?: string) =>
+      ['ledger', 'account', code, from, to] as const,
+  },
+
+  kitchen: {
+    // The station is part of the key: the grill's rail and the pass's rail are
+    // different questions, not the same one refetched.
+    tickets: (stationId?: string) => ['kitchen', 'tickets', stationId ?? ''] as const,
+    stations: () => ['kitchen', 'stations'] as const,
+  },
+
+  analytics: {
+    summary: (from: string, to: string) => ['analytics', 'summary', from, to] as const,
+    series: (from: string, to: string) => ['analytics', 'series', from, to] as const,
+    breakdown: (from: string, to: string, by: string) =>
+      ['analytics', 'breakdown', from, to, by] as const,
+    heatmap: (from: string, to: string) => ['analytics', 'heatmap', from, to] as const,
   },
 
   inventory: {
@@ -70,6 +120,8 @@ export const queryKeys = {
   documents: {
     list: (filters?: Record<string, unknown>) => ['documents', 'list', filters ?? {}] as const,
     detail: (id: string) => ['documents', 'detail', id] as const,
+    // An issued document never changes, so this one never goes stale.
+    artifact: (id: string) => ['documents', 'artifact', id] as const,
   },
 
   billing: {

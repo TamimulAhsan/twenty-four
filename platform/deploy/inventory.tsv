@@ -36,19 +36,19 @@ staff	commerce	built	Staff records, roles, rotas, availability, and the tier's s
 inventory	commerce	built	Stock levels, reservations, adjustments, low-stock thresholds
 payments	finance	built	Authorise, capture, refund. Swapped per market
 pos	commerce	built	Registering a sale: cart, tender, tabs, voids, refunds, takings, the floor
-invoicing	finance	later	Customer documents AND the tenant's own subscription billing. Swapped per market
-bookings	commerce	later	Calendar, slots, deposits, no-shows, buffers, double-booking prevention
-analytics	platform	6	Dashboard queries over ClickHouse. Never queries operational stores
+invoicing	finance	built	Customer documents AND the tenant's own subscription billing. Swapped per market
+bookings	commerce	built	Calendar, slots, deposits, no-shows, buffers, double-booking prevention
+analytics	platform	built	Dashboard queries over ClickHouse. Never queries operational stores
 tenant	control	built	Business identity, trade, hours, tax, locale. Also the entitlement record and the module registry: one record, written and read in one transaction
 provisioning	control	built	Runs the provisioning saga: per-step state, retries, compensation. Its rows are the merchant's 24-hour checklist
-notification	platform	later	Templates, branding, channel preference, quiet hours, delivery log
-media	platform	later	Only writer to object storage; signed URL issue
-audit	platform	later	Plain-language record of every automated decision
-scheduler	platform	later	Cron, reminders, the six-hour budget cycle, nightly reconciliation
-support	platform	later	Impersonation with consent, and the trail it leaves
-ledger	finance	later	Double-entry journal for this environment's single legal entity
+notification	platform	built	Templates, branding, channel preference, quiet hours, delivery log
+media	platform	built	Only writer to object storage; signed URL issue
+audit	platform	built	Plain-language record of every automated decision
+scheduler	platform	built	Cron, reminders, the six-hour budget cycle, nightly reconciliation
+support	platform	built	Impersonation: time limited, read-only by default, and recorded. The merchant is not asked first
+ledger	finance	built	Double-entry journal for this environment's single legal entity
 website	commerce	later	Site templates, pages, publishing, custom domain requests
-kitchen	commerce	later	Order lines to prep stations. A trade capability, not a sold module
+kitchen	commerce	built	Order lines to prep stations, claimed and passed. A trade capability inside POS, not a sold module
 crmsync	growth	later	Bidirectional pipeline to Twenty, and the ID mapping
 marketing	growth	later	Budget allocation against booked revenue, every six hours
 ads	growth	later	Campaign, spend and conversion sync with the ad platforms

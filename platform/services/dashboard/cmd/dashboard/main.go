@@ -31,6 +31,9 @@ type server struct {
 	// startup with the same rule the Makefile uses, so the two cannot disagree
 	// about whether "pos" is one deployment or two.
 	surfaces surfaces
+	// What each service puts on the bus and takes off it, read from source at
+	// startup. Nothing in the cluster declares this.
+	eventing map[string]eventing
 	readOnly bool
 }
 
@@ -109,6 +112,7 @@ func main() {
 		jobs:      newJobs(),
 		inventory: loadInventory(*inventory),
 		surfaces:  loadSurfaces("."),
+		eventing:  loadEventing("."),
 		readOnly:  *readOnly,
 	}
 	if len(srv.inventory) == 0 {

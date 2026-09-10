@@ -1,0 +1,215 @@
+syntax = "proto3";
+
+package twentyfour.notification.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// NotificationService is the one place a message to a person is composed and
+// recorded.
+//
+// Three things make it a service rather than a library. Templates and branding
+// are the tenant's, so a receipt and a booking reminder look like the same
+// business. Channel preference and quiet hours are a policy that has to hold
+// across every caller, and a policy enforced in five callers is a policy with
+// five versions of it. And the delivery log is the answer to "did they get it",
+// which is a question asked long after the sending service has moved on.
+//
+// It does not talk to a mail server. Deliverability is a full-time job and the
+// architecture says so, so the transport is a provider chosen per market, the
+// same way payments are, and this pass ships a development one that records
+// what would have been sent instead of sending it.
+service NotificationService {
+  // Composes a message from a template and queues it. Returns immediately: a
+  // caller that had to wait for delivery would be a caller whose sale is
+  // blocked by an SMTP timeout.
+  rpc Send(SendRequest) returns (SendResponse);
+
+  // What was sent, or refused, and why. This is the audit answer to "did they
+  // get it", so it includes the ones that never went out.
+  rpc ListDeliveries(ListDeliveriesRequest) returns (ListDeliveriesResponse);
+  rpc GetDelivery(GetDeliveryRequest) returns (GetDeliveryResponse);
+
+  // The tenant's policy: which channels are allowed at all, when the business
+  // is willing to disturb someone, and which categories it sends.
+  rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse);
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (UpdatePreferencesResponse);
+
+  // Templates. A tenant that has not written its own falls back to the
+  // platform's, so a business is never unable to send a receipt because nobody
+  // wrote one at onboarding.
+  rpc ListTemplates(ListTemplatesRequest) returns (ListTemplatesResponse);
+  rpc UpsertTemplate(UpsertTemplateRequest) returns (UpsertTemplateResponse);
+  rpc DeleteTemplate(DeleteTemplateRequest) returns (DeleteTemplateResponse);
+}
+
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_EMAIL = 1;
+  CHANNEL_SMS = 2;
+  CHANNEL_PUSH = 3;
+}
+
+// Why a message exists, which is what quiet hours and the tenant's preferences
+// are expressed in terms of. A booking reminder can wait until morning; a
+// password reset cannot, and neither can a receipt for a sale that just
+// happened in front of the customer.
+enum Category {
+  CATEGORY_UNSPECIFIED = 0;
+  // Somebody is standing there waiting for it. Never held, never suppressed.
+  CATEGORY_TRANSACTIONAL = 1;
+  CATEGORY_RECEIPT = 2;
+  CATEGORY_REMINDER = 3;
+  CATEGORY_OPERATIONAL = 4;
+  // The only category that is opt-in rather than opt-out.
+  CATEGORY_MARKETING = 5;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  // Accepted, not yet handed to a provider.
+  STATUS_QUEUED = 1;
+  // Waiting for quiet hours to end. Distinct from queued on purpose: one is
+  // about to go, the other is deliberately not going yet.
+  STATUS_HELD = 2;
+  STATUS_SENT = 3;
+  STATUS_FAILED = 4;
+  // The tenant's preferences said no. Recorded rather than dropped, because
+  // "we never sent it" is an answer somebody will need.
+  STATUS_SUPPRESSED = 5;
+}
+
+message Delivery {
+  string id = 1;
+  string template_key = 2;
+  Channel channel = 3;
+  Category category = 4;
+  Status status = 5;
+  // Where it went. An address or a number, as the channel requires.
+  string recipient = 6;
+  string subject = 7;
+  string body = 8;
+  // Set when the message is about something: an order, a booking, an invoice.
+  // It is how the delivery log is read back beside the thing it concerns.
+  string reference_type = 9;
+  string reference_id = 10;
+  string failure_reason = 11;
+  google.protobuf.Timestamp created_at = 12;
+  // When it may next be attempted. Set while held.
+  google.protobuf.Timestamp deliver_after = 13;
+  google.protobuf.Timestamp sent_at = 14;
+}
+
+message SendRequest {
+  string template_key = 1;
+  Channel channel = 2;
+  Category category = 3;
+  string recipient = 4;
+  // Substituted into the template. Values are strings on purpose: a template
+  // renders text, and a number that has already been formatted by the service
+  // that owns it is a number formatted by the service that knows the currency.
+  map<string, string> params = 5;
+  string reference_type = 6;
+  string reference_id = 7;
+  // A retried send with the same key delivers once. Without it a till that
+  // loses its network after emailing a receipt emails it again.
+  string idempotency_key = 8;
+}
+message SendResponse {
+  Delivery delivery = 1;
+}
+
+message ListDeliveriesRequest {
+  // Filters, all optional and combined with AND.
+  Status status = 1;
+  Channel channel = 2;
+  string reference_type = 3;
+  string reference_id = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+message ListDeliveriesResponse {
+  repeated Delivery deliveries = 1;
+  string next_page_token = 2;
+}
+
+message GetDeliveryRequest {
+  string id = 1;
+}
+message GetDeliveryResponse {
+  Delivery delivery = 1;
+}
+
+message Preferences {
+  // Which channels the business will send on at all. A channel absent here
+  // suppresses every message on it, including transactional ones: a business
+  // that has not set up SMS cannot send an SMS.
+  repeated Channel channels = 1;
+  // Local to the tenant's own time zone, as HH:MM. Equal values mean no quiet
+  // hours rather than a zero-length window, because a business that wants
+  // silence round the clock turns the channel off instead.
+  string quiet_from = 2;
+  string quiet_to = 3;
+  // The time zone those two are read in. Held here rather than looked up from
+  // Tenant on every send: a message going out an hour early because a profile
+  // lookup failed is worse than a stale offset.
+  string time_zone = 4;
+
+  bool booking_reminders = 5;
+  bool receipt_by_email = 6;
+  bool marketing = 7;
+}
+
+message GetPreferencesRequest {}
+message GetPreferencesResponse {
+  Preferences preferences = 1;
+}
+
+message UpdatePreferencesRequest {
+  // Only the fields present are changed. A merchant editing quiet hours must
+  // not silently reset which channels they send on.
+  optional Preferences preferences = 1;
+  repeated string update_mask = 2;
+}
+message UpdatePreferencesResponse {
+  Preferences preferences = 1;
+}
+
+message Template {
+  string key = 1;
+  Channel channel = 2;
+  Category category = 3;
+  string subject = 4;
+  string body = 5;
+  // True when this is the platform's text rather than the tenant's. The
+  // dashboard shows it differently: editing one creates the tenant's own.
+  bool builtin = 6;
+  // The parameter names this template refers to, derived from the body. The
+  // editor uses it to say which placeholders exist.
+  repeated string params = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListTemplatesRequest {}
+message ListTemplatesResponse {
+  repeated Template templates = 1;
+}
+
+message UpsertTemplateRequest {
+  string key = 1;
+  Channel channel = 2;
+  Category category = 3;
+  string subject = 4;
+  string body = 5;
+}
+message UpsertTemplateResponse {
+  Template template = 1;
+}
+
+message DeleteTemplateRequest {
+  // Removes the tenant's override, which restores the platform's text rather
+  // than leaving the tenant unable to send.
+  string key = 1;
+}
+message DeleteTemplateResponse {
+  Template template = 1;
+}

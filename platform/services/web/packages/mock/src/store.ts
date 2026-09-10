@@ -1021,18 +1021,19 @@ export class TenantStore {
     const startsAt = new Date(input.startsAt)
     const endsAt = new Date(startsAt.getTime() + (item.durationMinutes || 30) * 60_000)
 
-    // Never double-book a person. The check is on the staff member, not the
-    // slot, because two stylists can take the same nine o'clock.
-    if (input.staffId) {
+    // Never promise the same resource twice. The check is on the resource, not
+    // the slot, because two chairs can take the same nine o'clock, and it is a
+    // resource rather than a person because a hotel books rooms.
+    if (input.resourceId) {
       const clash = this.bookings.find(
         (booking) =>
-          booking.staffId === input.staffId &&
+          booking.resourceId === input.resourceId &&
           booking.status !== 'cancelled' &&
           new Date(booking.startsAt) < endsAt &&
           startsAt < new Date(booking.endsAt),
       )
       if (clash) {
-        throw new MockError(409, 'double_booked', 'That person is already booked at this time.')
+        throw new MockError(409, 'double_booked', 'That is already booked at this time.')
       }
     }
 
@@ -1044,11 +1045,17 @@ export class TenantStore {
       itemName: item.name,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
-      staffId: input.staffId,
+      resourceId: input.resourceId ?? '',
+      // A resource that is a person carries the staff id; a room carries none.
+      // The fixture's resources are people, so the two are the same here.
+      staffId: input.resourceId ?? null,
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       status: 'confirmed',
-      deposit: input.deposit ? money(Number(input.deposit.minor), input.deposit.currency) : null,
+      // Absent rather than zero: no deposit asked for is not a deposit of
+      // nothing, and a no-show policy turns on which it was.
+      deposit:
+        input.depositMinor === undefined ? null : money(input.depositMinor, this.currency),
       note: input.note ?? '',
     }
     this.bookings = [...this.bookings, booking]
@@ -1539,7 +1546,9 @@ export class TenantStore {
           try {
             const booking = this.createBooking({
               itemId: service.id,
-              staffId: person.id,
+              // The fixture's resources are its people, so the resource is the
+              // person. A hotel fixture would put a room here instead.
+              resourceId: person.id,
               customerName: customer?.name ?? 'Walk-in',
               customerPhone: customer?.phone ?? '',
               startsAt: at(dayOffset, hour, index % 2 === 0 ? 0 : 30).toISOString(),

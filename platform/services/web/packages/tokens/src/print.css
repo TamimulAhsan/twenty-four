@@ -1,0 +1,194 @@
+/* Printing.
+ *
+ * The problem this solves: window.print() prints the document, and the document
+ * is an application. Without a print stylesheet a till asked for a receipt
+ * produced the whole screen, sidebar and all, across several sheets of A4.
+ *
+ * The approach is to hide everything and then un-hide one subtree, rather than
+ * to hide the parts that are obviously wrong. Hiding a list is a list that grows
+ * a new item nobody added to the list; this way anything new is hidden until
+ * somebody deliberately marks it as belonging on paper.
+ */
+
+@media print {
+  /* The page is the roll, and it is named rather than global.
+   *
+   * A bare @page would resize every print in the product, so an invoice from
+   * the dashboard would come out on an 80mm page. Named pages let the receipt
+   * opt in and leave everything else on the paper the printer is loaded with.
+   *
+   * auto height, because a receipt is as long as it is: a fixed height would
+   * either clip a long sale or feed blank paper after a short one. Zero
+   * margin, because the printable area is handled by the element's own width
+   * and a browser margin on top of it loses the right-hand column of every
+   * total.
+   *
+   * Where named pages are not supported the receipt still prints, on whatever
+   * the default page is. Wrong paper, right document, which is the correct way
+   * round for a feature to degrade. */
+  /* No size here on purpose. It is written at print time by printReceipt(),
+   * which measures the receipt and sets the page to its actual length.
+   *
+   * The obvious `size: 80mm auto` is invalid CSS: the property takes `auto`,
+   * one length or two, and a length paired with `auto` is not a form it has.
+   * Written that way a browser drops the whole declaration, no page size is
+   * applied, and the receipt prints on whatever paper the driver last used.
+   * The rule looks right and does nothing. */
+  @page receipt {
+    margin: 0;
+  }
+
+  [data-print] {
+    page: receipt;
+  }
+
+  /* An invoice is a document, not a roll: A4 with a real margin, because it
+   * goes in a folder or an envelope rather than into a customer's hand. The
+   * marker is the same and only the paper differs, which is what lets one
+   * stylesheet serve both. */
+  @page document {
+    size: A4;
+    margin: 12mm;
+  }
+
+  [data-paper='a4'] {
+    page: document;
+    width: auto;
+    font-size: 12px;
+  }
+
+  /* Everything else is removed from the layout, not merely made invisible.
+   *
+   * visibility: hidden keeps the box. The application is a full-height layout,
+   * so hiding it that way left the whole dashboard still occupying its several
+   * pages of height behind the receipt: page one carried the receipt and pages
+   * two, three and four came out blank. display: none is what actually takes
+   * it out of the page count.
+   *
+   * The receipt is a direct child of body, portalled there rather than left in
+   * the dialog, so hiding body's other children removes the application whole
+   * and cannot catch the receipt's own ancestors.
+   *
+   * Conditional on there being something marked for paper, which matters:
+   * doing this unconditionally would make every other print in the product
+   * come out blank, and a blank page is a worse failure than the wrong page
+   * because nobody can tell what went wrong by looking at it. */
+  body:has([data-print]) > *:not([data-print]) {
+    display: none;
+  }
+
+  /* The page itself must not carry a height either. A layout built on
+   * min-height: 100% keeps the page as long as a viewport whether or not
+   * anything is in it. */
+  html:has([data-print]),
+  html:has([data-print]) body {
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    overflow: visible;
+  }
+
+  /* The roll's width, and only for a roll: an A4 document is laid out by its
+   * page margin instead. */
+  html:has([data-paper='80mm']),
+  html:has([data-paper='80mm']) body {
+    width: 80mm;
+  }
+
+  /* In normal flow, because there is nothing left beside it. Absolute
+   * positioning was needed only while the rest of the page was still occupying
+   * space, and an absolutely positioned box does not contribute its height to
+   * the page, which is its own way of producing a stray extra sheet. */
+  [data-print] {
+    position: static;
+    display: block;
+    /* No margin declared here on purpose. The receipt centres itself on the
+     * roll with margin: 0 auto, and a margin: 0 at equal specificity in this
+     * block would silently cancel it: the text would sit hard against the left
+     * edge with all the slack on the right, which is the crooked print this
+     * whole arrangement exists to avoid. */
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Black on white regardless of the theme. A dark-mode till printing white
+   * text on a thermal roll produces a blank receipt, and print-color-adjust is
+   * what stops a browser deciding to be helpful about it. */
+  [data-print] {
+    color: #000;
+    background: #fff;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* The page box has to match too, or the roll is fed at the wrong width. */
+  html:has([data-paper='58mm']),
+  html:has([data-paper='58mm']) body {
+    width: 58mm;
+  }
+}
+
+/* The print copy is off screen until there is a printer asking for it. Moved
+ * rather than hidden, because a browser does not lay out display:none, and
+ * both the print stylesheet and the height measurement need a box with real
+ * dimensions.
+ *
+ * Scoped to screen, which matters: the same selector inside the print block
+ * sets the position for paper, and this rule sits later in the file at equal
+ * specificity. Unscoped it won on paper too and printed the receipt ten metres
+ * to the left of the page. */
+@media screen {
+  [data-print] {
+    position: absolute;
+    left: -10000px;
+    top: 0;
+  }
+}
+
+/* The receipt, sized by its own grid.
+ *
+ * The width is stated in ch, so the box is exactly as wide as the 48 characters
+ * inside it whatever the font turns out to be, and the side margins are then
+ * whatever is left of the roll, split evenly by the auto margin. Setting a
+ * millimetre width instead is what went wrong before: the box was 72mm, the
+ * text at 11px was 83.8mm, and eleven millimetres of every line ran off the
+ * right-hand edge. All the visible white space ended up on the left, which
+ * reads as a receipt printed crooked.
+ *
+ * The font size is in millimetres for the same reason the width is in ch:
+ * both papers want the same 1.5mm per character, because 72mm over 48 columns
+ * and 48mm over 32 are the same figure. At the 0.6em advance of a monospaced
+ * face that is a 2.5mm em, and stating it in millimetres keeps it true on a
+ * printer whose pixel is not a browser's.
+ *
+ * The padding is top and bottom only, in every medium rather than only in
+ * print: the page height is measured off this element before printing, so
+ * anything adding to its height has to be there when it is measured. A little
+ * more at the foot than the head, because the cut falls below the last line
+ * and a receipt ending flush with the tear looks unfinished. */
+.receipt-paper {
+  box-sizing: content-box;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 2.5mm;
+  line-height: 1.35;
+  white-space: pre;
+  tab-size: 1;
+  width: 48ch;
+  margin: 0 auto;
+  padding: 4mm 0 6mm;
+}
+
+[data-paper='58mm'].receipt-paper {
+  width: 32ch;
+}
+
+/* A4 is a document rather than a roll: it takes its margin from the page box,
+ * and its width from the text the service laid out. */
+[data-paper='a4'].receipt-paper {
+  width: auto;
+  font-size: 3mm;
+  margin: 0;
+  padding: 0;
+}

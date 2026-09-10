@@ -1,18 +1,14 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { orders, queryKeys } from '@twentyfour/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { HttpError, kitchen, queryKeys, type Ticket, type TicketLine } from '@twentyfour/api'
 import {
-  Badge, Button, DENSE_GUTTER, EmptyState, Icon, PageBody, Skeleton, cn, useDateFormat,
+  Badge, Button, DENSE_GUTTER, EmptyState, ErrorState, Icon, PageBody, Select,
+  Skeleton, cn, useDateFormat, useToast,
 } from '@twentyfour/ui'
-
-const today = () => new Date().toISOString().slice(0, 10)
 
 function minutesSince(iso: string): number {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
 }
-
-/** How long a ticket stays on the rail before it is treated as served. */
-const OPEN_TICKET_MINUTES = 120
 
 /**
  * The prep screens.
@@ -22,42 +18,86 @@ const OPEN_TICKET_MINUTES = 120
  * buying the same POS gets a till and never sees this.
  *
  * Designed for a screen on a wall that nobody is holding: large type, colour
- * plus a number for age, and one button per ticket big enough to hit with the
- * back of a hand.
+ * plus a number for age, and buttons big enough to hit with the back of a hand.
+ *
+ * The state is the server's, and that is the change worth knowing about. This
+ * screen used to derive tickets from the day's orders and hold what had been
+ * bumped in a local set, which meant two screens in one kitchen disagreed about
+ * what was already cooking and a refresh brought everything back. A claim now
+ * belongs to a person, a ticket cannot be passed while a line is still on, and
+ * every screen sees the same rail.
  */
 export function KitchenView() {
   const dates = useDateFormat()
-  const [bumped, setBumped] = useState<Set<string>>(new Set())
+  const toast = useToast()
+  const client = useQueryClient()
+  const [station, setStation] = useState('')
 
-  const list = useQuery({
-    queryKey: queryKeys.orders.list({ from: today() }),
-    queryFn: () => orders.list({ from: today() }),
-    refetchInterval: 15_000,
+  const stations = useQuery({
+    queryKey: queryKeys.kitchen.stations(),
+    queryFn: () => kitchen.stations(),
   })
 
-  const tickets = (list.data ?? [])
-    .filter((order) => {
-      if (order.status !== 'paid' || bumped.has(order.id)) return false
-      // A prep screen shows what is still being made, not the day's history.
-      // Until the Kitchen Display service exists to hold its own ticket state,
-      // the window stands in for it: anything older than this was served long
-      // ago, and a screen full of four-hour-old tickets is noise a kitchen
-      // learns to ignore.
-      return minutesSince(order.placedAt) <= OPEN_TICKET_MINUTES
-    })
-    // Oldest first. A kitchen works the order things were asked for, so the
-    // list a cook reads top to bottom has to be the order they cook in.
-    .sort((a, b) => a.placedAt.localeCompare(b.placedAt))
+  const tickets = useQuery({
+    queryKey: queryKeys.kitchen.tickets(station),
+    queryFn: () => kitchen.tickets(station || undefined),
+    // A wall screen nobody touches. Polling is the whole update mechanism, so
+    // it is short enough that a cook is not looking at a stale rail.
+    refetchInterval: 5_000,
+  })
 
-  const bump = (id: string) => setBumped((current) => new Set(current).add(id))
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ['kitchen', 'tickets'] })
+  }
+
+  const act = useMutation({
+    mutationFn: (job: () => Promise<unknown>) => job(),
+    onSuccess: refresh,
+    onError: (err) => {
+      // The refusals are the interesting part and they are written for a
+      // kitchen: "somebody is already on that" and "that ticket still has
+      // something cooking" both mean act differently, not try again.
+      toast.show({
+        tone: 'warning',
+        title: err instanceof HttpError ? err.message : 'That did not work',
+      })
+      refresh()
+    },
+  })
+
+  const list = tickets.data ?? []
 
   return (
     <PageBody scroll className="bg-bg-inset" gutter={DENSE_GUTTER}>
-      {list.isPending ? (
+      {stations.data && stations.data.length > 1 && (
+        <div className="mb-3 flex items-center gap-3">
+          <Select
+            label="Screen"
+            value={station}
+            onChange={(event) => setStation(event.target.value)}
+            className="w-56"
+          >
+            {/* Everything, which is what a pass wants: knowing when a table's
+                whole order is ready is the job. */}
+            <option value="">The pass, everything</option>
+            {stations.data.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.name}</option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {tickets.isPending ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-56" />)}
         </div>
-      ) : tickets.length === 0 ? (
+      ) : tickets.isError ? (
+        <ErrorState
+          title="The rail could not be read"
+          description="Nothing has been lost. It will try again on its own in a few seconds."
+          className="mt-10 bg-surface"
+        />
+      ) : list.length === 0 ? (
         <EmptyState
           icon="ChefHat"
           title="Nothing waiting"
@@ -66,66 +106,128 @@ export function KitchenView() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {tickets.map((order) => {
-            const age = minutesSince(order.placedAt)
-            // Age is carried by a number as well as a colour: a prep screen is
-            // exactly where someone colour-blind must not be guessing.
-            const late = age >= 12
-            const warming = age >= 6
-            return (
-              <article
-                key={order.id}
-                className={cn(
-                  'flex flex-col rounded-xl border-2 bg-surface',
-                  late ? 'border-danger' : warming ? 'border-warning' : 'border-border',
-                )}
-              >
-                <header className="flex items-center justify-between gap-2 border-b border-border px-3.5 py-2.5">
-                  <span className="font-mono text-sm text-text-muted">{order.number}</span>
-                  <Badge tone={late ? 'danger' : warming ? 'warning' : 'neutral'} icon="Clock">
-                    {age} min
-                  </Badge>
-                </header>
-
-                <ul className="flex-1 px-3.5 py-3">
-                  {order.lines.map((line) => (
-                    <li key={line.id} className="flex gap-2.5 py-1.5 text-lg">
-                      <span className="tnum shrink-0 font-semibold text-accent-text">
-                        {line.quantity}
-                      </span>
-                      <span className="min-w-0 text-text">{line.name}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {order.note && (
-                  <p className="mx-3.5 mb-3 flex gap-2 rounded-lg bg-warning-subtle p-2.5 text-base text-text-muted">
-                    <Icon name="Info" size="md" className="mt-0.5 shrink-0" />
-                    {order.note}
-                  </p>
-                )}
-
-                <footer className="border-t border-border p-2.5">
-                  <p className="mb-2 text-center text-sm text-text-subtle">
-                    Ordered {dates.time(order.placedAt)}
-                  </p>
-                  <Button size="lg" block iconStart="Check" onClick={() => bump(order.id)}>
-                    Bump
-                  </Button>
-                </footer>
-              </article>
-            )
-          })}
-        </div>
-      )}
-
-      {bumped.size > 0 && (
-        <div className="mt-4 flex justify-center">
-          <Button variant="ghost" iconStart="RotateCcw" onClick={() => setBumped(new Set())}>
-            Recall {bumped.size} bumped {bumped.size === 1 ? 'ticket' : 'tickets'}
-          </Button>
+          {list.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              orderedAt={dates.time(ticket.placedAt)}
+              busy={act.isPending}
+              onClaim={(line) => act.mutate(() => kitchen.claim(line.id))}
+              onDone={(line) => act.mutate(() => kitchen.complete(line.id))}
+              onPass={() => act.mutate(() => kitchen.pass(ticket.id))}
+            />
+          ))}
         </div>
       )}
     </PageBody>
+  )
+}
+
+function TicketCard({
+  ticket,
+  orderedAt,
+  busy,
+  onClaim,
+  onDone,
+  onPass,
+}: {
+  ticket: Ticket
+  orderedAt: string
+  busy: boolean
+  onClaim: (line: TicketLine) => void
+  onDone: (line: TicketLine) => void
+  onPass: () => void
+}) {
+  const age = minutesSince(ticket.placedAt)
+  // Age is carried by a number as well as a colour: a prep screen is exactly
+  // where somebody colour-blind must not be guessing.
+  const late = age >= 12
+  const warming = age >= 6
+  const ready = ticket.state === 'ready'
+
+  return (
+    <article
+      className={cn(
+        'flex flex-col rounded-xl border-2 bg-surface',
+        ready ? 'border-success' : late ? 'border-danger' : warming ? 'border-warning' : 'border-border',
+      )}
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-border px-3.5 py-2.5">
+        <span className="font-mono text-sm text-text-muted">
+          {ticket.orderNumber}
+          {ticket.tableLabel && <span className="ml-2 text-text">{ticket.tableLabel}</span>}
+        </span>
+        <Badge tone={late ? 'danger' : warming ? 'warning' : 'neutral'} icon="Clock">
+          {age} min
+        </Badge>
+      </header>
+
+      <ul className="flex-1 divide-y divide-border px-3.5">
+        {ticket.lines
+          .filter((line) => line.state !== 'voided')
+          .map((line) => (
+            <li key={line.id} className="flex items-center gap-2.5 py-2.5 text-lg">
+              <span className="tnum shrink-0 font-semibold text-accent-text">{line.quantity}</span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1',
+                  line.state === 'done' ? 'text-text-subtle line-through' : 'text-text',
+                )}
+              >
+                {line.name}
+                {line.note && <span className="block text-base text-text-muted">{line.note}</span>}
+              </span>
+              <LineAction line={line} busy={busy} onClaim={onClaim} onDone={onDone} />
+            </li>
+          ))}
+      </ul>
+
+      {ticket.note && (
+        <p className="mx-3.5 mb-3 flex gap-2 rounded-lg bg-warning-subtle p-2.5 text-base text-text-muted">
+          <Icon name="Info" size="md" className="mt-0.5 shrink-0" />
+          {ticket.note}
+        </p>
+      )}
+
+      <footer className="border-t border-border p-2.5">
+        <p className="mb-2 text-center text-sm text-text-subtle">Ordered {orderedAt}</p>
+        {/*
+          Offered only once everything on it is done. The service refuses it
+          otherwise, and a button that is going to be refused is a button that
+          teaches a kitchen to press things twice.
+        */}
+        <Button size="lg" block iconStart="Check" disabled={!ready || busy} onClick={onPass}>
+          {ready ? 'Away' : 'Still cooking'}
+        </Button>
+      </footer>
+    </article>
+  )
+}
+
+function LineAction({
+  line,
+  busy,
+  onClaim,
+  onDone,
+}: {
+  line: TicketLine
+  busy: boolean
+  onClaim: (line: TicketLine) => void
+  onDone: (line: TicketLine) => void
+}) {
+  if (line.state === 'done') {
+    return <Icon name="CheckCircle2" size="md" className="shrink-0 text-success" />
+  }
+  if (line.state === 'claimed') {
+    return (
+      <Button size="sm" variant="secondary" disabled={busy} onClick={() => onDone(line)}>
+        Done
+      </Button>
+    )
+  }
+  return (
+    <Button size="sm" variant="outline" disabled={busy} onClick={() => onClaim(line)}>
+      Start
+    </Button>
   )
 }

@@ -7,9 +7,18 @@
  * so they land under the input that caused them rather than in a banner above
  * all of them.
  */
-import { MIN_PASSWORD_LENGTH } from '@twentyfour/api'
 import { industryProfile, TIER_IDS, type TierId } from '@twentyfour/entitlement'
 import { MockError, availableTenants, storeFor } from './store'
+
+/**
+ * The shortest password this stand-in gateway accepts.
+ *
+ * Held here rather than imported from the client, because the client is what
+ * this is standing in judgement over. It is served from `/api/auth/policy` so
+ * the form asks for it the same way it asks the real gateway, which is the
+ * only way that path gets exercised in development.
+ */
+export const MOCK_MIN_PASSWORD_LENGTH = 10
 
 export interface SignupBody {
   email: string
@@ -45,10 +54,10 @@ export function readSignup(raw: unknown): SignupBody {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     fieldErrors.push({ field: 'email', message: 'Enter an email address we can reach you on.' })
   }
-  if (password.length < MIN_PASSWORD_LENGTH) {
+  if (password.length < MOCK_MIN_PASSWORD_LENGTH) {
     fieldErrors.push({
       field: 'password',
-      message: `Use at least ${MIN_PASSWORD_LENGTH} characters.`,
+      message: `Use at least ${MOCK_MIN_PASSWORD_LENGTH} characters.`,
     })
   }
   if (!displayName) fieldErrors.push({ field: 'displayName', message: 'Tell us your name.' })

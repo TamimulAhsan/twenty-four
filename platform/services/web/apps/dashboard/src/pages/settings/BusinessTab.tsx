@@ -8,6 +8,7 @@ import {
   Badge, Button, Card, CardHeader, Dialog, Icon, Input, cn, useToast,
 } from '@twentyfour/ui'
 import { BusinessTypeSelector } from '@twentyfour/shell'
+import { MediaField } from '../../media/MediaField'
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
@@ -84,6 +85,21 @@ export function BusinessTab() {
           Currency and language come from the market this account was set up in and cannot be
           changed here. Moving market means a new account.
         </p>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Your mark"
+          description="Appears on documents, on emails and on your site."
+        />
+        <div className="mt-4">
+          <MediaField
+            purpose="brand_logo"
+            label="Logo"
+            hint="PNG, JPEG, WebP or AVIF, up to 4 MB. It is stored once and used everywhere."
+            disabled={!mayEdit}
+          />
+        </div>
       </Card>
 
       <Card padded={false}>

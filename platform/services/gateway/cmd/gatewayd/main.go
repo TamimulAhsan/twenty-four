@@ -25,14 +25,23 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	analyticspb "github.com/twentyfour/platform/gen/go/twentyfour/analytics/v1"
+	auditpb "github.com/twentyfour/platform/gen/go/twentyfour/audit/v1"
 	authpb "github.com/twentyfour/platform/gen/go/twentyfour/auth/v1"
+	bookingspb "github.com/twentyfour/platform/gen/go/twentyfour/bookings/v1"
 	catalogpb "github.com/twentyfour/platform/gen/go/twentyfour/catalog/v1"
 	inventorypb "github.com/twentyfour/platform/gen/go/twentyfour/inventory/v1"
+	invoicingpb "github.com/twentyfour/platform/gen/go/twentyfour/invoicing/v1"
+	kitchenpb "github.com/twentyfour/platform/gen/go/twentyfour/kitchen/v1"
+	ledgerpb "github.com/twentyfour/platform/gen/go/twentyfour/ledger/v1"
+	mediapb "github.com/twentyfour/platform/gen/go/twentyfour/media/v1"
+	notificationpb "github.com/twentyfour/platform/gen/go/twentyfour/notification/v1"
 	paymentspb "github.com/twentyfour/platform/gen/go/twentyfour/payments/v1"
 	pospb "github.com/twentyfour/platform/gen/go/twentyfour/pos/v1"
 	provpb "github.com/twentyfour/platform/gen/go/twentyfour/provisioning/v1"
 	rbacpb "github.com/twentyfour/platform/gen/go/twentyfour/rbac/v1"
 	staffpb "github.com/twentyfour/platform/gen/go/twentyfour/staff/v1"
+	supportpb "github.com/twentyfour/platform/gen/go/twentyfour/support/v1"
 	tenantpb "github.com/twentyfour/platform/gen/go/twentyfour/tenant/v1"
 	"github.com/twentyfour/platform/packages/httpx"
 	"github.com/twentyfour/platform/packages/tenantctx"
@@ -49,10 +58,28 @@ type gateway struct {
 	pos          pospb.PosServiceClient
 	tenant       tenantpb.TenantServiceClient
 	provisioning provpb.ProvisioningServiceClient
+	analytics    analyticspb.AnalyticsServiceClient
+	notification notificationpb.NotificationServiceClient
+	audit        auditpb.AuditServiceClient
+	media        mediapb.MediaServiceClient
+	ledger       ledgerpb.LedgerServiceClient
+	support      supportpb.SupportServiceClient
+	invoicing    invoicingpb.InvoicingServiceClient
+	bookings     bookingspb.BookingsServiceClient
+	kitchen      kitchenpb.KitchenServiceClient
 	cookies      websession.Manager
 	// Where a specialist is sent when they sign in here. Its own host, because
 	// the admin plane is not inside the merchant cookie's namespace.
 	adminURL string
+	// This deployment's currency. One market, one currency: it is on every
+	// service's command line already, and the gateway needs it to wrap the
+	// bare integers the dashboard sends into the Money every service expects.
+	currency string
+	// The merchant origin, used to build links that go into messages. Held as
+	// configuration rather than read off the request, because the request that
+	// creates an invitation is not the one that follows the link, and a Host
+	// header is something a caller can set.
+	appURL string
 	// permissive turns every RBAC denial into an allow, so the whole dashboard
 	// can be walked through before the services behind it exist. It is a
 	// development switch: it must never be set anywhere a real merchant's data
@@ -79,8 +106,20 @@ func main() {
 	posAddr := flag.String("pos", "pos:9108", "POS service address")
 	tenantAddr := flag.String("tenant", "tenant:9109", "Tenant service address")
 	provAddr := flag.String("provisioning", "provisioning:9110", "Provisioning service address")
+	analyticsAddr := flag.String("analytics", "analytics:9111", "Analytics service address")
+	notificationAddr := flag.String("notification", "notification:9112", "Notification service address")
+	auditAddr := flag.String("audit", "audit:9114", "Audit service address")
+	mediaAddr := flag.String("media", "media:9115", "Media service address")
+	ledgerAddr := flag.String("ledger", "ledger:9118", "Ledger service address")
+	supportAddr := flag.String("support", "support:9117", "Support service address")
+	invoicingAddr := flag.String("invoicing", "invoicing:9119", "Invoicing service address")
+	bookingsAddr := flag.String("bookings", "bookings:9120", "Bookings service address")
+	kitchenAddr := flag.String("kitchen", "kitchen:9121", "Kitchen service address")
+	currency := flag.String("currency", "HUF", "this market's currency")
 	adminURL := flag.String("admin-url", "http://admin.twentyfour.localhost",
 		"origin of the admin console, where a specialist signing in here is sent")
+	appURL := flag.String("app-url", "http://app.twentyfour.localhost",
+		"merchant origin, used to build the links that go into messages")
 	cookieDomain := flag.String("cookie-domain", "", "parent domain for the session cookie; empty means host-only")
 	secure := flag.Bool("secure-cookie", false, "set Secure on the session cookie; must be on outside local development")
 	ttl := flag.Duration("session-ttl", 12*time.Hour, "session lifetime")
@@ -116,6 +155,24 @@ func main() {
 	defer tenantConn.Close()
 	provConn := dial(*provAddr)
 	defer provConn.Close()
+	analyticsConn := dial(*analyticsAddr)
+	defer analyticsConn.Close()
+	notificationConn := dial(*notificationAddr)
+	defer notificationConn.Close()
+	auditConn := dial(*auditAddr)
+	defer auditConn.Close()
+	mediaConn := dial(*mediaAddr)
+	defer mediaConn.Close()
+	ledgerConn := dial(*ledgerAddr)
+	defer ledgerConn.Close()
+	supportConn := dial(*supportAddr)
+	defer supportConn.Close()
+	invoicingConn := dial(*invoicingAddr)
+	defer invoicingConn.Close()
+	bookingsConn := dial(*bookingsAddr)
+	defer bookingsConn.Close()
+	kitchenConn := dial(*kitchenAddr)
+	defer kitchenConn.Close()
 
 	g := &gateway{
 		auth:         authpb.NewAuthServiceClient(authConn),
@@ -127,6 +184,16 @@ func main() {
 		pos:          pospb.NewPosServiceClient(posConn),
 		tenant:       tenantpb.NewTenantServiceClient(tenantConn),
 		provisioning: provpb.NewProvisioningServiceClient(provConn),
+		analytics:    analyticspb.NewAnalyticsServiceClient(analyticsConn),
+		notification: notificationpb.NewNotificationServiceClient(notificationConn),
+		audit:        auditpb.NewAuditServiceClient(auditConn),
+		media:        mediapb.NewMediaServiceClient(mediaConn),
+		ledger:       ledgerpb.NewLedgerServiceClient(ledgerConn),
+		support:      supportpb.NewSupportServiceClient(supportConn),
+		invoicing:    invoicingpb.NewInvoicingServiceClient(invoicingConn),
+		bookings:     bookingspb.NewBookingsServiceClient(bookingsConn),
+		kitchen:      kitchenpb.NewKitchenServiceClient(kitchenConn),
+		currency:     *currency,
 		cookies: websession.Manager{
 			// The merchant cookie, on the parent domain, so the dashboard, the
 			// till, the calendar and the CRM subdomain share one sign-in.
@@ -136,6 +203,7 @@ func main() {
 			TTL:    *ttl,
 		},
 		adminURL:   strings.TrimRight(*adminURL, "/"),
+		appURL:     strings.TrimRight(*appURL, "/"),
 		permissive: *permissive,
 	}
 	if *permissive {
@@ -162,6 +230,15 @@ func main() {
 	g.registerTeamAndStock(mux)
 	g.registerPayments(mux)
 	g.registerOrders(mux)
+	g.registerAnalytics(mux)
+	g.registerNotifications(mux)
+	g.registerAudit(mux)
+	g.registerMedia(mux)
+	g.registerLedger(mux)
+	g.registerSupport(mux)
+	g.registerDocuments(mux)
+	g.registerBookings(mux)
+	g.registerKitchen(mux)
 	g.registerReadStubs(mux)
 
 	// Anything else under /api that is not implemented yet says so plainly,
@@ -313,14 +390,6 @@ func (g *gateway) downstream(r *http.Request, c caller) context.Context {
 		id.UserID = uid
 	}
 	return tenantctx.Outbound(r.Context(), id)
-}
-
-// logInviteToken is what stands in for the Notification service. An invitation
-// nobody can accept is not worth building, and printing the link is honest
-// about the fact that nothing is being emailed yet.
-func logInviteToken(r *http.Request, email, token string) {
-	slog.Warn("invitation issued but not sent: there is no Notification service yet",
-		"email", email, "accept_token", token, "request_id", httpx.RequestID(r))
 }
 
 // failGRPC writes the HTTP answer for a failed downstream call, and logs the

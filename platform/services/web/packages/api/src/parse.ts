@@ -21,6 +21,12 @@ import type {
   OrderLine,
   PaymentPending,
   Payment,
+  ReportBreakdown,
+  ReportHeatmap,
+  ReportSeries,
+  ReportSlice,
+  ReportSummary,
+  ReportTotals,
   Subscription,
   Takings,
   Tender,
@@ -34,6 +40,10 @@ const asRecord = (value: unknown, what: string): Raw => {
   }
   return value as Raw
 }
+
+/** A string field, defaulting to empty rather than throwing: an absent optional
+ *  string is an absence, not a malformed response. */
+const text = (value: unknown): string => (typeof value === 'string' ? value : '')
 
 const optionalMoney = (value: unknown): Money | null =>
   value === null || value === undefined ? null : parseMoney(value)
@@ -190,4 +200,211 @@ export function parseDiscount(value: unknown): Discount {
 export function parseLoyaltyProgramme(value: unknown): LoyaltyProgramme {
   const raw = asRecord(value, 'loyalty programme')
   return { ...(raw as unknown as LoyaltyProgramme), pointValue: parseMoney(raw['pointValue']) }
+}
+
+/* -------------------------------------------------------------- analytics */
+
+const parseFreshness = (value: unknown) => {
+  if (value === null || value === undefined) return { through: null }
+  const raw = asRecord(value, 'freshness')
+  return { through: typeof raw['through'] === 'string' ? raw['through'] : null }
+}
+
+const count = (value: unknown): number => {
+  // Counts cross the wire as numbers, but a 64-bit one from protobuf arrives
+  // as a string. Both are counts of sales, so both are read the same way.
+  const parsed = typeof value === 'string' ? Number(value) : value
+  return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : 0
+}
+
+function parseTotals(value: unknown): ReportTotals {
+  const raw = asRecord(value, 'totals')
+  return {
+    gross: parseMoney(raw['gross']),
+    net: parseMoney(raw['net']),
+    tax: parseMoney(raw['tax']),
+    discount: parseMoney(raw['discount']),
+    refunded: parseMoney(raw['refunded']),
+    // Null here means "not answerable", never "zero". optionalMoney keeps the
+    // two apart, which is the whole point of the field.
+    cost: optionalMoney(raw['cost']),
+    margin: optionalMoney(raw['margin']),
+    orders: count(raw['orders']),
+    customers: count(raw['customers']),
+    averageBasket: parseMoney(raw['averageBasket']),
+    averageLinesPerOrderMilli: count(raw['averageLinesPerOrderMilli']),
+  }
+}
+
+export function parseReportSummary(value: unknown): ReportSummary {
+  const raw = asRecord(value, 'summary')
+  const before = asRecord(raw['previousPeriod'], 'previousPeriod')
+  return {
+    current: parseTotals(raw['current']),
+    previous: parseTotals(raw['previous']),
+    previousPeriod: { from: String(before['from']), to: String(before['to']) },
+    freshness: parseFreshness(raw['freshness']),
+  }
+}
+
+export function parseReportSeries(value: unknown): ReportSeries {
+  const raw = asRecord(value, 'series')
+  return {
+    points: asArray(raw['points'], 'points').map((point) => {
+      const day = asRecord(point, 'day')
+      return {
+        date: String(day['date']),
+        gross: parseMoney(day['gross']),
+        net: parseMoney(day['net']),
+        tax: parseMoney(day['tax']),
+        margin: optionalMoney(day['margin']),
+        orders: count(day['orders']),
+        customers: count(day['customers']),
+      }
+    }),
+    freshness: parseFreshness(raw['freshness']),
+  }
+}
+
+function parseSlice(value: unknown): ReportSlice {
+  const raw = asRecord(value, 'slice')
+  return {
+    key: String(raw['key'] ?? ''),
+    label: String(raw['label'] ?? ''),
+    gross: parseMoney(raw['gross']),
+    shareBasisPoints: count(raw['shareBasisPoints']),
+    orders: count(raw['orders']),
+  }
+}
+
+export function parseReportBreakdown(value: unknown): ReportBreakdown {
+  const raw = asRecord(value, 'breakdown')
+  return {
+    slices: asArray(raw['slices'], 'slices').map(parseSlice),
+    other: raw['other'] === null || raw['other'] === undefined ? null : parseSlice(raw['other']),
+    freshness: parseFreshness(raw['freshness']),
+  }
+}
+
+export function parseReportHeatmap(value: unknown): ReportHeatmap {
+  const raw = asRecord(value, 'heatmap')
+  return {
+    cells: asArray(raw['cells'], 'cells').map((cell) => {
+      const c = asRecord(cell, 'cell')
+      return {
+        weekday: count(c['weekday']),
+        hour: count(c['hour']),
+        orders: count(c['orders']),
+        gross: parseMoney(c['gross']),
+      }
+    }),
+    freshness: parseFreshness(raw['freshness']),
+  }
+}
+
+/* ------------------------------------------------------------------ ledger */
+
+export type AccountKind = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'
+
+export interface LedgerAccount {
+  readonly code: string
+  readonly name: string
+  readonly kind: AccountKind
+  readonly builtin: boolean
+}
+
+export interface TrialBalanceRow {
+  readonly account: LedgerAccount
+  readonly balance: Money
+  readonly debit: Money
+  readonly credit: Money
+}
+
+export interface TrialBalance {
+  readonly rows: readonly TrialBalanceRow[]
+  readonly totalDebits: Money
+  readonly totalCredits: Money
+  readonly balanced: boolean
+}
+
+export interface JournalLine {
+  readonly account: string
+  /** A signed debit: positive is a debit, negative is a credit. */
+  readonly amount: Money
+  readonly memo: string
+}
+
+export interface JournalEntry {
+  readonly id: string
+  readonly kind: string
+  readonly memo: string
+  readonly referenceType: string
+  readonly referenceId: string
+  readonly reversesId: string
+  readonly reversedById: string
+  readonly lines: readonly JournalLine[]
+  readonly occurredAt: string
+}
+
+const parseAccount = (value: unknown): LedgerAccount => {
+  const raw = asRecord(value, 'account')
+  return {
+    code: text(raw['code']),
+    name: text(raw['name']),
+    kind: text(raw['kind']) as LedgerAccount['kind'],
+    builtin: raw['builtin'] === true,
+  }
+}
+
+/**
+ * The trial balance, with every amount through parseMoney.
+ *
+ * The wire carries minor units as a string, because an int64 through JSON is a
+ * number that quietly loses digits. Typing the response as Money without
+ * parsing it would compile and would be a lie: the field would say number and
+ * hold a string, and the first arithmetic on it would concatenate.
+ */
+export function parseTrialBalance(value: unknown): TrialBalance {
+  const raw = asRecord(value, 'trial balance')
+  const rows = Array.isArray(raw['rows']) ? raw['rows'] : []
+  return {
+    rows: rows.map((row) => {
+      const r = asRecord(row, 'trial balance row')
+      return {
+        account: parseAccount(r['account']),
+        balance: parseMoney(r['balance']),
+        debit: parseMoney(r['debit']),
+        credit: parseMoney(r['credit']),
+      }
+    }),
+    totalDebits: parseMoney(raw['totalDebits']),
+    totalCredits: parseMoney(raw['totalCredits']),
+    // Taken as the service reported it. A screen that worked this out for
+    // itself would be a second opinion, and the one thing a set of books must
+    // not have is two answers.
+    balanced: raw['balanced'] === true,
+  }
+}
+
+export function parseJournalEntry(value: unknown): JournalEntry {
+  const raw = asRecord(value, 'journal entry')
+  const lines = Array.isArray(raw['lines']) ? raw['lines'] : []
+  return {
+    id: text(raw['id']),
+    kind: text(raw['kind']),
+    memo: text(raw['memo']),
+    referenceType: text(raw['referenceType']),
+    referenceId: text(raw['referenceId']),
+    reversesId: text(raw['reversesId']),
+    reversedById: text(raw['reversedById']),
+    lines: lines.map((line) => {
+      const l = asRecord(line, 'journal line')
+      return {
+        account: text(l['account']),
+        amount: parseMoney(l['amount']),
+        memo: text(l['memo']),
+      }
+    }),
+    occurredAt: text(raw['occurredAt']),
+  }
 }

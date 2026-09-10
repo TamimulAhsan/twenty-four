@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adminAuth,
@@ -7,7 +7,7 @@ import {
   type AdminEnvironment,
   type AdminSession,
 } from '@twentyfour/api'
-import { ErrorState, FormatProvider, Spinner } from '@twentyfour/ui'
+import { ConfirmDialog, ErrorState, FormatProvider, Spinner } from '@twentyfour/ui'
 import { signInUrl } from './signInUrl'
 
 /**
@@ -49,8 +49,22 @@ export function useEnvironment(): AdminEnvironment {
   return useConsole().environment
 }
 
-export function useSignOut() {
+/**
+ * Signing out of the console.
+ *
+ * Asks first, and the caller must render `confirmation` for the question to
+ * appear. Same shape as the merchant plane's hook on purpose: two planes with
+ * two different answers to "did you mean that" is how one of them ends up
+ * without the question.
+ *
+ * The stake is higher here than on the merchant side. A specialist is often
+ * partway through an impersonation session or a provisioning run, and this
+ * plane can see every tenant, so the row that ends the session sits a
+ * mis-click away from the navigation they use all day.
+ */
+export function useSignOut(): { signOut: () => void; pending: boolean; confirmation: ReactNode } {
   const queryClient = useQueryClient()
+  const [asking, setAsking] = useState(false)
   const mutation = useMutation({
     mutationFn: adminAuth.signOut,
     // Everything cached was read as this specialist. Clearing it is what keeps
@@ -58,7 +72,22 @@ export function useSignOut() {
     // tenants for the frame before their own load.
     onSettled: () => queryClient.clear(),
   })
-  return { signOut: () => mutation.mutate(), pending: mutation.isPending }
+
+  const confirmation = (
+    <ConfirmDialog
+      open={asking}
+      onCancel={() => setAsking(false)}
+      onConfirm={() => mutation.mutate()}
+      title="Sign out of the console?"
+      description="Any support session you have open stays open until it expires or is revoked. Ending it is a separate act, on the tenant."
+      confirmLabel="Sign out"
+      confirmVariant="danger"
+      confirmIcon="LogOut"
+      pending={mutation.isPending}
+    />
+  )
+
+  return { signOut: () => setAsking(true), pending: mutation.isPending, confirmation }
 }
 
 export function AdminGate({ children }: { children: ReactNode }) {

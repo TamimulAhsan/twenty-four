@@ -1,0 +1,212 @@
+syntax = "proto3";
+
+package twentyfour.ledger.v1;
+
+import "google/protobuf/timestamp.proto";
+import "twentyfour/common/v1/money.proto";
+
+// LedgerService is the double-entry journal for this environment's single legal
+// entity.
+//
+// One ledger per deployment, because one deployment is one market, one legal
+// entity, one currency and one set of books. That is what makes this service
+// simple enough to be worth trusting: there is no multi-entity bookkeeping
+// here, no consolidation, and no currency conversion, because the architecture
+// put those on the other side of a VPS boundary.
+//
+// Nothing writes to it directly in the normal course of business. It listens to
+// the bus and derives entries from what the operational services announced,
+// which is what keeps the books from being a second opinion about whether a
+// sale happened. Post exists for the corrections an accountant makes by hand,
+// and those are the ones that need a person's name against them.
+//
+// The invariant, and it is the only one that matters: every entry balances.
+// A journal that can hold an unbalanced entry is a journal that will, and
+// finding out which one it was six months later is the work this constraint
+// exists to avoid.
+service LedgerService {
+  // A manual entry. Refused unless the lines balance.
+  rpc Post(PostRequest) returns (PostResponse);
+  // A correcting entry that reverses another. Never an edit and never a
+  // delete: an issued journal entry is as immutable as an issued invoice, and
+  // for the same reason.
+  rpc Reverse(ReverseRequest) returns (ReverseResponse);
+
+  rpc GetEntry(GetEntryRequest) returns (GetEntryResponse);
+  rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
+
+  // The chart of accounts this deployment uses.
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+  // What each account has on it. The trial balance, which sums to zero when
+  // the books are sound, and says so when they are not.
+  rpc TrialBalance(TrialBalanceRequest) returns (TrialBalanceResponse);
+  // One account, line by line, with a running balance.
+  rpc AccountLedger(AccountLedgerRequest) returns (AccountLedgerResponse);
+}
+
+// The five kinds an account can be. Which side increases an account follows
+// from this and is not stored separately: two places to say "assets increase on
+// the debit side" is one place for them to disagree.
+enum AccountKind {
+  ACCOUNT_KIND_UNSPECIFIED = 0;
+  ACCOUNT_KIND_ASSET = 1;
+  ACCOUNT_KIND_LIABILITY = 2;
+  ACCOUNT_KIND_EQUITY = 3;
+  ACCOUNT_KIND_REVENUE = 4;
+  ACCOUNT_KIND_EXPENSE = 5;
+}
+
+message Account {
+  // Stable and semantic: "cash", "card_clearing", "sales_revenue". Never a
+  // number, because a numbered chart of accounts is a market convention and
+  // this codebase has no country logic in it.
+  string code = 1;
+  string name = 2;
+  AccountKind kind = 3;
+  // True for the accounts the platform posts to on its own. A tenant may add
+  // its own, and may not remove these.
+  bool builtin = 4;
+}
+
+message Line {
+  string account_code = 1;
+  // A signed debit: positive is a debit, negative is a credit.
+  //
+  // One signed column rather than two, because it makes the invariant a sum. An
+  // entry balances when its lines add to zero, which is a thing a database
+  // constraint and a reader can both check; with separate debit and credit
+  // columns the same invariant is a comparison of two totals that can be
+  // written independently and therefore written wrong.
+  //
+  // Whether a debit increases an account depends on its kind, and that is
+  // derived from the kind rather than stored, which is why an asset with a
+  // positive balance and revenue with a negative one are both normal.
+  twentyfour.common.v1.Money amount = 2;
+  string memo = 3;
+}
+
+message Entry {
+  string id = 1;
+  // What this records: "sale", "refund", "payment", "correction".
+  string kind = 2;
+  // The thing in the operational world it came from, so a line in the books
+  // can be traced back to the sale that caused it.
+  string reference_type = 3;
+  string reference_id = 4;
+  // The event that produced it, when it came from the bus. Empty for a manual
+  // entry, which is the distinction an auditor asks about first.
+  string event_id = 5;
+
+  string memo = 6;
+  repeated Line lines = 7;
+
+  // Set when this entry reverses another, and on the entry that was reversed.
+  string reverses_id = 8;
+  string reversed_by_id = 9;
+
+  // The person, for a manual entry. Empty when the platform derived it.
+  string posted_by = 10;
+  google.protobuf.Timestamp occurred_at = 11;
+  google.protobuf.Timestamp posted_at = 12;
+}
+
+message PostRequest {
+  string kind = 1;
+  string reference_type = 2;
+  string reference_id = 3;
+  string memo = 4;
+  repeated Line lines = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+  string idempotency_key = 7;
+}
+message PostResponse {
+  Entry entry = 1;
+}
+
+message ReverseRequest {
+  string id = 1;
+  string memo = 2;
+}
+message ReverseResponse {
+  // The correcting entry. The original is unchanged, and now carries a pointer
+  // to this one.
+  Entry entry = 1;
+}
+
+message GetEntryRequest {
+  string id = 1;
+}
+message GetEntryResponse {
+  Entry entry = 1;
+}
+
+message ListEntriesRequest {
+  string kind = 1;
+  string reference_type = 2;
+  string reference_id = 3;
+  google.protobuf.Timestamp from = 4;
+  google.protobuf.Timestamp to = 5;
+  int32 page_size = 6;
+  string page_token = 7;
+}
+message ListEntriesResponse {
+  repeated Entry entries = 1;
+  string next_page_token = 2;
+}
+
+message ListAccountsRequest {}
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+}
+
+message Balance {
+  Account account = 1;
+  // The balance the way the account is normally read, so revenue earned is
+  // positive and cash held is positive. Derived by flipping the signed debit
+  // total for the kinds that increase on the credit side, which is the only
+  // presentation this service applies to a figure.
+  twentyfour.common.v1.Money balance = 2;
+  // The same figure in the two columns a trial balance is printed in. Exactly
+  // one of them is non-zero for any account.
+  twentyfour.common.v1.Money debit = 3;
+  twentyfour.common.v1.Money credit = 4;
+}
+
+message TrialBalanceRequest {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+}
+message TrialBalanceResponse {
+  repeated Balance balances = 1;
+  twentyfour.common.v1.Money total_debits = 2;
+  twentyfour.common.v1.Money total_credits = 3;
+  // True when the two totals agree, which they always should. Stated rather
+  // than left to the reader to check, because a trial balance that silently
+  // does not balance is the failure this whole service is arranged to prevent.
+  bool balanced = 4;
+}
+
+message AccountLedgerRequest {
+  string account_code = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  int32 page_size = 4;
+}
+message PostedLine {
+  string entry_id = 1;
+  string kind = 2;
+  string memo = 3;
+  string reference_type = 4;
+  string reference_id = 5;
+  twentyfour.common.v1.Money amount = 6;
+  twentyfour.common.v1.Money running_balance = 7;
+  google.protobuf.Timestamp occurred_at = 8;
+}
+message AccountLedgerResponse {
+  Account account = 1;
+  // The balance before the first line shown, so a page of a ledger is readable
+  // on its own rather than only from the beginning of time.
+  twentyfour.common.v1.Money opening_balance = 2;
+  repeated PostedLine lines = 3;
+  twentyfour.common.v1.Money closing_balance = 4;
+}

@@ -1,0 +1,56 @@
+# Invoicing & Billing: fiscal documents for the merchant's customers, and the
+# merchant's own subscription charges.
+#
+# One service, not two. Both issue a document under a market's rules and both
+# need the same numbering, layout and tax machinery; the only real difference is
+# who the document is addressed to. Two services meant two implementations of
+# that machinery in every market.
+#
+# This pod and Payments are the market-swapped set. Everything here that could
+# be a rule about Hungary is a rule this implementation holds, and no caller can
+# tell which one is behind the contract.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: invoicing
+  namespace: twentyfour
+  labels: { app: invoicing, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: invoicing } }
+  template:
+    metadata: { labels: { app: invoicing, tier: backend } }
+    spec:
+      containers:
+        - name: invoicingd
+          image: localhost:5000/twentyfour/invoicing:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9119"
+            - "-auth=auth.twentyfour.svc.cluster.local:9102"
+            - "-tenant=tenant.twentyfour.svc.cluster.local:9109"
+            - "-currency=HUF"
+            # Registry values, and not final. Carried in one flag so the day
+            # they are decided is a configuration change rather than a release.
+            - "-prices=starter=8900,growth=18900,max=34900,enterprise=0"
+          ports: [{ containerPort: 9119, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: invoicing } }
+          readinessProbe:
+            grpc: { port: 9119 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9119 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: invoicing, namespace: twentyfour }
+spec:
+  selector: { app: invoicing }
+  ports: [{ port: 9119, targetPort: 9119, name: grpc }]

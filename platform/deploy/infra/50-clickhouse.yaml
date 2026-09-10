@@ -1,0 +1,83 @@
+# The analytics store. Fed only by the CDC connectors in 60-connect.yaml and
+# read only by the analytics service; nothing writes to it directly, because a
+# service writing to both Postgres and ClickHouse drifts the first time one
+# write succeeds and the other does not.
+#
+# Dev-only shape: one node, no replication, no ZooKeeper/Keeper. Production is
+# a cluster, which changes the table engines and nothing else about the design.
+apiVersion: v1
+kind: Secret
+metadata: { name: clickhouse, namespace: twentyfour }
+stringData:
+  CLICKHOUSE_USER: twentyfour
+  CLICKHOUSE_PASSWORD: devpassword
+  CLICKHOUSE_DB: analytics
+---
+# ClickHouse sizes its caches from the host's RAM, not from the container's
+# limit, so on a shared development box it will happily reserve most of the
+# machine and then be killed for it. These caps are what make it a good
+# neighbour to Postgres and Kafka on one node.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: clickhouse-config, namespace: twentyfour }
+data:
+  overrides.xml: |
+    <clickhouse>
+        <!-- The image's own default binds the HTTP port to the IPv6 wildcard,
+             which on a node without IPv6 leaves it reachable only from inside
+             the container: healthy on localhost, refused from the Service. -->
+        <listen_host>0.0.0.0</listen_host>
+        <max_server_memory_usage>1500000000</max_server_memory_usage>
+        <mark_cache_size>268435456</mark_cache_size>
+        <uncompressed_cache_size>0</uncompressed_cache_size>
+        <logger>
+            <level>warning</level>
+            <console>1</console>
+        </logger>
+    </clickhouse>
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: clickhouse, namespace: twentyfour }
+spec:
+  serviceName: clickhouse
+  replicas: 1
+  selector: { matchLabels: { app: clickhouse } }
+  template:
+    metadata: { labels: { app: clickhouse } }
+    spec:
+      securityContext: { fsGroup: 101 }
+      containers:
+        - name: clickhouse
+          image: docker.io/clickhouse/clickhouse-server:25.3-alpine
+          envFrom: [{ secretRef: { name: clickhouse } }]
+          ports:
+            - { containerPort: 8123, name: http }
+            - { containerPort: 9000, name: native }
+          resources:
+            requests: { memory: 512Mi, cpu: 100m }
+            limits: { memory: 2Gi }
+          readinessProbe:
+            httpGet: { path: /ping, port: 8123 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/clickhouse }
+            - { name: config, mountPath: /etc/clickhouse-server/config.d }
+      volumes:
+        - name: config
+          configMap: { name: clickhouse-config }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 4Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: clickhouse, namespace: twentyfour }
+spec:
+  selector: { app: clickhouse }
+  ports:
+    - { port: 8123, targetPort: 8123, name: http }
+    - { port: 9000, targetPort: 9000, name: native }

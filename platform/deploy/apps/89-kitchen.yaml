@@ -1,0 +1,48 @@
+# Kitchen Display: the prep screens.
+#
+# A trade capability, not a sold module. Nobody buys it; the industry profile
+# switches it on for food service, and a candy shop buying the same POS gets a
+# till and no prep screen. It is deployed everywhere and used where the profile
+# says so, which is what keeps POS meaning "register a sale" in every trade.
+#
+# It listens to order events. The till knows nothing about a pass.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kitchen
+  namespace: twentyfour
+  labels: { app: kitchen, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kitchen } }
+  template:
+    metadata: { labels: { app: kitchen, tier: backend } }
+    spec:
+      containers:
+        - name: kitchend
+          image: localhost:5000/twentyfour/kitchen:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9121"
+            - "-brokers=kafka.twentyfour.svc.cluster.local:9092"
+          ports: [{ containerPort: 9121, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: kitchen } }
+          readinessProbe:
+            grpc: { port: 9121 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9121 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kitchen, namespace: twentyfour }
+spec:
+  selector: { app: kitchen }
+  ports: [{ port: 9121, targetPort: 9121, name: grpc }]

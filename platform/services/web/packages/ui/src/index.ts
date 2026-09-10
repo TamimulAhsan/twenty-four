@@ -8,7 +8,7 @@ export { Spinner, Skeleton, SkeletonText, EmptyState, ErrorState, type EmptyStat
 export { FormatProvider, useFormat, MoneyText, NumberText, useDateFormat, type FormatContextValue, type MoneyTextProps } from './format'
 export { TableScroll, Table, Th, Td, Tr } from './table'
 export { StatTile, PageHeader, type StatTileProps } from './stat'
-export { Dialog, type DialogProps } from './overlay'
+export { ConfirmDialog, Dialog, type ConfirmDialogProps, type DialogProps } from './overlay'
 export { ToastProvider, useToast, type Toast, type ToastTone } from './toast'
 export { ThemeToggle, useThemePreference } from './theme'
 export { useTicker, formatRemaining, formatCountdown } from './clock'

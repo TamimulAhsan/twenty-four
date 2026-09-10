@@ -1,0 +1,45 @@
+{{define "desk.html"}}
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="5">
+<title>Message desk · TwentyFour</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b0d11; --card:#151922; --ink:#e5e7eb; --muted:#9ca3af; --line:#252b36 }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); padding:32px;
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif }
+  main { max-width:720px; margin:0 auto }
+  h1 { font-size:19px; margin:0 0 4px } p.sub { color:var(--muted); margin:0 0 24px; font-size:13px }
+  a.row { display:block; background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:16px 18px; margin-bottom:10px; text-decoration:none; color:inherit }
+  .head { display:flex; align-items:baseline; justify-content:space-between; gap:16px }
+  .who { font-weight:600 } .meta { color:var(--muted); font-size:13px }
+  .body { color:var(--muted); font-size:13px; margin-top:6px }
+  .tag { font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+         border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted) }
+  .empty { background:var(--card); border:1px dashed var(--line); border-radius:12px;
+           padding:40px; text-align:center; color:var(--muted) }
+</style>
+<main>
+  <h1>Message desk</h1>
+  <p class="sub">Everything this deployment composed. Nothing here was actually sent: there is no transport.</p>
+  {{if .Deliveries}}
+    {{range .Deliveries}}
+      <a class="row" href="{{$.Base}}/{{.ID}}">
+        <span class="head">
+          <span class="who">{{if .Subject}}{{.Subject}}{{else}}{{.TemplateKey}}{{end}}</span>
+          <span class="tag">{{.StatusLabel}}</span>
+        </span>
+        <div class="meta">{{.Channel}} to {{.Recipient}} &middot; {{.Age}} ago</div>
+        <div class="body">{{preview .Body}}</div>
+      </a>
+    {{end}}
+  {{else}}
+    <div class="empty">Nothing composed yet.</div>
+  {{end}}
+</main>
+{{end}}

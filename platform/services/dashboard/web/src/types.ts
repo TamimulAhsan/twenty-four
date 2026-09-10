@@ -37,7 +37,21 @@ export interface Job {
   output: string; started: string
 }
 export interface GEdge {
-  from: string; to: string; kind: 'routes' | 'selects' | 'depends'; label: string
+  from: string
+  to: string
+  /**
+   * How the two are connected, which is not one relationship but five.
+   *
+   * `depends` is a synchronous call. `stores` is where a workload's state
+   * lives. `publishes` and `consumes` are the bus, and they are drawn
+   * separately because an event flow that looks like a dependency reads as
+   * the opposite of what it is: a consumer does not call the thing it hears
+   * from, and the thing it hears from does not know it exists. `replicates`
+   * is change data capture, which is neither: no service is involved at
+   * either end.
+   */
+  kind: 'routes' | 'selects' | 'depends' | 'stores' | 'publishes' | 'consumes' | 'replicates'
+  label: string
 }
 export interface Stats {
   Pods: number; PodsReady: number; Services: number

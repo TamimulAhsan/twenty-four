@@ -1,0 +1,51 @@
+# Support: impersonation, time limited and recorded.
+#
+# The merchant is not asked first, which is a product decision: support happens
+# when somebody has rung up with a broken till. What holds instead is that a
+# session expires on its own, is read-only unless somebody asked otherwise,
+# names a person rather than a shared account, and is announced so the audit
+# trail keeps it and the merchant can stop a live one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: support
+  namespace: twentyfour
+  labels: { app: support, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: support } }
+  template:
+    metadata: { labels: { app: support, tier: backend } }
+    spec:
+      containers:
+        - name: supportd
+          image: localhost:5000/twentyfour/support:dev
+          imagePullPolicy: Always
+          args:
+            - "-addr=:9117"
+            # Four hours is a working afternoon. Long enough that a specialist
+            # is not asking twice during one call, short enough that a forgotten
+            # grant stops mattering the same day.
+            - "-grant=4h"
+            - "-max-grant=24h"
+          ports: [{ containerPort: 9117, name: grpc }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: service-dsn, key: support } }
+          readinessProbe:
+            grpc: { port: 9117 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 9117 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: support, namespace: twentyfour }
+spec:
+  selector: { app: support }
+  ports: [{ port: 9117, targetPort: 9117, name: grpc }]
